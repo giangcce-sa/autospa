@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Settings {
+  id            String   @id @default("1")
+  claudeApiKey  String?
+  claudeBaseUrl String   @default("https://api.anthropic.com")
+  openaiApiKey  String?
+  openaiBaseUrl String   @default("https://api.openai.com/v1")
+  imageModel    String   @default("dall-e-3")
+  zaloToken              String?
+  zaloOaId               String?
+  draftRetentionDays     Int      @default(30)
+  publishedRetentionDays Int      @default(90)
+  webhookVerifyToken     String   @default("")
+  autoReplyComments      Boolean  @default(false)
+  autoReplyMessages      Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model FacebookPage {
+  id          String   @id @default(cuid())
+  fbPageId    String   @unique
+  pageName    String
+  accessToken String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  posts         Post[]
+  comments      PostComment[]
+  inboxMessages InboxMessage[]
+}
+
+model BrandKnowledge {
+  id        String   @id @default(cuid())
+  category  String
+  title     String
+  content   String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BrandKit {
+  id           String   @id @default("1")
+  logoUrl      String?
+  primaryColor String   @default("#2d6a4f")
+  accentColor  String   @default("#40c074")
+  fontStyle    String   @default("elegant")
+  spaName      String?
+  tagline      String?
+  updatedAt    DateTime @updatedAt
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       String?
+  category    String?
+  duration    String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  posts       Post[]
+}
+
+model StyleSample {
+  id        String   @id @default(cuid())
+  content   String
+  platform  String   @default("facebook")
+  likes     Int      @default(0)
+  comments  Int      @default(0)
+  shares    Int      @default(0)
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+}
+
+model StyleProfile {
+  id        String   @id @default("1")
+  profile   String
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id           String          @id @default(cuid())
+  caption      String
+  hashtags     String?
+  imageUrl     String?
+  imagePrompt  String?
+  platform     String          @default("facebook")
+  postType     String          @default("service")
+  tone         String          @default("friendly")
+  status       String          @default("draft")
+  scheduledAt  DateTime?
+  publishedAt  DateTime?
+  fbPostId     String?
+  qualityScore Int?
+  qualityNotes String?
+  serviceId      String?
+  bulkPlanId     String?
+  facebookPageId String?
+  service        Service?        @relation(fields: [serviceId], references: [id])
+  bulkPlan       BulkPlan?       @relation(fields: [bulkPlanId], references: [id])
+  facebookPage   FacebookPage?   @relation(fields: [facebookPageId], references: [id])
+  analytics    PostAnalytics?
+  comments     PostComment[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model BulkPlan {
+  id          String   @id @default(cuid())
+  name        String
+  month       Int
+  year        Int
+  status      String   @default("draft")
+  posts       Post[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PostAnalytics {
+  id        String   @id @default(cuid())
+  postId    String   @unique
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reach     Int      @default(0)
+  likes     Int      @default(0)
+  comments  Int      @default(0)
+  shares    Int      @default(0)
+  clicks    Int      @default(0)
+  fetchedAt DateTime @default(now())
+}
+
+model PostComment {
+  id             String        @id @default(cuid())
+  postId         String
+  post           Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  facebookPageId String?
+  facebookPage   FacebookPage? @relation(fields: [facebookPageId], references: [id])
+  fbCommentId    String?
+  authorName     String
+  content        String
+  sentiment      String?
+  isReplied      Boolean       @default(false)
+  autoReply      String?
+  isAlert        Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+}
+
+model CommentRule {
+  id        String   @id @default(cuid())
+  trigger   String
+  reply     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model InboxMessage {
+  id             String        @id @default(cuid())
+  senderId       String
+  senderName     String
+  message        String
+  reply          String?
+  isRead         Boolean       @default(false)
+  isAutoReply    Boolean       @default(false)
+  customerId     String?
+  facebookPageId String?
+  customer       Customer?     @relation(fields: [customerId], references: [id])
+  facebookPage   FacebookPage? @relation(fields: [facebookPageId], references: [id])
+  createdAt      DateTime      @default(now())
+}
+
+model AppointmentRequest {
+  id          String    @id @default(cuid())
+  name        String
+  phone       String?
+  service     String?
+  preferredAt String?
+  note        String?
+  status      String    @default("pending")
+  source      String    @default("inbox")
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Customer {
+  id           String               @id @default(cuid())
+  name         String
+  phone        String?
+  fbId         String?
+  fbName       String?
+  email        String?
+  birthday     String?
+  segment      String               @default("new")
+  leadScore    Int                  @default(0)
+  lastContact  DateTime?
+  note         String?
+  tags         String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  messages     InboxMessage[]
+  appointments AppointmentRequest[]
+  notes        CustomerNote[]
+  careMessages CareMessage[]
+}
+
+model CustomerNote {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  content    String
+  type       String   @default("note")
+  createdAt  DateTime @default(now())
+}
+
+model CareMessage {
+  id          String    @id @default(cuid())
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  type        String
+  content     String
+  platform    String    @default("facebook")
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now())
+}
+
+model HolidayEvent {
+  id          String   @id @default(cuid())
+  name        String
+  date        String
+  description String?
+  isVietnamese Boolean @default(true)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model SocialAlert {
+  id        String   @id @default(cuid())
+  type      String
+  content   String
+  source    String
+  severity  String   @default("low")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Lead {
+  id           String   @id @default(cuid())
+  customerId   String?
+  name         String
+  phone        String?
+  source       String   @default("facebook")
+  score        Int      @default(0)
+  stage        String   @default("cold")
+  service      String?
+  lastAction   String?
+  nextFollowUp DateTime?
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
