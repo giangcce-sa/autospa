@@ -11,7 +11,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
     "@hookform/resolvers": "^5.4.0",
+    "@libsql/client": "^0.17.3",
     "@phosphor-icons/react": "^2.1.10",
+    "@prisma/adapter-libsql": "^7.8.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "clsx": "^2.1.1",
