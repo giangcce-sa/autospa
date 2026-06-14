@@ -30,13 +30,16 @@ export async function getBrandContext(): Promise<string> {
   return items.map((i: { category: string; title: string; content: string }) => `[${i.category}] ${i.title}: ${i.content}`).join("\n");
 }
 
-export async function getStyleProfile(): Promise<string> {
-  const profile = await prisma.styleProfile.findFirst();
+export async function getStyleProfile(facebookPageId?: string): Promise<string> {
+  const profile = await prisma.styleProfile.findFirst({
+    where: facebookPageId ? { facebookPageId } : undefined,
+  });
   return profile?.profile ?? "";
 }
 
-export async function getStyleSamples(limit = 5): Promise<string> {
+export async function getStyleSamples(limit = 5, facebookPageId?: string): Promise<string> {
   const samples = await prisma.styleSample.findMany({
+    where: facebookPageId ? { facebookPageId } : undefined,
     orderBy: [{ likes: "desc" }, { comments: "desc" }],
     take: limit,
   });

@@ -1,15 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
-import { Sparkle, Copy, BookmarkSimple, CheckCircle, PaperPlaneTilt } from "@phosphor-icons/react";
+import { Sparkle, Copy, BookmarkSimple, CheckCircle, PaperPlaneTilt, Image as ImageIcon } from "@phosphor-icons/react";
 
 interface Service { id: string; name: string; category: string | null; }
+
+interface Props {
+  facebookPageId?: string;
+  onSaved?: (postId: string, caption: string, hashtags: string) => void;
+  onGoToImage?: () => void;
+  onGoToPublish?: (postId?: string) => void;
+}
 
 const postTypes = [
   { value: "service", label: "Giới thiệu dịch vụ" },
@@ -24,20 +30,26 @@ const tones = [
   { value: "luxury", label: "Sang trọng" },
 ];
 
-export function ContentGenerator() {
-  const router = useRouter();
+export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToPublish }: Props) {
   const [services, setServices] = useState<Service[]>([]);
+  const [styleSampleCount, setStyleSampleCount] = useState(0);
   const [form, setForm] = useState({ serviceId: "", postType: "service", tone: "friendly", customNote: "", platform: "facebook" });
   const [result, setResult] = useState<{ caption: string; hashtags: string; postId?: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sendingToPublish, setSendingToPublish] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/services").then((r) => r.json()).then((res) => res.data && setServices(res.data.filter((s: Service & { active: boolean }) => s.active)));
-  }, []);
+    const url = facebookPageId ? `/api/services?facebookPageId=${facebookPageId}` : "/api/services";
+    fetch(url).then((r) => r.json()).then((res) => res.data && setServices(res.data.filter((s: Service & { active: boolean }) => s.active)));
+
+    const styleUrl = facebookPageId ? `/api/style-training?facebookPageId=${facebookPageId}` : "/api/style-training";
+    fetch(styleUrl).then((r) => r.json()).then((res) => {
+      if (res.data) setStyleSampleCount(res.data.samples?.length ?? 0);
+    });
+  }, [facebookPageId]);
 
   const handleGenerate = async (saveToLibrary = false) => {
     setLoading(true);
@@ -47,41 +59,40 @@ export function ContentGenerator() {
       const res = await fetch("/api/content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, saveToLibrary }),
+        body: JSON.stringify({ ...form, saveToLibrary, facebookPageId }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setResult(data.data);
-      if (saveToLibrary) setSaved(true);
+      if (saveToLibrary) {
+        setSaved(true);
+        if (data.data.postId && onSaved) onSaved(data.data.postId, data.data.caption, data.data.hashtags);
+      }
       return data.data as { caption: string; hashtags: string; postId?: string };
     } finally { setLoading(false); }
   };
 
-  const handleSendToPublish = async () => {
-    setSendingToPublish(true);
+  const handleSaveAndSend = async (target: "image" | "publish") => {
+    setSaving(true);
     setError("");
     try {
-      // If already saved (has postId), navigate directly
-      if (result?.postId) {
-        router.push(`/publish?postId=${result.postId}`);
-        return;
+      let postId = result?.postId;
+      if (!postId) {
+        const res = await fetch("/api/content", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...form, saveToLibrary: true, facebookPageId }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setError(data.error); return; }
+        setResult(data.data);
+        setSaved(true);
+        postId = data.data.postId;
+        if (postId && onSaved) onSaved(postId, data.data.caption, data.data.hashtags);
       }
-      // Otherwise save first then navigate
-      const res = await fetch("/api/content", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, saveToLibrary: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
-      setResult(data.data);
-      if (data.data.postId) {
-        router.push(`/publish?postId=${data.data.postId}`);
-      } else {
-        // Fallback: pass caption via query (no postId)
-        router.push(`/publish`);
-      }
-    } finally { setSendingToPublish(false); }
+      if (target === "image" && onGoToImage) onGoToImage();
+      if (target === "publish" && onGoToPublish) onGoToPublish(postId);
+    } finally { setSaving(false); }
   };
 
   const handleCopy = () => {
@@ -96,6 +107,12 @@ export function ContentGenerator() {
       <Card>
         <CardHeader><CardTitle>Tùy chọn nội dung</CardTitle></CardHeader>
         <div className="space-y-3">
+          {styleSampleCount > 0 && (
+            <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg" style={{ background: "var(--accent-light)", color: "var(--accent)" }}>
+              <Sparkle size={12} weight="fill" />
+              Dùng {styleSampleCount} bài mẫu Style Training để tạo content
+            </div>
+          )}
           <Select label="Dịch vụ" value={form.serviceId} onChange={(e) => setForm({ ...form, serviceId: e.target.value })}>
             <option value="">Không chọn dịch vụ cụ thể</option>
             {services.map((s) => <option key={s.id} value={s.id}>{s.name}{s.category ? ` (${s.category})` : ""}</option>)}
@@ -119,7 +136,7 @@ export function ContentGenerator() {
             onChange={(e) => setForm({ ...form, customNote: e.target.value })}
           />
           {error && <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
-          <Button onClick={() => handleGenerate(false)} loading={loading} className="w-full">
+          <Button onClick={() => handleGenerate(true)} loading={loading} className="w-full">
             <Sparkle size={14} weight="fill" /> Tạo nội dung
           </Button>
         </div>
@@ -134,9 +151,7 @@ export function ContentGenerator() {
                 {copied ? <CheckCircle size={13} weight="fill" /> : <Copy size={13} />}
                 {copied ? "Đã copy" : "Copy"}
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => handleGenerate(true)} loading={loading} disabled={saved}>
-                <BookmarkSimple size={13} /> {saved ? "Đã lưu" : "Lưu nháp"}
-              </Button>
+              {saved && <Badge variant="success">Đã lưu</Badge>}
             </div>
           )}
         </CardHeader>
@@ -157,14 +172,22 @@ export function ContentGenerator() {
               </div>
             </div>
 
-            {/* CTA: send to publish */}
-            <div className="pt-1 border-t" style={{ borderColor: "var(--border)" }}>
-              <Button onClick={handleSendToPublish} loading={sendingToPublish} className="w-full" variant="primary">
-                <PaperPlaneTilt size={14} weight="fill" /> Gửi sang Đăng bài
-              </Button>
-              <p className="text-[10px] text-center mt-1.5" style={{ color: "var(--text-muted)" }}>
-                Lưu nháp và mở trang Đăng bài với nội dung đã điền sẵn
-              </p>
+            <div className="pt-2 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
+              {onGoToImage && (
+                <Button onClick={() => handleSaveAndSend("image")} loading={saving} variant="secondary" className="w-full">
+                  <ImageIcon size={14} /> Tạo hình ảnh cho bài này
+                </Button>
+              )}
+              {onGoToPublish && (
+                <Button onClick={() => handleSaveAndSend("publish")} loading={saving} className="w-full" variant="primary">
+                  <PaperPlaneTilt size={14} weight="fill" /> Gửi sang Đăng bài
+                </Button>
+              )}
+              {!onGoToImage && !onGoToPublish && (
+                <Button onClick={() => handleSaveAndSend("publish")} loading={saving} className="w-full" variant="primary">
+                  <PaperPlaneTilt size={14} weight="fill" /> Gửi sang Đăng bài
+                </Button>
+              )}
             </div>
           </div>
         ) : (

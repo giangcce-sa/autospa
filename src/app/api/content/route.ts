@@ -18,12 +18,12 @@ const TONE_LABELS: Record<string, string> = {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { serviceId, postType, tone, customNote, platform, saveToLibrary } = body;
+    const { serviceId, postType, tone, customNote, platform, saveToLibrary, facebookPageId } = body;
 
     const [brandContext, styleProfile, styleSamples, service] = await Promise.all([
       getBrandContext(),
-      getStyleProfile(),
-      getStyleSamples(5),
+      getStyleProfile(facebookPageId),
+      getStyleSamples(5, facebookPageId),
       serviceId ? prisma.service.findUnique({ where: { id: serviceId } }) : null,
     ]);
 
@@ -69,7 +69,7 @@ HASHTAGS:
     let savedPost = null;
     if (saveToLibrary) {
       savedPost = await prisma.post.create({
-        data: { caption, hashtags, platform: platform ?? "facebook", postType: postType ?? "service", tone: tone ?? "friendly", serviceId: serviceId ?? null },
+        data: { caption, hashtags, platform: platform ?? "facebook", postType: postType ?? "service", tone: tone ?? "friendly", serviceId: serviceId ?? null, facebookPageId: facebookPageId ?? null },
       });
     }
 

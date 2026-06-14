@@ -5,10 +5,11 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 import { StatusBadge } from "@/components/ui/Badge";
+import { useRouter } from "next/navigation";
 import {
   FacebookLogo, PaperPlaneTilt, CalendarBlank, FloppyDisk,
   User, ThumbsUp, ChatCircle, Share, CaretDown, Image as ImageIcon,
-  CheckCircle, Sparkle,
+  CheckCircle, Sparkle, Megaphone,
 } from "@phosphor-icons/react";
 
 interface FbPage { id: string; fbPageId: string; pageName: string; isActive: boolean; }
@@ -31,6 +32,7 @@ interface Props {
 }
 
 export function PublishManager({ initialPostId, initialImageUrl }: Props) {
+  const router = useRouter();
   const [postId, setPostId] = useState<string | undefined>(initialPostId);
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
@@ -59,6 +61,11 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
       }
     });
   }, []);
+
+  // Sync imageUrl from parent when a new image is generated
+  useEffect(() => {
+    if (initialImageUrl) setImageUrl(initialImageUrl);
+  }, [initialImageUrl]);
 
   // Load post from postId (passed via URL or set after draft pick)
   useEffect(() => {
@@ -273,9 +280,18 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
               <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>
             ) : null}
             {status && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge status={status} />
                 <span className="text-xs" style={{ color: "var(--text-muted)" }}>Đã xử lý thành công</span>
+                {status === "published" && postId && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => router.push(`/facebook-ads?postId=${postId}`)}
+                  >
+                    <Megaphone size={12} /> Chạy quảng cáo
+                  </Button>
+                )}
               </div>
             )}
 

@@ -16,13 +16,13 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { month, year, postsPerWeek, postTypes, tone } = await req.json();
+    const { month, year, postsPerWeek, postTypes, tone, facebookPageId } = await req.json();
     if (!month || !year) return NextResponse.json({ error: "Thiếu tháng/năm", success: false }, { status: 400 });
 
     const [brandContext, styleProfile, services] = await Promise.all([
       getBrandContext(),
-      getStyleProfile(),
-      prisma.service.findMany({ where: { active: true }, take: 10 }),
+      getStyleProfile(facebookPageId),
+      prisma.service.findMany({ where: { facebookPageId: facebookPageId ?? undefined, active: true }, take: 10 }),
     ]);
 
     const daysInMonth = new Date(year, month, 0).getDate();
@@ -74,6 +74,7 @@ Chỉ trả về JSON, không thêm gì khác.`;
             platform: "facebook",
             status: "draft",
             scheduledAt: new Date(year, month - 1, p.day, 9, 0),
+            facebookPageId: facebookPageId ?? null,
           })),
         },
       },

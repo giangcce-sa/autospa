@@ -1,14 +1,14 @@
-import { ContentGenerator } from "@/components/modules/content/ContentGenerator";
+import { ContentWorkspace } from "@/components/modules/content/ContentWorkspace";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function ContentPage() {
   return (
     <>
       <PageHeader
-        title="Tạo Nội dung"
-        description="AI sinh caption và hashtag tiếng Việt theo văn phong spa của bạn"
+        title="Nội dung"
+        description="Tạo caption, hình ảnh AI và đăng lên Facebook — tất cả trong một nơi"
       />
-      <ContentGenerator />
+      <ContentWorkspace />
     </>
   );
 }

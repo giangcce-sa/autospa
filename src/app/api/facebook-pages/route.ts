@@ -4,11 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET() {
   try {
     const pages = await prisma.facebookPage.findMany({ orderBy: { createdAt: "asc" } });
-    const safe = pages.map((p: { id: string; fbPageId: string; pageName: string; accessToken: string; isActive: boolean; createdAt: Date }) => ({
+    const safe = pages.map((p: { id: string; fbPageId: string; pageName: string; accessToken: string; isActive: boolean; adAccountId: string | null; createdAt: Date }) => ({
       id: p.id,
       fbPageId: p.fbPageId,
       pageName: p.pageName,
       isActive: p.isActive,
+      adAccountId: p.adAccountId,
       createdAt: p.createdAt,
       accessTokenHint: "••••••••" + p.accessToken.slice(-4),
     }));
@@ -37,16 +38,24 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "add") {
-      const { fbPageId, pageName, accessToken } = body;
+      const { fbPageId, pageName, accessToken, adAccountId } = body;
       if (!fbPageId?.trim() || !pageName?.trim() || !accessToken?.trim()) {
         return NextResponse.json({ error: "Thiếu Page ID, tên page hoặc Access Token", success: false }, { status: 400 });
       }
+      const adActId = adAccountId?.trim() || null;
       const page = await prisma.facebookPage.upsert({
         where: { fbPageId: fbPageId.trim() },
-        create: { fbPageId: fbPageId.trim(), pageName: pageName.trim(), accessToken: accessToken.trim() },
-        update: { pageName: pageName.trim(), accessToken: accessToken.trim() },
+        create: { fbPageId: fbPageId.trim(), pageName: pageName.trim(), accessToken: accessToken.trim(), adAccountId: adActId },
+        update: { pageName: pageName.trim(), accessToken: accessToken.trim(), adAccountId: adActId },
       });
       return NextResponse.json({ data: page, success: true });
+    }
+
+    if (action === "update-ad-account") {
+      const { id, adAccountId } = body;
+      if (!id) return NextResponse.json({ error: "Thiếu id", success: false }, { status: 400 });
+      await prisma.facebookPage.update({ where: { id }, data: { adAccountId: adAccountId?.trim() || null } });
+      return NextResponse.json({ success: true });
     }
 
     if (action === "toggle") {

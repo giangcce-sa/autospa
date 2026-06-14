@@ -11,8 +11,10 @@ export async function GET() {
       claudeApiKey: settings.claudeApiKey ? "••••••••" + settings.claudeApiKey.slice(-4) : null,
       openaiApiKey: settings.openaiApiKey ? "••••••••" + settings.openaiApiKey.slice(-4) : null,
       zaloToken: settings.zaloToken ? "••••••••" + settings.zaloToken.slice(-4) : null,
+      spaApiKey: settings.spaApiKey ? "••••••••" + settings.spaApiKey.slice(-4) : null,
       openaiBaseUrl: settings.openaiBaseUrl,
       imageModel: settings.imageModel,
+      hasSpaApiKey: !!settings.spaApiKey,
     };
     return NextResponse.json({ data: safe, success: true });
   } catch {
@@ -70,6 +72,12 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      if (service === "spa") {
+        const { testSpaConnection } = await import("@/lib/spa-client");
+        const result = await testSpaConnection();
+        return NextResponse.json(result);
+      }
+
       if (service === "zalo") {
         const token = resolveKey(apiKey, settings?.zaloToken);
         if (!token) return NextResponse.json({ success: false, message: "Chưa có Zalo Token — nhập rồi test" });
@@ -89,11 +97,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { claudeApiKey, claudeBaseUrl, openaiApiKey, openaiBaseUrl, imageModel, zaloToken, zaloOaId, draftRetentionDays, publishedRetentionDays, webhookVerifyToken, autoReplyComments, autoReplyMessages } = body;
-    const updateData: Record<string, string | number | boolean> = {};
-    // Secret fields: only update if a non-empty value is provided (empty = keep existing)
+    const updateData: Record<string, string | number | boolean | null> = {};
+    // Secret fields: only update if a non-empty, non-masked value is provided
     if (claudeApiKey?.trim()) updateData.claudeApiKey = claudeApiKey.trim();
     if (openaiApiKey?.trim()) updateData.openaiApiKey = openaiApiKey.trim();
     if (zaloToken?.trim()) updateData.zaloToken = zaloToken.trim();
+    if (body.spaApiKey?.trim()) updateData.spaApiKey = body.spaApiKey.trim();
     // Non-secret fields: always update
     if (claudeBaseUrl) updateData.claudeBaseUrl = claudeBaseUrl;
     if (openaiBaseUrl) updateData.openaiBaseUrl = openaiBaseUrl;
@@ -102,8 +111,20 @@ export async function POST(req: NextRequest) {
     if (draftRetentionDays !== undefined) updateData.draftRetentionDays = Number(draftRetentionDays);
     if (publishedRetentionDays !== undefined) updateData.publishedRetentionDays = Number(publishedRetentionDays);
     if (webhookVerifyToken !== undefined) updateData.webhookVerifyToken = webhookVerifyToken;
+    if (body.webhookMode) updateData.webhookMode = body.webhookMode;
     if (autoReplyComments !== undefined) updateData.autoReplyComments = Boolean(autoReplyComments);
     if (autoReplyMessages !== undefined) updateData.autoReplyMessages = Boolean(autoReplyMessages);
+    // Autonomous marketing fields
+    if (body.spaApiUrl !== undefined) updateData.spaApiUrl = body.spaApiUrl || null;
+    if (body.spaWebhookSecret !== undefined) updateData.spaWebhookSecret = body.spaWebhookSecret || null;
+    if (body.leadHandoffMode) updateData.leadHandoffMode = body.leadHandoffMode;
+    if (body.leadHandoffLink !== undefined) updateData.leadHandoffLink = body.leadHandoffLink || null;
+    if (body.automationLevel) updateData.automationLevel = body.automationLevel;
+    if (body.zaloApprovalRecipient !== undefined) updateData.zaloApprovalRecipient = body.zaloApprovalRecipient || null;
+    if (body.adsOptimizePauseCtr !== undefined) updateData.adsOptimizePauseCtr = Number(body.adsOptimizePauseCtr);
+    if (body.adsOptimizeScaleCtr !== undefined) updateData.adsOptimizeScaleCtr = Number(body.adsOptimizeScaleCtr);
+    if (body.adsOptimizeFreqLimit !== undefined) updateData.adsOptimizeFreqLimit = Number(body.adsOptimizeFreqLimit);
+    if (body.adsOptimizeScalePct !== undefined) updateData.adsOptimizeScalePct = Number(body.adsOptimizeScalePct);
 
     const settings = await prisma.settings.upsert({
       where: { id: "1" },

@@ -1,14 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
-import { Textarea } from "@/components/ui/Input";
+import { Textarea, Input } from "@/components/ui/Input";
 import { Sparkle, ArrowCounterClockwise, DownloadSimple, Image as ImageIcon, PaperPlaneTilt } from "@phosphor-icons/react";
 
 interface Service { id: string; name: string; }
+
+interface Props {
+  postId?: string;
+  facebookPageId?: string;
+  onImageSet?: (imageUrl: string) => void;
+  onGoToPublish?: () => void;
+}
 
 const styles = [
   { value: "bright", label: "Tươi sáng, hiện đại" },
@@ -16,17 +22,42 @@ const styles = [
   { value: "natural", label: "Tự nhiên, organic" },
 ];
 
-export function ImageGenerator() {
-  const router = useRouter();
+const characters = [
+  { value: "", label: "Không có người" },
+  { value: "female-vn", label: "Phụ nữ Việt Nam (khách hàng)" },
+  { value: "male-vn", label: "Nam Việt Nam (khách hàng)" },
+  { value: "staff-female", label: "Nhân viên nữ chuyên nghiệp" },
+  { value: "hands", label: "Chỉ bàn tay (đang thực hiện)" },
+];
+
+const equipment = [
+  { value: "", label: "Không có thiết bị cụ thể" },
+  { value: "laser", label: "Máy laser / triệt lông" },
+  { value: "spa-bed", label: "Giường spa / ghế điều trị" },
+  { value: "facial-machine", label: "Máy chăm sóc da mặt" },
+  { value: "nail-tools", label: "Dụng cụ nail / manicure" },
+  { value: "massage-tools", label: "Đá nóng / dụng cụ massage" },
+  { value: "skincare-products", label: "Mỹ phẩm / sản phẩm chăm sóc" },
+];
+
+export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPublish }: Props) {
   const [services, setServices] = useState<Service[]>([]);
-  const [form, setForm] = useState({ serviceId: "", style: "bright", customPrompt: "" });
+  const [form, setForm] = useState({
+    serviceId: "",
+    style: "bright",
+    customPrompt: "",
+    character: "",
+    equipment: "",
+    referenceDesc: "",
+  });
   const [result, setResult] = useState<{ imageUrl: string; prompt: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/services").then((r) => r.json()).then((res) => res.data && setServices(res.data.filter((s: Service & { active: boolean }) => s.active)));
-  }, []);
+    const url = facebookPageId ? `/api/services?facebookPageId=${facebookPageId}` : "/api/services";
+    fetch(url).then((r) => r.json()).then((res) => res.data && setServices(res.data.filter((s: Service & { active: boolean }) => s.active)));
+  }, [facebookPageId]);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -35,11 +66,12 @@ export function ImageGenerator() {
       const res = await fetch("/api/openai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, postId }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setResult(data.data);
+      if (onImageSet) onImageSet(data.data.imageUrl);
     } finally { setLoading(false); }
   };
 
@@ -54,7 +86,9 @@ export function ImageGenerator() {
 
   const handleSendToPublish = () => {
     if (!result) return;
-    router.push(`/publish?imageUrl=${encodeURIComponent(result.imageUrl)}`);
+    if (onGoToPublish) {
+      onGoToPublish();
+    }
   };
 
   return (
@@ -69,10 +103,23 @@ export function ImageGenerator() {
           <Select label="Phong cách" value={form.style} onChange={(e) => setForm({ ...form, style: e.target.value })}>
             {styles.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </Select>
+          <Select label="Nhân vật mẫu" value={form.character} onChange={(e) => setForm({ ...form, character: e.target.value })}>
+            {characters.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </Select>
+          <Select label="Thiết bị / dụng cụ" value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })}>
+            {equipment.map((eq) => <option key={eq.value} value={eq.value}>{eq.label}</option>)}
+          </Select>
+          <Input
+            label="Phong cách ảnh mẫu (tùy chọn)"
+            placeholder="VD: Phong cách Hàn Quốc, nền trắng tối giản, ánh sáng dịu..."
+            value={form.referenceDesc}
+            onChange={(e) => setForm({ ...form, referenceDesc: e.target.value })}
+            hint="Mô tả ảnh mẫu bạn muốn AI học theo"
+          />
           <Textarea
             label="Mô tả thêm (tùy chọn)"
-            placeholder="VD: Hình ảnh thiên về tông màu xanh lá, có hoa sen..."
-            rows={3}
+            placeholder="VD: Tập trung vào vùng da mặt, tông màu xanh lá nhẹ..."
+            rows={2}
             value={form.customPrompt}
             onChange={(e) => setForm({ ...form, customPrompt: e.target.value })}
           />
@@ -91,7 +138,7 @@ export function ImageGenerator() {
             <div className="p-4 space-y-3">
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                 <span className="font-medium" style={{ color: "var(--text-secondary)" }}>Prompt: </span>
-                {result.prompt.length > 100 ? result.prompt.slice(0, 100) + "..." : result.prompt}
+                {result.prompt.length > 120 ? result.prompt.slice(0, 120) + "..." : result.prompt}
               </p>
               <div className="flex gap-2">
                 <Button variant="secondary" onClick={handleGenerate} loading={loading} className="flex-1">
@@ -101,13 +148,15 @@ export function ImageGenerator() {
                   <DownloadSimple size={13} /> Tải về
                 </Button>
               </div>
-              {/* CTA: send to publish */}
               <Button onClick={handleSendToPublish} className="w-full">
-                <PaperPlaneTilt size={14} weight="fill" /> Gắn vào bài đăng
+                <PaperPlaneTilt size={14} weight="fill" />
+                {onGoToPublish ? "Gắn vào bài đăng →" : "Đã lưu vào bài"}
               </Button>
-              <p className="text-[10px] text-center" style={{ color: "var(--text-muted)" }}>
-                Mở trang Đăng bài với hình này đã điền sẵn
-              </p>
+              {postId && (
+                <p className="text-[10px] text-center" style={{ color: "var(--text-muted)" }}>
+                  Hình đã được lưu vào bài nháp
+                </p>
+              )}
             </div>
           </div>
         ) : (

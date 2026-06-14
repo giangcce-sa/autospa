@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateContent } from "@/lib/claude";
 import { replyToFbComment, replyToFbConversation } from "@/lib/facebook";
+import { getOrCreateConversation, processIncomingMessage, executeHandoff } from "@/lib/lead-agent";
 
 // Facebook webhook verification (GET)
 export async function GET(req: NextRequest) {
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
   if (body.object !== "page") return NextResponse.json({ status: "ok" });
 
   const settings = await prisma.settings.findFirst();
+  if (settings?.webhookMode !== "auto") return NextResponse.json({ status: "ok" });
 
   for (const entry of (body.entry as Record<string, unknown>[]) ?? []) {
     // Look up which FacebookPage this entry belongs to
@@ -128,7 +130,7 @@ async function handleComment(
 
 async function handleMessage(
   msg: Record<string, unknown>,
-  settings: { autoReplyMessages: boolean } | null,
+  settings: { autoReplyMessages: boolean; automationLevel?: string; leadHandoffMode?: string; zaloApprovalRecipient?: string | null } | null,
   facebookPageId?: string
 ) {
   const sender = msg.sender as { id?: string } | undefined;
@@ -152,6 +154,27 @@ async function handleMessage(
     },
   });
 
+  // Lead Agent — runs when automationLevel is semi or full
+  if (settings?.automationLevel && settings.automationLevel !== "supervised") {
+    try {
+      const conv = await getOrCreateConversation(senderId, facebookPageId);
+      if (!conv.isComplete) {
+        const { replyText, isComplete } = await processIncomingMessage(conv.id, text);
+        if (replyText) {
+          await replyToFbConversation(senderId, replyText, facebookPageId);
+          await prisma.inboxMessage.update({ where: { id: inboxMsg.id }, data: { reply: replyText, isAutoReply: true } });
+        }
+        if (isComplete) {
+          await executeHandoff(conv.id, settings.leadHandoffMode ?? "staff", settings.zaloApprovalRecipient);
+        }
+      }
+      return;
+    } catch {
+      // Lead Agent failed — fall through to simple auto-reply
+    }
+  }
+
+  // Simple auto-reply (supervised mode or Lead Agent disabled)
   if (settings?.autoReplyMessages) {
     try {
       const reply = await generateContent(

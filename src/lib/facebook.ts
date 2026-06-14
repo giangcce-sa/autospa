@@ -25,13 +25,34 @@ function detectFbError(data: { error?: { message: string; code?: number } }) {
 
 export async function postToFacebook(message: string, imageUrl?: string, facebookPageId?: string): Promise<string> {
   const { token, pageId } = await getPageCreds(facebookPageId);
-  const url = imageUrl
-    ? `https://graph.facebook.com/v21.0/${pageId}/photos`
-    : `https://graph.facebook.com/v21.0/${pageId}/feed`;
-  const body = imageUrl
-    ? { caption: message, url: imageUrl, access_token: token }
-    : { message, access_token: token };
-  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+  if (imageUrl) {
+    // Upload image as binary multipart — works for both data: URLs and http URLs,
+    // avoids Facebook rejecting temporary/private image URLs
+    const formData = new FormData();
+    if (imageUrl.startsWith("data:")) {
+      const [header, b64] = imageUrl.split(",");
+      const mimeType = header.match(/data:([^;]+)/)?.[1] ?? "image/png";
+      const buffer = Buffer.from(b64, "base64");
+      formData.append("source", new Blob([buffer], { type: mimeType }), "image.png");
+    } else {
+      const imgRes = await fetch(imageUrl);
+      if (!imgRes.ok) throw new Error(`Không tải được ảnh (${imgRes.status})`);
+      formData.append("source", await imgRes.blob(), "image.png");
+    }
+    formData.append("caption", message);
+    formData.append("access_token", token);
+    const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/photos`, { method: "POST", body: formData });
+    const data = await res.json();
+    detectFbError(data);
+    return data.id ?? data.post_id;
+  }
+
+  const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, access_token: token }),
+  });
   const data = await res.json();
   detectFbError(data);
   return data.id ?? data.post_id;

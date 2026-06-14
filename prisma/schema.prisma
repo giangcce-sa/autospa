@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model Settings {
@@ -18,23 +18,44 @@ model Settings {
   draftRetentionDays     Int      @default(30)
   publishedRetentionDays Int      @default(90)
   webhookVerifyToken     String   @default("")
+  webhookMode            String   @default("manual")
   autoReplyComments      Boolean  @default(false)
   autoReplyMessages      Boolean  @default(false)
+  // Spa Software Integration
+  spaApiUrl              String?
+  spaApiKey              String?
+  spaWebhookSecret       String?
+  // Lead Handoff
+  leadHandoffMode        String   @default("staff")       // "link" | "api" | "staff"
+  leadHandoffLink        String?
+  // Automation
+  automationLevel        String   @default("supervised")  // "supervised" | "semi" | "full"
+  zaloApprovalRecipient  String?
+  // Ads Optimization Thresholds
+  adsOptimizePauseCtr    Float    @default(0.5)
+  adsOptimizeScaleCtr    Float    @default(2.0)
+  adsOptimizeFreqLimit   Float    @default(3.0)
+  adsOptimizeScalePct    Int      @default(20)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }
 
 model FacebookPage {
-  id          String   @id @default(cuid())
-  fbPageId    String   @unique
-  pageName    String
-  accessToken String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  fbPageId     String   @unique
+  pageName     String
+  accessToken  String
+  isActive     Boolean  @default(true)
+  adAccountId  String?
+  createdAt    DateTime @default(now())
 
   posts         Post[]
   comments      PostComment[]
   inboxMessages InboxMessage[]
+  brandKit      BrandKit?
+  styleProfile  StyleProfile?
+  styleSamples  StyleSample[]
+  services      Service[]
 }
 
 model BrandKnowledge {
@@ -48,44 +69,52 @@ model BrandKnowledge {
 }
 
 model BrandKit {
-  id           String   @id @default("1")
-  logoUrl      String?
-  primaryColor String   @default("#2d6a4f")
-  accentColor  String   @default("#40c074")
-  fontStyle    String   @default("elegant")
-  spaName      String?
-  tagline      String?
-  updatedAt    DateTime @updatedAt
+  id             String        @id @default(cuid())
+  facebookPageId String?       @unique
+  facebookPage   FacebookPage? @relation(fields: [facebookPageId], references: [id])
+  logoUrl        String?
+  primaryColor   String        @default("#2d6a4f")
+  accentColor    String        @default("#40c074")
+  fontStyle      String        @default("elegant")
+  spaName        String?
+  tagline        String?
+  updatedAt      DateTime      @updatedAt
 }
 
 model Service {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  price       String?
-  category    String?
-  duration    String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  posts       Post[]
+  id             String        @id @default(cuid())
+  facebookPageId String?
+  facebookPage   FacebookPage? @relation(fields: [facebookPageId], references: [id])
+  name           String
+  description    String?
+  price          String?
+  category       String?
+  duration       String?
+  active         Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  posts          Post[]
 }
 
 model StyleSample {
-  id        String   @id @default(cuid())
-  content   String
-  platform  String   @default("facebook")
-  likes     Int      @default(0)
-  comments  Int      @default(0)
-  shares    Int      @default(0)
-  source    String   @default("manual")
-  createdAt DateTime @default(now())
+  id             String        @id @default(cuid())
+  facebookPageId String?
+  facebookPage   FacebookPage? @relation(fields: [facebookPageId], references: [id])
+  content        String
+  platform       String        @default("facebook")
+  likes          Int           @default(0)
+  comments       Int           @default(0)
+  shares         Int           @default(0)
+  source         String        @default("manual")
+  createdAt      DateTime      @default(now())
 }
 
 model StyleProfile {
-  id        String   @id @default("1")
-  profile   String
-  updatedAt DateTime @updatedAt
+  id             String        @id @default(cuid())
+  facebookPageId String?       @unique
+  facebookPage   FacebookPage? @relation(fields: [facebookPageId], references: [id])
+  profile        String
+  updatedAt      DateTime      @updatedAt
 }
 
 model Post {
@@ -101,6 +130,8 @@ model Post {
   scheduledAt  DateTime?
   publishedAt  DateTime?
   fbPostId     String?
+  fbAdId       String?
+  fbCampaignId String?
   qualityScore Int?
   qualityNotes String?
   serviceId      String?
@@ -267,6 +298,63 @@ model Lead {
   lastAction   String?
   nextFollowUp DateTime?
   note         String?
+  // Autonomous lead agent
+  channelType    String?
+  channelId      String?
+  handoffAt      DateTime?
+  handoffMode    String?
+  spaBookingId   String?
+  nurtureStep    Int      @default(0)
+  nurtureSentAt  DateTime?
+  conversations  LeadConversation[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model LeadConversation {
+  id             String   @id @default(cuid())
+  leadId         String
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  senderId       String
+  facebookPageId String?
+  step           Int      @default(0)
+  collectedName    String?
+  collectedService String?
+  isComplete     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model PendingApproval {
+  id            String    @id @default(cuid())
+  type          String
+  payload       String
+  status        String    @default("pending")
+  shortCode     String    @unique
+  zaloMessageId String?
+  decidedAt     DateTime?
+  timeoutAt     DateTime
+  createdAt     DateTime  @default(now())
+}
+
+model AdOptimizationLog {
+  id           String   @id @default(cuid())
+  campaignId   String
+  campaignName String
+  action       String
+  reason       String
+  oldValue     String?
+  newValue     String?
+  createdAt    DateTime @default(now())
+}
+
+model SpaSync {
+  id                String    @id @default("1")
+  lastSyncAt        DateTime?
+  revenueToday      Int       @default(0)
+  bookingCountToday Int       @default(0)
+  lastError         String?
+  lastPublishRun    DateTime?
+  lastAdsOptRun     DateTime?
+  updatedAt         DateTime  @updatedAt
 }

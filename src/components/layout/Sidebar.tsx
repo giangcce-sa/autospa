@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { ThemeToggle } from "./ThemeToggle";
 import { cn } from "@/lib/utils";
+import { useActivePage } from "@/contexts/ActivePageContext";
 
 const navGroups = [
   {
@@ -22,6 +23,7 @@ const navGroups = [
   {
     label: "Nội dung",
     items: [
+      { label: "Nghiên cứu AI", href: "/content-research", icon: Sparkle },
       { label: "Tạo nội dung", href: "/content", icon: PencilSimple },
       { label: "Tạo hình ảnh", href: "/images", icon: Image },
       { label: "Bulk Generation", href: "/bulk", icon: Stack },
@@ -51,8 +53,15 @@ const navGroups = [
     label: "Phân tích",
     items: [
       { label: "Analytics", href: "/analytics", icon: ChartBar },
+      { label: "Quảng cáo", href: "/facebook-ads", icon: Megaphone },
       { label: "Social Listening", href: "/listening", icon: Megaphone },
       { label: "Báo cáo thông minh", href: "/reports", icon: ChartLine },
+    ],
+  },
+  {
+    label: "Tự động hóa",
+    items: [
+      { label: "Automation", href: "/automation", icon: Robot },
     ],
   },
   {
@@ -70,6 +79,7 @@ const navGroups = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { pages, selectedPageId, setSelectedPageId } = useActivePage();
 
   return (
     <aside
@@ -77,7 +87,7 @@ export function Sidebar() {
       style={{ width: "var(--sidebar-width)", background: "var(--bg-card)", borderColor: "var(--border)" }}
     >
       <div className="p-4 border-b sticky top-0 z-10" style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 mb-0">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "var(--accent)" }}>
             <Sparkle size={16} weight="fill" color="white" />
           </div>
@@ -86,6 +96,20 @@ export function Sidebar() {
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>Marketing Tool</p>
           </div>
         </div>
+        {pages.length > 1 && (
+          <div className="mt-3">
+            <select
+              value={selectedPageId}
+              onChange={(e) => setSelectedPageId(e.target.value)}
+              className="w-full text-xs rounded-lg px-2.5 py-2 border truncate"
+              style={{ borderColor: "var(--border)", background: "var(--bg-subtle)", color: "var(--text)" }}
+            >
+              {pages.map((p) => (
+                <option key={p.id} value={p.id}>{p.pageName}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <nav className="flex-1 p-2 space-y-4 pb-4">

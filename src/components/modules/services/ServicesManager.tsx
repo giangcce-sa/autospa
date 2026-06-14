@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Plus, PencilSimple, Trash, Briefcase, X } from "@phosphor-icons/react";
+import { useActivePage } from "@/contexts/ActivePageContext";
 
 interface Service {
   id: string;
@@ -20,20 +21,22 @@ interface Service {
 }
 
 const categories = ["Chăm sóc da", "Triệt lông", "Giảm béo", "Trị mụn", "Nail", "Massage", "Khác"];
-
 const emptyForm = { name: "", description: "", price: "", category: "", duration: "" };
 
 export function ServicesManager() {
+  const { selectedPageId } = useActivePage();
   const [services, setServices] = useState<Service[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Service | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
 
-  const load = () =>
-    fetch("/api/services").then((r) => r.json()).then((res) => res.data && setServices(res.data));
+  const load = (pageId?: string) =>
+    fetch(pageId ? `/api/services?facebookPageId=${pageId}` : "/api/services").then((r) => r.json()).then((res) => res.data && setServices(res.data));
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load(selectedPageId || undefined);
+  }, [selectedPageId]);
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setShowForm(true); };
   const openEdit = (s: Service) => {
@@ -48,9 +51,13 @@ export function ServicesManager() {
     try {
       const url = editing ? `/api/services/${editing.id}` : "/api/services";
       const method = editing ? "PUT" : "POST";
-      await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, facebookPageId: selectedPageId }),
+      });
       setShowForm(false);
-      load();
+      load(selectedPageId || undefined);
     } finally {
       setLoading(false);
     }
@@ -59,17 +66,18 @@ export function ServicesManager() {
   const handleDelete = async (id: string) => {
     if (!confirm("Xóa dịch vụ này?")) return;
     await fetch(`/api/services/${id}`, { method: "DELETE" });
-    load();
+    load(selectedPageId || undefined);
   };
 
   const toggleActive = async (s: Service) => {
     await fetch(`/api/services/${s.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...s, active: !s.active }) });
-    load();
+    load(selectedPageId || undefined);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <div />
         <Button onClick={openCreate}>
           <Plus size={14} weight="bold" /> Thêm dịch vụ
         </Button>

@@ -18,11 +18,17 @@ async function fetchFbPosts(pageId: string, token: string, limit = 20) {
   }>;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const facebookPageId = new URL(req.url).searchParams.get("facebookPageId") || null;
     const [samples, profile] = await Promise.all([
-      prisma.styleSample.findMany({ orderBy: { createdAt: "desc" } }),
-      prisma.styleProfile.findFirst(),
+      prisma.styleSample.findMany({
+        where: { facebookPageId },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.styleProfile.findFirst({
+        where: { facebookPageId },
+      }),
     ]);
     return NextResponse.json({ data: { samples, profile }, success: true });
   } catch {
@@ -33,12 +39,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, content, likes, comments, shares, platform } = body;
+    const { action, content, likes, comments, shares, platform, facebookPageId: rawFbPageId } = body;
+    const facebookPageId = rawFbPageId || null;
 
     if (action === "fetch-fb") {
-      const { pageId, source, facebookPageId } = body;
+      const { pageId, source } = body;
 
-      // Resolve credentials: use specific page if provided, else first active page
       let resolvedPageId: string | undefined = pageId;
       let token: string | undefined;
       if (source === "own" || facebookPageId) {
@@ -62,11 +68,7 @@ export async function POST(req: NextRequest) {
         const isPermission = msg.includes("pages_read_engagement") || msg.includes("#10") || msg.includes("permission");
         const isInvalidToken = msg.toLowerCase().includes("invalid") && msg.toLowerCase().includes("token");
         return NextResponse.json({
-          error: isPermission
-            ? "TOKEN_PERMISSION"
-            : isInvalidToken
-            ? "TOKEN_INVALID"
-            : msg,
+          error: isPermission ? "TOKEN_PERMISSION" : isInvalidToken ? "TOKEN_INVALID" : msg,
           success: false,
         }, { status: 400 });
       }
@@ -81,7 +83,14 @@ export async function POST(req: NextRequest) {
       const created = await Promise.all(
         posts.map((p) =>
           prisma.styleSample.create({
-            data: { content: p.message, likes: p.likes, comments: p.comments, shares: p.shares, source: "facebook" },
+            data: {
+              content: p.message,
+              likes: p.likes,
+              comments: p.comments,
+              shares: p.shares,
+              source: "facebook",
+              facebookPageId: facebookPageId ?? null,
+            },
           })
         )
       );
@@ -90,13 +99,23 @@ export async function POST(req: NextRequest) {
 
     if (action === "add-sample") {
       const sample = await prisma.styleSample.create({
-        data: { content, likes: likes ?? 0, comments: comments ?? 0, shares: shares ?? 0, platform: platform ?? "facebook" },
+        data: {
+          content,
+          likes: likes ?? 0,
+          comments: comments ?? 0,
+          shares: shares ?? 0,
+          platform: platform ?? "facebook",
+          facebookPageId: facebookPageId ?? null,
+        },
       });
       return NextResponse.json({ data: sample, success: true });
     }
 
     if (action === "analyze") {
-      const samples = await prisma.styleSample.findMany({ take: 20 });
+      const samples = await prisma.styleSample.findMany({
+        where: { facebookPageId: facebookPageId ?? undefined },
+        take: 20,
+      });
       if (!samples.length) return NextResponse.json({ error: "Chưa có bài mẫu nào", success: false }, { status: 400 });
 
       const sampleText = samples.map((s: { content: string }, i: number) => `Bài ${i + 1}:\n${s.content}`).join("\n\n---\n\n");
@@ -104,7 +123,11 @@ export async function POST(req: NextRequest) {
       const systemPrompt = `Bạn là chuyên gia phân tích văn phong. Hãy phân tích kỹ và trả về hồ sơ văn phong gồm: cách xưng hô, tone giọng, cách dùng emoji, độ dài câu, cách mở đầu/kết thúc, cách gọi khách hàng, phong cách hashtag, và các đặc điểm nổi bật khác. Viết bằng tiếng Việt, súc tích và có thể dùng làm hướng dẫn viết bài sau này.`;
 
       const profile = await generateContent(prompt, systemPrompt);
-      await prisma.styleProfile.upsert({ where: { id: "1" }, create: { id: "1", profile }, update: { profile } });
+      await prisma.styleProfile.upsert({
+        where: { facebookPageId: facebookPageId ?? null },
+        create: { facebookPageId: facebookPageId ?? null, profile },
+        update: { profile },
+      });
       return NextResponse.json({ data: { profile }, success: true });
     }
 
