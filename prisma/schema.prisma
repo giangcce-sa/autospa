@@ -289,6 +289,14 @@ model Customer {
   tags         String?
   npsScore     Int?
   npsAt        DateTime?
+  // CLV & Churn (cached, updated by cron)
+  clvTotal     Int?                 // tổng doanh thu VND
+  clvTier      String?              // low | mid | high | premium
+  churnRisk    String?              // low | medium | high
+  rfmScore     Int?                 // 1-125
+  avgVisitDays Int?                 // trung bình số ngày giữa 2 lần visit
+  lastBookingAt DateTime?
+  clvUpdatedAt DateTime?
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   messages     InboxMessage[]
