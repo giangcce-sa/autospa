@@ -9,9 +9,10 @@ interface Lead {
   name: string;
   phone: string | null;
   score: number;
-  lastContact: string | null;
+  updatedAt: string;
+  service: string | null;
   source: string;
-  status: string;
+  stage: string;
 }
 
 function scoreColor(score: number) {
@@ -37,10 +38,10 @@ export function HotLeads() {
     fetch("/api/sale")
       .then((r) => r.json())
       .then((res) => {
-        const all: Lead[] = res.data ?? [];
+        const all: Lead[] = res.data?.leads ?? [];
         const hot = all
-          .filter((l) => l.score >= 60 && l.status !== "closed")
-          .sort((a, b) => b.score - a.score)
+          .filter((l) => (l.stage === "hot" || l.score >= 60) && l.stage !== "closed")
+          .sort((a, b) => (b.score - a.score) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
           .slice(0, 4);
         setLeads(hot);
       })
@@ -98,9 +99,9 @@ export function HotLeads() {
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold truncate" style={{ color: "var(--text)" }}>{lead.name}</p>
               <div className="flex items-center gap-2 text-[10px]" style={{ color: "var(--text-muted)" }}>
-                <span>{lead.source}</span>
+                <span>{lead.service ?? lead.source}</span>
                 <span>·</span>
-                <span>{timeAgo(lead.lastContact)}</span>
+                <span>{timeAgo(lead.updatedAt)}</span>
               </div>
             </div>
 

@@ -5,10 +5,11 @@ import Link from "next/link";
 import { ArrowRight, Circle, CheckCircle } from "@phosphor-icons/react";
 
 interface Task {
+  id: string;
   label: string;
+  detail?: string;
   href: string;
   priority: "high" | "medium" | "low";
-  done?: boolean;
 }
 
 const PRIORITY_COLOR = {
@@ -33,46 +34,28 @@ export function CEOTaskCenter() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/orchestrator").then((r) => r.json()),
-      fetch("/api/sale").then((r) => r.json()),
-      fetch("/api/inbox").then((r) => r.json()),
-    ]).then(([orc, sale, inbox]) => {
-      const list: Task[] = [];
+    fetch("/api/dashboard/command-center")
+      .then((r) => r.json())
+      .then((res) => {
+        const queue: Array<{ id: string; title: string; detail: string; href: string; priority: "critical" | "high" | "medium" | "low" }> = res.data?.todayQueue ?? [];
+        const list: Task[] = queue.slice(0, 5).map((item) => ({
+          id: item.id,
+          label: item.title,
+          detail: item.detail,
+          href: item.href,
+          priority: item.priority === "critical" ? "high" : item.priority,
+        }));
 
-      // Orchestrator recommended actions
-      const actions = orc.data?.plan?.actions ?? [];
-      actions.slice(0, 3).forEach((a: { agent: string; action: string; status: string }) => {
-        if (a.status === "queued") {
-          list.push({ label: a.action, href: "/orchestrator", priority: "high" });
+        if (list.length === 0) {
+          list.push(
+            { id: "fallback:publish", label: "Duyệt lịch nội dung hôm nay", href: "/publish", priority: "low" },
+            { id: "fallback:competitors", label: "Xem tín hiệu đối thủ mới", href: "/competitors", priority: "low" },
+            { id: "fallback:ads", label: "Kiểm tra hiệu suất quảng cáo", href: "/facebook-ads", priority: "medium" },
+          );
         }
-      });
 
-      // Hot leads
-      const hotLeads = (sale.data ?? []).filter((l: { score: number }) => l.score >= 80);
-      if (hotLeads.length > 0) {
-        list.push({ label: `Follow-up ${hotLeads.length} lead nóng chưa chốt`, href: "/sale", priority: "high" });
-      }
-
-      // Unread inbox
-      const unread = (inbox.data ?? []).filter((m: { read: boolean }) => !m.read);
-      if (unread.length > 0) {
-        list.push({ label: `Phản hồi ${unread.length} tin nhắn chưa đọc`, href: "/inbox", priority: "medium" });
-      }
-
-      // Generic tasks if empty
-      if (list.length === 0) {
-        list.push(
-          { label: "Duyệt bài nội dung hôm nay", href: "/publish", priority: "low" },
-          { label: "Xem báo cáo đối thủ tuần này", href: "/competitors", priority: "low" },
-          { label: "Kiểm tra hiệu suất quảng cáo", href: "/analytics", priority: "medium" },
-        );
-      }
-
-      // Always add
-      list.push({ label: "Chạy Orchestrator phân tích hệ thống", href: "/orchestrator", priority: "medium" });
-
-      setTasks(list.slice(0, 6));
+        list.push({ id: "run:orchestrator", label: "Chạy Orchestrator phân tích hệ thống", href: "/orchestrator", priority: "medium" });
+        setTasks(list.slice(0, 6));
     }).catch(() => setTasks([])).finally(() => setLoading(false));
   }, []);
 
@@ -86,7 +69,7 @@ export function CEOTaskCenter() {
         const isDone = done.has(i);
         return (
           <div
-            key={i}
+            key={task.id}
             className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all"
             style={{
               background: isDone ? "var(--bg-subtle)" : PRIORITY_BG[task.priority],
@@ -97,7 +80,8 @@ export function CEOTaskCenter() {
             <button
               onClick={() => setDone((prev) => {
                 const n = new Set(prev);
-                n.has(i) ? n.delete(i) : n.add(i);
+                if (n.has(i)) n.delete(i);
+                else n.add(i);
                 return n;
               })}
               className="shrink-0 transition-transform hover:scale-110"
@@ -111,6 +95,9 @@ export function CEOTaskCenter() {
               <p className={`text-xs ${isDone ? "line-through" : ""} truncate`} style={{ color: isDone ? "var(--text-muted)" : "var(--text)" }}>
                 {task.label}
               </p>
+              {task.detail && (
+                <p className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>{task.detail}</p>
+              )}
             </Link>
             <span
               className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"

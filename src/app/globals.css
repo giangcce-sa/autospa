@@ -258,6 +258,48 @@ button, a {
   border-radius: var(--radius-sm);
 }
 
+/* Dashboard readability pass.
+   The dashboard is action-heavy, so tiny utility labels need to remain compact
+   but readable on laptop screens. Scoped to avoid changing dense tables elsewhere. */
+.dashboard-readable {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.dashboard-readable .text-\[9px\] {
+  font-size: 11px !important;
+  line-height: 1.25rem !important;
+}
+
+.dashboard-readable .text-\[10px\] {
+  font-size: 12px !important;
+  line-height: 1.3rem !important;
+}
+
+.dashboard-readable .text-\[11px\] {
+  font-size: 12.5px !important;
+  line-height: 1.35rem !important;
+}
+
+.dashboard-readable .text-xs {
+  font-size: 13.5px !important;
+  line-height: 1.45rem !important;
+}
+
+.dashboard-readable .text-sm {
+  font-size: 15px !important;
+  line-height: 1.6rem !important;
+}
+
+.dashboard-readable h1 {
+  letter-spacing: -0.012em;
+}
+
+.dashboard-readable h2,
+.dashboard-readable h3 {
+  letter-spacing: -0.006em;
+}
+
 /* ═══ Utilities ═══════════════════════════════════════════ */
 
 .text-balance { text-wrap: balance; }

@@ -3,17 +3,17 @@
 import Link from "next/link";
 import {
   PencilSimple, Tag, ArrowsClockwise, FloppyDisk, Image as ImageIcon,
-  ChatsTeardrop, Brain, Robot,
+  CheckCircle, Flame, Robot,
 } from "@phosphor-icons/react";
 
 const ACTIONS = [
+  { label: "Duyệt việc", href: "/automation", icon: CheckCircle, color: "var(--premium)", premium: true },
+  { label: "Chăm lead", href: "/sale", icon: Flame, color: "var(--rose)" },
   { label: "Viết bài AI", href: "/content", icon: PencilSimple, color: "var(--accent)" },
-  { label: "Flash Deal", href: "/promotions", icon: Tag, color: "var(--amber)" },
-  { label: "Tạo ảnh AI", href: "/images", icon: ImageIcon, color: "var(--blue)" },
-  { label: "Orchestrator", href: "/orchestrator", icon: Robot, color: "var(--premium)", premium: true },
-  { label: "AI Council", href: "/council", icon: ChatsTeardrop, color: "var(--premium)", premium: true },
-  { label: "CEO Memory", href: "/ceo-memory", icon: Brain, color: "var(--premium)", premium: true },
-  { label: "Sync now", href: "/competitors", icon: ArrowsClockwise, color: "var(--text-secondary)" },
+  { label: "Tạo promo", href: "/promotions", icon: Tag, color: "var(--amber)" },
+  { label: "Tạo ảnh", href: "/images", icon: ImageIcon, color: "var(--blue)" },
+  { label: "Run AI team", href: "/orchestrator", icon: Robot, color: "var(--premium)", premium: true },
+  { label: "Sync đối thủ", href: "/competitors", icon: ArrowsClockwise, color: "var(--text-secondary)" },
   { label: "Backup", href: "/settings", icon: FloppyDisk, color: "var(--text-secondary)" },
 ];
 

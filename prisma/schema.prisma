@@ -56,6 +56,13 @@ model Settings {
   adsOptimizeScaleCtr    Float    @default(2.0)
   adsOptimizeFreqLimit   Float    @default(3.0)
   adsOptimizeScalePct    Int      @default(20)
+  // Telegram
+  telegramBotToken       String?
+  telegramChatId         String?
+  telegramAlerts         Boolean  @default(true)
+  weeklyReportEnabled    Boolean  @default(true)
+  weeklyReportDay        Int      @default(1)
+  weeklyReportHour       Int      @default(8)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }
@@ -546,6 +553,36 @@ model AdOptimizationLog {
   oldValue     String?
   newValue     String?
   createdAt    DateTime @default(now())
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  detail    String?
+  href      String?
+  severity  String   @default("info")
+  source    String   @default("system")
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([severity, createdAt])
+}
+
+model JobRun {
+  id          String    @id @default(cuid())
+  name        String
+  status      String    @default("running")
+  trigger     String    @default("manual")
+  summary     String?
+  metrics     String?
+  error       String?
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([name, startedAt])
+  @@index([status, startedAt])
 }
 
 model SpaSync {

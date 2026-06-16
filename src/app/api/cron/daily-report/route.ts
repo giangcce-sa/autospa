@@ -8,11 +8,14 @@ import { checkPendingOutcomes } from "@/lib/ceo-memory";
 import { runOrchestrator } from "@/lib/orchestrator";
 import { syncAdsLibrary } from "@/lib/intelligence/ads-library";
 import { syncGoogleTrends } from "@/lib/intelligence/google-trends";
+import { batchSendNps } from "@/lib/feedback";
+import { finishJobRun, logActivity, startJobRun } from "@/lib/activity-log";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
   if (denied) return denied;
 
+  const job = await startJobRun("daily_report", "cron", "Daily automation bundle").catch(() => null);
   const results: Record<string, unknown> = {};
 
   try {
@@ -71,15 +74,35 @@ export async function GET(req: NextRequest) {
 
   // NPS batch-send: trigger for appointments completed in the last 2 hours
   try {
-    const npsRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/feedback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "batch-send", hoursAfter: 2 }),
-    });
-    results.nps = (await npsRes.json()).data ?? {};
+    results.nps = await batchSendNps(2);
   } catch (e) {
     results.npsError = String(e);
   }
+
+  const errorKeys = Object.keys(results).filter((key) => key.endsWith("Error"));
+  const status = errorKeys.length > 0 ? "failed" : "completed";
+  const summary = errorKeys.length > 0
+    ? `Daily report completed with ${errorKeys.length} errors`
+    : "Daily report completed";
+
+  if (job) {
+    await finishJobRun(job.id, {
+      status,
+      summary,
+      metrics: results,
+      error: errorKeys.length > 0 ? errorKeys.join(", ") : undefined,
+    }).catch(() => null);
+  }
+
+  await logActivity({
+    type: "job_run",
+    title: status === "completed" ? "Daily automation completed" : "Daily automation needs review",
+    detail: summary,
+    href: "/orchestrator",
+    severity: status === "completed" ? "success" : "warning",
+    source: "cron",
+    metadata: results,
+  }).catch(() => null);
 
   return NextResponse.json(results);
 }

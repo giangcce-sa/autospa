@@ -101,7 +101,7 @@ async function handleComment(
 
   const rules = await prisma.commentRule.findMany({ where: { isActive: true } });
   const matchedRule = rules.find((r: { trigger: string; reply: string }) => lower.includes(r.trigger.toLowerCase()));
-  let autoReply = matchedRule?.reply ?? null;
+  const autoReply = matchedRule?.reply ?? null;
   let isReplied = false;
 
   if (settings?.autoReplyComments && autoReply) {

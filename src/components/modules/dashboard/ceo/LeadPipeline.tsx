@@ -9,6 +9,7 @@ interface Stage {
   count: number;
   color: string;
   pct: number;
+  key: string;
 }
 
 export function LeadPipeline() {
@@ -20,22 +21,23 @@ export function LeadPipeline() {
     fetch("/api/sale")
       .then((r) => r.json())
       .then((res) => {
-        const leads = res.data ?? [];
-        const counts: Record<string, number> = {
-          new: 0, contacted: 0, interested: 0, booked: 0, closed: 0,
-        };
-        leads.forEach((l: { status: string }) => {
-          if (l.status in counts) counts[l.status]++;
-          else counts.new++;
+        const leads: Array<{ stage: string }> = res.data?.leads ?? [];
+        const counts: Record<string, number> = { cold: 0, warm: 0, hot: 0, booked: 0, closed: 0 };
+        leads.forEach((lead) => {
+          if (lead.stage === "closed") counts.closed++;
+          else if (lead.stage === "hot") counts.hot++;
+          else if (lead.stage === "warm") counts.warm++;
+          else if (lead.stage === "booked") counts.booked++;
+          else counts.cold++;
         });
-        const t = leads.length || 1;
+        const t = Math.max(leads.length, 1);
         setTotal(leads.length);
         setStages([
-          { label: "Lead mới", count: counts.new, color: "var(--blue)", pct: Math.round((counts.new / t) * 100) },
-          { label: "Đã liên hệ", count: counts.contacted, color: "var(--accent)", pct: Math.round((counts.contacted / t) * 100) },
-          { label: "Có nhu cầu", count: counts.interested, color: "var(--amber)", pct: Math.round((counts.interested / t) * 100) },
-          { label: "Đã đặt lịch", count: counts.booked, color: "var(--premium)", pct: Math.round((counts.booked / t) * 100) },
-          { label: "Chốt được", count: counts.closed, color: "var(--success)", pct: Math.round((counts.closed / t) * 100) },
+          { key: "cold", label: "Lead mới", count: counts.cold, color: "var(--blue)", pct: Math.round((counts.cold / t) * 100) },
+          { key: "warm", label: "Đang quan tâm", count: counts.warm, color: "var(--accent)", pct: Math.round((counts.warm / t) * 100) },
+          { key: "hot", label: "Sẵn sàng chốt", count: counts.hot, color: "var(--rose)", pct: Math.round((counts.hot / t) * 100) },
+          { key: "booked", label: "Đã đặt lịch", count: counts.booked, color: "var(--premium)", pct: Math.round((counts.booked / t) * 100) },
+          { key: "closed", label: "Đã thanh toán", count: counts.closed, color: "var(--success)", pct: Math.round((counts.closed / t) * 100) },
         ]);
       })
       .catch(() => setStages([]))
@@ -88,6 +90,9 @@ export function LeadPipeline() {
                   </span>
                 )}
               </div>
+            </div>
+            <div className="flex justify-between px-1 mt-0.5">
+              <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>{stage.pct}% tổng lead</span>
             </div>
           </div>
         );

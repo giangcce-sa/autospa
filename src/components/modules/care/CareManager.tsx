@@ -126,7 +126,7 @@ export function CareManager() {
             {customers.filter((c: Customer & { birthday?: string | null }) => {
               const today = new Date();
               const md = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}`;
-              return (c as any).birthday?.includes(md);
+              return c.birthday?.includes(md);
             }).map((c) => (
               <div key={c.id} className="text-xs py-1 flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
                 <Gift size={11} style={{ color: "var(--amber)" }} weight="fill" />

@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { triggerWorkflow } from "./workflows";
 import { postToZalo } from "./zalo";
+import { sendAlert as sendTelegramAlert } from "./telegram";
 
 /**
  * Realtime monitor — runs every 15 minutes to detect critical anomalies.
@@ -23,11 +24,17 @@ async function recordAlert(type: string, signal: string, severity: "warning" | "
   });
 }
 
-async function notifyAdmin(message: string) {
+async function notifyAdmin(message: string, title = "REALTIME ALERT", severity: "critical" | "warning" | "info" = "warning") {
   const settings = await prisma.settings.findFirst();
-  if (!settings?.zaloApprovalRecipient) return;
+  // Zalo notify
+  if (settings?.zaloApprovalRecipient) {
+    try {
+      await postToZalo(`🚨 REALTIME ALERT\n${message}`, undefined, settings.zaloApprovalRecipient);
+    } catch { /* swallow */ }
+  }
+  // Telegram notify
   try {
-    await postToZalo(`🚨 REALTIME ALERT\n${message}`, undefined, settings.zaloApprovalRecipient);
+    await sendTelegramAlert(title, message, severity);
   } catch { /* swallow */ }
 }
 

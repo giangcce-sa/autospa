@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  PaperPlaneTilt, CalendarBlank, ChatCircleDots,
-  Users, Flame, Bell, Sparkle, ArrowRight, Circle,
-  Gauge, ChartLine,
+  CalendarBlank, ChatCircleDots,
+  Flame, Bell, Sparkle, ArrowRight, Circle,
+  Gauge, ChartLine, CheckCircle, WarningCircle,
 } from "@phosphor-icons/react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Stat } from "@/components/ui/Stat";
@@ -28,6 +28,15 @@ interface Stats {
   unreadAlerts: number;
 }
 
+interface CommandCenterData {
+  stats: Stats;
+  kpis: {
+    pendingApprovals: number;
+    criticalTasks: number;
+    queueTotal: number;
+  };
+}
+
 const SETUP_STEPS = [
   { href: "/settings", label: "Cấu hình API Keys", desc: "Claude, OpenAI, Facebook, Zalo" },
   { href: "/services", label: "Thêm dịch vụ spa", desc: "Tên, giá, mô tả" },
@@ -41,11 +50,19 @@ const VIEW_KEY = "dashboard-view";
 
 export function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [command, setCommand] = useState<CommandCenterData | null>(null);
   const [view, setView] = useState<"today" | "ceo">("today");
 
   useEffect(() => {
-    fetch("/api/dashboard").then((r) => r.json()).then((res) => {
-      if (res.data) setStats(res.data);
+    fetch("/api/dashboard/command-center").then((r) => r.json()).then((res) => {
+      if (res.data) {
+        setCommand(res.data);
+        setStats(res.data.stats);
+      }
+    }).catch(() => {
+      fetch("/api/dashboard").then((r) => r.json()).then((res) => {
+        if (res.data) setStats(res.data);
+      });
     });
     try {
       const saved = localStorage.getItem(VIEW_KEY);
@@ -63,7 +80,7 @@ export function Dashboard() {
   // ─── New user onboarding view ─────────────────────────────
   if (isNewUser) {
     return (
-      <div className="space-y-6">
+      <div className="dashboard-readable space-y-6">
         <div
           className="rounded-2xl p-6 flex items-center justify-between gap-4"
           style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)" }}
@@ -142,7 +159,7 @@ export function Dashboard() {
   // ─── CEO Dashboard view ────────────────────────────────────
   if (view === "ceo") {
     return (
-      <div className="space-y-4">
+      <div className="dashboard-readable space-y-4">
         <div className="flex justify-end">{ViewToggle}</div>
         <CEODashboard />
       </div>
@@ -151,7 +168,7 @@ export function Dashboard() {
 
   // ─── Daily "Today" view ───────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="dashboard-readable space-y-6">
       {/* View toggle */}
       <div className="flex justify-end">{ViewToggle}</div>
 
@@ -161,18 +178,18 @@ export function Dashboard() {
       {/* 2. Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Stat
-          label="Bài đã đăng tháng này"
-          value={stats?.publishedThisMonth ?? 0}
-          icon={PaperPlaneTilt}
-          color="var(--accent)"
-          href="/library"
+          label="Việc gấp cần xử lý"
+          value={command?.kpis.criticalTasks ?? 0}
+          icon={WarningCircle}
+          color="var(--rose)"
+          href="#today-queue"
         />
         <Stat
-          label="Đang lên lịch"
-          value={stats?.scheduled ?? 0}
-          icon={CalendarBlank}
-          color="var(--amber)"
-          href="/publish"
+          label="Đang chờ duyệt"
+          value={command?.kpis.pendingApprovals ?? 0}
+          icon={CheckCircle}
+          color="var(--premium)"
+          href="/automation"
         />
         <Stat
           label="Tin nhắn chưa đọc"
@@ -189,11 +206,11 @@ export function Dashboard() {
           href="/sale"
         />
         <Stat
-          label="Khách hàng CRM"
-          value={stats?.totalCustomers ?? 0}
-          icon={Users}
-          color="var(--blue)"
-          href="/crm"
+          label="Đang lên lịch"
+          value={stats?.scheduled ?? 0}
+          icon={CalendarBlank}
+          color="var(--amber)"
+          href="/publish"
         />
         <Stat
           label="Cảnh báo mới"
@@ -207,7 +224,7 @@ export function Dashboard() {
       {/* 3. Quick actions */}
       <QuickActions />
 
-      {/* 4. Today's queue (3 columns) */}
+      {/* 4. Today's command queue */}
       <TodayQueue />
 
       {/* 5. Activity feed */}

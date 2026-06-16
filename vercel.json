@@ -4,6 +4,7 @@
     { "path": "/api/cron/realtime-monitor", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/ads-optimize", "schedule": "0 */4 * * *" },
     { "path": "/api/cron/daily-report",  "schedule": "0 13 * * *" },
-    { "path": "/api/cron/backup-reminder", "schedule": "0 3 * * 0" }
+    { "path": "/api/cron/backup-reminder", "schedule": "0 3 * * 0" },
+    { "path": "/api/cron/weekly-report", "schedule": "0 8 * * 1" }
   ]
 }

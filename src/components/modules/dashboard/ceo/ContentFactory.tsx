@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, PaperPlaneTilt, Clock, PencilSimple, Image } from "@phosphor-icons/react";
+import { ArrowRight, PaperPlaneTilt, Clock, PencilSimple } from "@phosphor-icons/react";
 
 interface DaySlot {
   label: string;

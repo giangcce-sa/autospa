@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   PaperPlaneTilt, Users, TreeStructure, Bell, CurrencyCircleDollar,
-  ArrowRight, Pulse,
+  ArrowRight, Pulse, WarningCircle,
 } from "@phosphor-icons/react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { SkeletonRow } from "@/components/ui/Skeleton";
 
 interface ActivityItem {
   id: string;
-  type: "post_published" | "lead_new" | "workflow_run" | "alert" | "revenue";
+  type: "post_published" | "lead_new" | "workflow_run" | "job_run" | "alert" | "revenue" | "review_blocked" | "publish_failed";
   title: string;
   detail?: string;
   href?: string;
@@ -23,8 +23,11 @@ const TYPE_ICON: Record<string, React.ElementType> = {
   post_published: PaperPlaneTilt,
   lead_new: Users,
   workflow_run: TreeStructure,
+  job_run: TreeStructure,
   alert: Bell,
   revenue: CurrencyCircleDollar,
+  review_blocked: WarningCircle,
+  publish_failed: WarningCircle,
 };
 
 const SEVERITY_COLOR: Record<string, string> = {

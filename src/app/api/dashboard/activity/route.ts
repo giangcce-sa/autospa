@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 interface ActivityItem {
   id: string;
-  type: "post_published" | "lead_new" | "workflow_run" | "alert" | "revenue";
+  type: "post_published" | "lead_new" | "workflow_run" | "job_run" | "alert" | "revenue" | "review_blocked" | "publish_failed";
   title: string;
   detail?: string;
   href?: string;
@@ -13,6 +13,26 @@ interface ActivityItem {
 
 export async function GET() {
   try {
+    const logs = await prisma.activityLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    });
+
+    if (logs.length > 0) {
+      return NextResponse.json({
+        data: logs.map((log): ActivityItem => ({
+          id: log.id,
+          type: log.type as ActivityItem["type"],
+          title: log.title,
+          detail: log.detail ?? undefined,
+          href: log.href ?? undefined,
+          timestamp: log.createdAt.toISOString(),
+          severity: log.severity as ActivityItem["severity"],
+        })),
+        success: true,
+      });
+    }
+
     const since = new Date(Date.now() - 24 * 3600 * 1000);
 
     const [recentPosts, recentLeads, recentWorkflows, recentAlerts, recentRevenue] = await Promise.all([

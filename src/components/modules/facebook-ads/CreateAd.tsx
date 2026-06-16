@@ -37,6 +37,14 @@ export function CreateAd({ facebookPageId, initialPostId }: Props) {
   const [result, setResult] = useState<{ campaignId: string; adId: string } | null>(null);
   const [error, setError] = useState("");
 
+  function pickPost(post: DraftPost) {
+    setSelectedPost(post);
+    setShowPicker(false);
+    const today = new Date().toISOString().slice(0, 10);
+    const svcName = post.service?.name ?? "Dịch vụ";
+    setName(`${svcName} · ${today}`);
+  }
+
   useEffect(() => {
     fetch("/api/content/list")
       .then((r) => r.json())
@@ -48,16 +56,7 @@ export function CreateAd({ facebookPageId, initialPostId }: Props) {
           if (found) pickPost(found);
         }
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPostId]);
-
-  const pickPost = (post: DraftPost) => {
-    setSelectedPost(post);
-    setShowPicker(false);
-    const today = new Date().toISOString().slice(0, 10);
-    const svcName = post.service?.name ?? "Dịch vụ";
-    setName(`${svcName} · ${today}`);
-  };
 
   const genderIds = () => {
     if (gender === "male") return [1];
