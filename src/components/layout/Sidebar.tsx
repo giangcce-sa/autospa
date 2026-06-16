@@ -4,51 +4,64 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Gauge, Briefcase, PencilSimple, Image, PaperPlaneTilt,
-  Archive, ChatCircleDots, Buildings, Brain, Gear, Sparkle,
-  Stack, ChartBar, Palette, Lightning, ChatTeardropDots,
-  UsersThree, Megaphone, Robot, ChartLine, Scan, Eye, Flame,
-  Tag, ArrowsSplit, BookOpen, CaretRight, ChatsTeardrop, TrendUp,
-  SidebarSimple, MagnifyingGlass,
+  Gauge, PencilSimple, Megaphone, UsersThree, Gear,
+  Robot, ChatsTeardrop, Brain, PaperPlaneTilt, Archive,
+  Tag, Sparkle, Image, Stack, ArrowsSplit, ChartBar,
+  TrendUp, Eye, ChartLine, ChatCircleDots, Flame,
+  Lightning, ChatTeardropDots, Briefcase, Buildings,
+  Palette, Scan, BookOpen, SidebarSimple, MagnifyingGlass,
 } from "@phosphor-icons/react";
 import { ThemeToggle } from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 import { useActivePage } from "@/contexts/ActivePageContext";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
-  badge?: string;
   premium?: boolean;
 }
 
-interface NavGroup {
+interface Section {
   id: string;
   label: string;
-  dot?: string;
-  defaultOpen: boolean;
-  items: NavItem[];
+  icon: React.ElementType;
+  color?: string;
+  basic: NavItem[];    // shown in Basic mode
+  expert: NavItem[];   // shown only in Expert mode (additional)
 }
 
-const PINNED: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: Gauge },
-  { label: "Orchestrator", href: "/orchestrator", icon: Robot, premium: true },
-  { label: "AI Council", href: "/council", icon: ChatsTeardrop, premium: true },
-  { label: "CEO Memory", href: "/ceo-memory", icon: Brain, premium: true },
-  { label: "Self-Learning", href: "/learning", icon: Brain, premium: true },
-];
+// ─── Navigation structure ─────────────────────────────────────────────────────
 
-const GROUPS: NavGroup[] = [
+const SECTIONS: Section[] = [
+  {
+    id: "core",
+    label: "AI Core",
+    icon: Gauge,
+    color: "var(--premium)",
+    basic: [
+      { label: "Dashboard", href: "/", icon: Gauge },
+      { label: "Orchestrator", href: "/orchestrator", icon: Robot, premium: true },
+    ],
+    expert: [
+      { label: "AI Council", href: "/council", icon: ChatsTeardrop, premium: true },
+      { label: "CEO Memory", href: "/ceo-memory", icon: Brain, premium: true },
+      { label: "Self-Learning", href: "/learning", icon: Brain, premium: true },
+    ],
+  },
   {
     id: "content",
     label: "Nội dung",
-    dot: "var(--accent)",
-    defaultOpen: false,
-    items: [
+    icon: PencilSimple,
+    color: "var(--accent)",
+    basic: [
       { label: "Viết bài", href: "/content", icon: PencilSimple },
       { label: "Đăng & Lịch", href: "/publish", icon: PaperPlaneTilt },
       { label: "Thư viện", href: "/library", icon: Archive },
+    ],
+    expert: [
       { label: "Flash Deal", href: "/flash-deal", icon: Tag },
       { label: "Nghiên cứu", href: "/content-research", icon: Sparkle },
       { label: "Tạo ảnh AI", href: "/images", icon: Image },
@@ -57,15 +70,17 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: "ads",
-    label: "Quảng cáo",
-    dot: "var(--amber)",
-    defaultOpen: false,
-    items: [
+    id: "marketing",
+    label: "Marketing",
+    icon: Megaphone,
+    color: "var(--warning)",
+    basic: [
       { label: "Facebook Ads", href: "/facebook-ads", icon: Megaphone },
+      { label: "Phân tích", href: "/analytics", icon: ChartBar },
+    ],
+    expert: [
       { label: "TikTok / IG", href: "/tiktok-ig", icon: Sparkle },
       { label: "Google Business", href: "/google-business", icon: MagnifyingGlass },
-      { label: "Phân tích", href: "/analytics", icon: ChartBar },
       { label: "Intelligence", href: "/competitors", icon: TrendUp },
       { label: "Listening", href: "/listening", icon: Eye },
       { label: "Báo cáo", href: "/reports", icon: ChartLine },
@@ -74,12 +89,14 @@ const GROUPS: NavGroup[] = [
   {
     id: "customers",
     label: "Khách hàng",
-    dot: "var(--rose)",
-    defaultOpen: false,
-    items: [
+    icon: UsersThree,
+    color: "var(--rose)",
+    basic: [
       { label: "Tin nhắn", href: "/inbox", icon: ChatCircleDots },
       { label: "Chốt Sale", href: "/sale", icon: Flame },
       { label: "CRM", href: "/crm", icon: UsersThree },
+    ],
+    expert: [
       { label: "Zalo OA", href: "/zalo", icon: Lightning },
       { label: "Bình luận", href: "/auto-comment", icon: ChatTeardropDots },
     ],
@@ -87,11 +104,13 @@ const GROUPS: NavGroup[] = [
   {
     id: "settings",
     label: "Thiết lập",
-    defaultOpen: false,
-    items: [
+    icon: Gear,
+    basic: [
       { label: "Cài đặt", href: "/settings", icon: Gear },
       { label: "Dịch vụ", href: "/services", icon: Briefcase },
       { label: "Thương hiệu", href: "/brand", icon: Buildings },
+    ],
+    expert: [
       { label: "Brand Kit", href: "/brand-kit", icon: Palette },
       { label: "Style Training", href: "/style-training", icon: Brain },
       { label: "Tự động hóa", href: "/automation", icon: Lightning },
@@ -101,327 +120,268 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
-const ICON_ONLY_KEY = "sidebar-icon-only";
-const GROUP_COLLAPSE_KEY = "sidebar-collapsed";
+const STORAGE_SECTION = "sidebar-section";
+const STORAGE_MODE = "sidebar-mode";
+const STORAGE_COLLAPSED = "sidebar-icon-only";
 
-function NavLink({
-  item,
-  active,
-  iconOnly,
-}: {
-  item: NavItem;
-  active: boolean;
-  iconOnly: boolean;
-}) {
+// ─── NavLink ──────────────────────────────────────────────────────────────────
+
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
-  const isPremiumActive = item.premium && active;
-  const isPremiumIdle = item.premium && !active;
 
-  const activeStyle = isPremiumActive
+  const activeStyle = item.premium
     ? { background: "linear-gradient(135deg, var(--premium) 0%, var(--premium-hover) 100%)", color: "white", boxShadow: "var(--shadow-premium)" }
-    : { background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)", color: "white", boxShadow: "0 2px 10px rgba(45,106,79,0.28)" };
+    : { background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)", color: "white", boxShadow: "0 2px 10px rgba(45,106,79,0.25)" };
 
-  const idleStyle = isPremiumIdle
-    ? { background: "transparent", color: "var(--premium)" }
-    : { background: "transparent", color: "var(--text-secondary)" };
-
-  const className = `${item.premium ? "nav-item-premium" : "nav-item"} flex items-center gap-2.5 rounded-lg font-medium text-[13px] transition-all duration-150 ${iconOnly ? "justify-center px-0 py-2" : "px-2.5 py-[7px]"}`;
+  const idleStyle = item.premium
+    ? { color: "var(--premium)" }
+    : { color: "var(--text-secondary)" };
 
   return (
     <Link
       href={item.href}
-      className={className}
-      title={iconOnly ? item.label : undefined}
+      className="flex items-center gap-2.5 rounded-lg font-medium text-[13px] px-2.5 py-[7px] transition-all duration-150 hover:bg-[var(--bg-subtle)]"
       style={active ? activeStyle : idleStyle}
     >
       <Icon size={14} weight={active ? "fill" : "regular"} style={{ flexShrink: 0 }} />
-      {!iconOnly && (
-        <>
-          <span className="truncate flex-1">{item.label}</span>
-          {item.badge && !active && (
-            <span
-              className="badge-pulse text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
-              style={{ background: item.premium ? "var(--premium)" : "var(--accent)", color: "white" }}
-            >
-              {item.badge}
-            </span>
-          )}
-        </>
-      )}
+      <span className="truncate flex-1">{item.label}</span>
     </Link>
   );
 }
 
-function CollapsibleGroup({
-  group,
-  pathname,
-  open,
-  onToggle,
-  iconOnly,
-}: {
-  group: NavGroup;
-  pathname: string;
-  open: boolean;
-  onToggle: () => void;
-  iconOnly: boolean;
-}) {
-  const hasActive = group.items.some((i) => i.href === pathname);
-
-  if (iconOnly) {
-    return (
-      <div className="space-y-0.5">
-        {group.items.map((item) => (
-          <NavLink key={item.href} item={item} active={pathname === item.href} iconOnly />
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <button
-        onClick={onToggle}
-        className="group/hdr flex items-center justify-between w-full px-2 py-1.5 rounded-lg transition-colors hover:bg-[var(--bg-subtle)]"
-      >
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest"
-          style={{ color: hasActive ? "var(--text-secondary)" : "var(--text-muted)" }}>
-          {group.dot && (
-            <span
-              className="w-1.5 h-1.5 rounded-full shrink-0"
-              style={{ background: hasActive ? group.dot : "var(--border-strong)" }}
-            />
-          )}
-          {group.label}
-        </span>
-        <div className="flex items-center gap-1.5">
-          {!open && hasActive && (
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: group.dot ?? "var(--accent)" }} />
-          )}
-        <CaretRight
-          size={9}
-          style={{
-            color: "var(--text-muted)",
-            transform: open ? "rotate(90deg)" : "rotate(0deg)",
-            transition: "transform 0.2s cubic-bezier(0.4,0,0.2,1)",
-          }}
-        />
-        </div>
-      </button>
-
-      <div
-        className="overflow-hidden"
-        style={{
-          maxHeight: open ? "600px" : "0px",
-          opacity: open ? 1 : 0,
-          transition: "max-height 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.2s ease",
-        }}
-      >
-        <div className="space-y-0.5 pt-0.5 pb-1 pl-1">
-          {group.items.map((item) => (
-            <NavLink key={item.href} item={item} active={pathname === item.href} iconOnly={false} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+// ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
   const pathname = usePathname();
   const { pages, selectedPageId, setSelectedPageId } = useActivePage();
 
-  const [iconOnly, setIconOnly] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [activeId, setActiveId] = useState(SECTIONS[0].id);
+  const [mode, setMode] = useState<"basic" | "expert">("basic");
 
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
-    const defaults: Record<string, boolean> = {};
-    GROUPS.forEach((g) => { defaults[g.id] = !g.defaultOpen; });
-    return defaults;
-  });
-
+  // Load from localStorage
   useEffect(() => {
     try {
-      const io = localStorage.getItem(ICON_ONLY_KEY);
-      if (io === "1") setIconOnly(true);
-      const saved = JSON.parse(localStorage.getItem(GROUP_COLLAPSE_KEY) ?? "{}") as Record<string, boolean>;
-      if (Object.keys(saved).length > 0) setCollapsed((prev) => ({ ...prev, ...saved }));
+      if (localStorage.getItem(STORAGE_COLLAPSED) === "1") setCollapsed(true);
+      const savedSection = localStorage.getItem(STORAGE_SECTION);
+      if (savedSection) setActiveId(savedSection);
+      const savedMode = localStorage.getItem(STORAGE_MODE) as "basic" | "expert" | null;
+      if (savedMode) setMode(savedMode);
     } catch { /* ignore */ }
   }, []);
 
+  // Auto-switch section when navigating via URL
   useEffect(() => {
-    GROUPS.forEach((g) => {
-      if (g.items.some((i) => i.href === pathname)) {
-        setCollapsed((prev) => {
-          if (!prev[g.id]) return prev;
-          const next = { ...prev, [g.id]: false };
-          localStorage.setItem(GROUP_COLLAPSE_KEY, JSON.stringify(next));
-          return next;
-        });
+    for (const section of SECTIONS) {
+      const all = [...section.basic, ...section.expert];
+      if (all.some((i) => i.href === pathname || (pathname !== "/" && i.href !== "/" && pathname.startsWith(i.href)))) {
+        setActiveId(section.id);
+        break;
       }
-    });
+    }
   }, [pathname]);
 
-  const toggleIconOnly = () => {
-    setIconOnly((v) => {
-      localStorage.setItem(ICON_ONLY_KEY, v ? "0" : "1");
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      try { localStorage.setItem(STORAGE_COLLAPSED, v ? "0" : "1"); } catch { /* ignore */ }
       return !v;
     });
   };
 
-  const toggleGroup = (id: string) => {
-    setCollapsed((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      localStorage.setItem(GROUP_COLLAPSE_KEY, JSON.stringify(next));
+  const selectSection = (id: string) => {
+    setActiveId(id);
+    try { localStorage.setItem(STORAGE_SECTION, id); } catch { /* ignore */ }
+    // Expand if collapsed
+    if (collapsed) {
+      setCollapsed(false);
+      try { localStorage.setItem(STORAGE_COLLAPSED, "0"); } catch { /* ignore */ }
+    }
+  };
+
+  const toggleMode = () => {
+    setMode((v) => {
+      const next = v === "basic" ? "expert" : "basic";
+      try { localStorage.setItem(STORAGE_MODE, next); } catch { /* ignore */ }
       return next;
     });
   };
 
+  const activeSection = SECTIONS.find((s) => s.id === activeId) ?? SECTIONS[0];
+  const visibleItems = mode === "expert"
+    ? [...activeSection.basic, ...activeSection.expert]
+    : activeSection.basic;
+  const hiddenCount = activeSection.expert.length;
+
+  const sidebarWidth = collapsed ? "var(--sidebar-width-collapsed)" : "var(--sidebar-width)";
+
   return (
     <>
-      {/* Spacer for layout offset */}
-      <div
-        className="hidden md:block shrink-0 transition-all duration-200"
-        style={{ width: iconOnly ? "var(--sidebar-width-collapsed)" : "var(--sidebar-width)" }}
-      />
+      {/* Layout spacer */}
+      <div className="hidden md:block shrink-0 transition-all duration-200" style={{ width: sidebarWidth }} />
 
       <aside
-        className="fixed left-0 top-0 h-full flex-col border-r z-30 hidden md:flex overflow-y-auto transition-all duration-200"
-        style={{
-          width: iconOnly ? "var(--sidebar-width-collapsed)" : "var(--sidebar-width)",
-          background: "var(--bg-card)",
-          borderColor: "var(--border)",
-        }}
+        className="fixed left-0 top-0 h-full z-30 hidden md:flex flex-row border-r overflow-hidden transition-all duration-200"
+        style={{ width: sidebarWidth, background: "var(--bg-card)", borderColor: "var(--border)" }}
       >
-        {/* Logo + toggle */}
+        {/* ── Activity Bar (left icon strip) ── */}
         <div
-          className="p-3 border-b sticky top-0 z-10 flex items-center"
-          style={{
-            borderColor: "var(--border)",
-            background: "var(--bg-card)",
-            justifyContent: iconOnly ? "center" : "space-between",
-          }}
+          className="flex flex-col items-center py-2 shrink-0 border-r"
+          style={{ width: "var(--sidebar-width-collapsed)", borderColor: "var(--border)" }}
         >
-          {!iconOnly && (
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div
-                className="logo-icon w-8 h-8 rounded-lg flex items-center justify-center shrink-0 cursor-default"
-                style={{
-                  background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)",
-                  boxShadow: "0 2px 8px rgba(45,106,79,0.35)",
-                }}
-              >
-                <Sparkle size={16} weight="fill" color="white" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-sm leading-tight truncate" style={{ color: "var(--text)" }}>AutoSpa</p>
-                <p className="text-[10px] leading-tight" style={{ color: "var(--text-muted)" }}>Marketing AI</p>
-              </div>
-            </div>
-          )}
+          {/* Logo */}
+          <div
+            className="logo-icon w-8 h-8 rounded-lg flex items-center justify-center mb-3 cursor-default shrink-0"
+            style={{
+              background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)",
+              boxShadow: "0 2px 8px rgba(45,106,79,0.35)",
+            }}
+          >
+            <Sparkle size={15} weight="fill" color="white" />
+          </div>
 
-          {iconOnly && (
-            <div
-              className="logo-icon w-8 h-8 rounded-lg flex items-center justify-center cursor-default"
-              style={{
-                background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)",
-                boxShadow: "0 2px 8px rgba(45,106,79,0.35)",
-              }}
-            >
-              <Sparkle size={16} weight="fill" color="white" />
-            </div>
-          )}
+          {/* Section icons */}
+          <div className="flex flex-col gap-0.5 flex-1 w-full px-2">
+            {SECTIONS.map((section) => {
+              const Icon = section.icon;
+              const isActive = section.id === activeId;
+              const hasCurrentRoute = [...section.basic, ...section.expert].some(
+                (i) => i.href === pathname || (pathname !== "/" && i.href !== "/" && pathname.startsWith(i.href))
+              );
 
-          {!iconOnly && (
+              return (
+                <button
+                  key={section.id}
+                  onClick={() => selectSection(section.id)}
+                  title={section.label}
+                  className="relative flex flex-col items-center justify-center w-full py-2.5 rounded-xl transition-all duration-150 group"
+                  style={{
+                    background: isActive ? (section.color ? `${section.color}15` : "var(--bg-subtle)") : "transparent",
+                    color: isActive ? (section.color ?? "var(--accent)") : "var(--text-muted)",
+                  }}
+                >
+                  {/* Active indicator bar */}
+                  {isActive && (
+                    <div
+                      className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full"
+                      style={{ background: section.color ?? "var(--accent)" }}
+                    />
+                  )}
+
+                  <Icon size={18} weight={isActive ? "fill" : "regular"} />
+                  <span className="text-[9px] mt-0.5 font-medium leading-none">
+                    {section.label.split(" ")[0]}
+                  </span>
+
+                  {/* Dot if active route but different section selected */}
+                  {hasCurrentRoute && !isActive && (
+                    <div
+                      className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
+                      style={{ background: section.color ?? "var(--accent)" }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Footer controls */}
+          <div className="flex flex-col items-center gap-2 pb-2 pt-2 w-full border-t px-2" style={{ borderColor: "var(--border)" }}>
             <button
-              onClick={toggleIconOnly}
-              className="p-1.5 rounded-lg transition-opacity hover:opacity-80 shrink-0"
-              title="Thu gọn sidebar (Cmd+B)"
+              onClick={toggleCollapsed}
+              title={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
+              className="p-2 rounded-lg transition-opacity hover:opacity-70 w-full flex justify-center"
               style={{ color: "var(--text-muted)" }}
             >
               <SidebarSimple size={14} />
             </button>
-          )}
+            <ThemeToggle />
+          </div>
         </div>
 
-        {/* Page selector */}
-        {!iconOnly && pages.length > 1 && (
-          <div className="px-3 pt-2">
-            <select
-              value={selectedPageId}
-              onChange={(e) => setSelectedPageId(e.target.value)}
-              className="w-full text-xs rounded-lg px-2.5 py-1.5 border truncate outline-none"
-              style={{ borderColor: "var(--border)", background: "var(--bg-subtle)", color: "var(--text)" }}
+        {/* ── Item Panel (right) ── */}
+        {!collapsed && (
+          <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+            {/* Header */}
+            <div
+              className="px-3 pt-3 pb-2 border-b sticky top-0 z-10"
+              style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
             >
-              {pages.map((p) => (
-                <option key={p.id} value={p.id}>{p.pageName}</option>
-              ))}
-            </select>
+              {/* Brand name */}
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="font-semibold text-sm leading-tight" style={{ color: "var(--text)" }}>AutoSpa</p>
+                  <p className="text-[10px] leading-tight" style={{ color: "var(--text-muted)" }}>Marketing AI</p>
+                </div>
+                <UserMenu />
+              </div>
+
+              {/* Page selector */}
+              {pages.length > 1 && (
+                <select
+                  value={selectedPageId}
+                  onChange={(e) => setSelectedPageId(e.target.value)}
+                  className="w-full text-[11px] rounded-lg px-2 py-1.5 border truncate outline-none"
+                  style={{ borderColor: "var(--border)", background: "var(--bg-subtle)", color: "var(--text)" }}
+                >
+                  {pages.map((p) => (
+                    <option key={p.id} value={p.id}>{p.pageName}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Section label */}
+            <div className="px-3 pt-2.5 pb-1">
+              <p
+                className="text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: activeSection.color ?? "var(--text-muted)" }}
+              >
+                {activeSection.label}
+              </p>
+            </div>
+
+            {/* Nav items */}
+            <nav className="flex-1 px-2 pb-2 overflow-y-auto">
+              <div className="space-y-0.5">
+                {visibleItems.map((item) => {
+                  const active = item.href === "/"
+                    ? pathname === "/"
+                    : pathname === item.href || pathname.startsWith(item.href + "/");
+                  return <NavLink key={item.href} item={item} active={active} />;
+                })}
+              </div>
+
+              {/* Expert unlock hint */}
+              {mode === "basic" && hiddenCount > 0 && (
+                <button
+                  onClick={toggleMode}
+                  className="mt-3 w-full text-left px-2.5 py-2 rounded-lg text-[11px] transition-colors hover:bg-[var(--bg-subtle)]"
+                  style={{ color: "var(--text-muted)", border: "1px dashed var(--border-strong)" }}
+                >
+                  + {hiddenCount} tính năng nâng cao
+                </button>
+              )}
+            </nav>
+
+            {/* Footer: mode toggle + version */}
+            <div
+              className="px-3 py-2 border-t flex items-center justify-between"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <button
+                onClick={toggleMode}
+                className="text-[10px] px-2 py-1 rounded-full font-semibold transition-colors"
+                style={{
+                  background: mode === "expert" ? "var(--premium-light)" : "var(--bg-subtle)",
+                  color: mode === "expert" ? "var(--premium)" : "var(--text-muted)",
+                }}
+              >
+                {mode === "basic" ? "Basic" : "Expert"}
+              </button>
+              <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>v2.4.0</span>
+            </div>
           </div>
         )}
-
-        {/* Nav */}
-        <nav className="flex-1 px-2 py-2 pb-4">
-          {/* Pinned — AI Core */}
-          {!iconOnly && (
-            <p className="px-2 mb-1 text-[9px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-              AI Core
-            </p>
-          )}
-          <div className="space-y-0.5 mb-3">
-            {PINNED.map((item) => (
-              <NavLink key={item.href} item={item} active={pathname === item.href} iconOnly={iconOnly} />
-            ))}
-          </div>
-
-          {/* Divider */}
-          <div className="mb-3" style={{ height: "1px", background: "var(--border)", margin: iconOnly ? "8px 4px" : "8px 8px" }} />
-
-          {/* Groups */}
-          <div className="space-y-1">
-            {GROUPS.map((group) => (
-              <CollapsibleGroup
-                key={group.id}
-                group={group}
-                pathname={pathname}
-                open={!collapsed[group.id]}
-                onToggle={() => toggleGroup(group.id)}
-                iconOnly={iconOnly}
-              />
-            ))}
-          </div>
-        </nav>
-
-        {/* Footer */}
-        <div
-          className="p-3 border-t sticky bottom-0 flex items-center gap-2"
-          style={{
-            borderColor: "var(--border)",
-            background: "var(--bg-card)",
-            justifyContent: iconOnly ? "center" : "space-between",
-            flexDirection: iconOnly ? "column" : "row",
-          }}
-        >
-          {iconOnly ? (
-            <>
-              <button
-                onClick={toggleIconOnly}
-                className="p-1.5 rounded-lg transition-opacity hover:opacity-80"
-                title="Mở rộng sidebar"
-                style={{ color: "var(--text-muted)" }}
-              >
-                <SidebarSimple size={14} />
-              </button>
-              <ThemeToggle />
-            </>
-          ) : (
-            <>
-              <UserMenu />
-              <div className="flex items-center gap-2">
-                <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>v2.3.0</span>
-                <ThemeToggle />
-              </div>
-            </>
-          )}
-        </div>
       </aside>
     </>
   );
