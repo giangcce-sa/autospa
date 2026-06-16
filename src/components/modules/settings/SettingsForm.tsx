@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Key, Robot, FacebookLogo, CheckCircle, Lightning, Spinner, Archive, Globe, Copy, Plus, Trash } from "@phosphor-icons/react";
+import { Key, Robot, FacebookLogo, CheckCircle, Lightning, Spinner, Archive, Globe, Copy, Plus, Trash, FloppyDisk, DownloadSimple, PencilSimple, X } from "@phosphor-icons/react";
 
 // Non-secret fields pre-filled normally.
 // Secret fields (keys/tokens) are NEVER pre-filled — empty = keep existing value in DB.
@@ -19,6 +19,7 @@ interface FormState {
   claudeBaseUrl: string;
   openaiBaseUrl: string;
   imageModel: string;
+  openaiChatModel: string;
   zaloOaId: string;
   draftRetentionDays: string;
   publishedRetentionDays: string;
@@ -84,6 +85,7 @@ export function SettingsForm() {
     claudeBaseUrl: "https://api.anthropic.com",
     openaiBaseUrl: "https://api.openai.com/v1",
     imageModel: "dall-e-3",
+    openaiChatModel: "gpt-5",
     zaloOaId: "",
     draftRetentionDays: "30",
     publishedRetentionDays: "90",
@@ -118,6 +120,9 @@ export function SettingsForm() {
   const [fbTest, setFbTest] = useState<TestStatus>(initTest());
   const [addingPage, setAddingPage] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingPage, setEditingPage] = useState<string | null>(null);
+  const [editPageForm, setEditPageForm] = useState({ pageName: "", accessToken: "", adAccountId: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const loadFbPages = () =>
     fetch("/api/facebook-pages").then((r) => r.json()).then((res) => {
@@ -139,6 +144,7 @@ export function SettingsForm() {
         claudeBaseUrl: d.claudeBaseUrl ?? "https://api.anthropic.com",
         openaiBaseUrl: d.openaiBaseUrl ?? "https://api.openai.com/v1",
         imageModel: d.imageModel ?? "dall-e-3",
+        openaiChatModel: d.openaiChatModel ?? "gpt-5",
         zaloOaId: d.zaloOaId ?? "",
         draftRetentionDays: String(d.draftRetentionDays ?? 30),
         publishedRetentionDays: String(d.publishedRetentionDays ?? 90),
@@ -221,6 +227,25 @@ export function SettingsForm() {
     setEditingAdAccount((prev) => { const n = { ...prev }; delete n[id]; return n; });
   };
 
+  const openEditPage = (p: FbPage) => {
+    setEditingPage(p.id);
+    setEditPageForm({ pageName: p.pageName, accessToken: "", adAccountId: p.adAccountId ?? "" });
+  };
+
+  const saveEditPage = async () => {
+    if (!editingPage) return;
+    setSavingEdit(true);
+    try {
+      await fetch("/api/facebook-pages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", id: editingPage, ...editPageForm }),
+      });
+      setEditingPage(null);
+      loadFbPages();
+    } finally { setSavingEdit(false); }
+  };
+
   const handleSave = async () => {
     setLoading(true);
     try {
@@ -228,6 +253,7 @@ export function SettingsForm() {
         claudeBaseUrl: form.claudeBaseUrl,
         openaiBaseUrl: form.openaiBaseUrl,
         imageModel: form.imageModel,
+        openaiChatModel: form.openaiChatModel,
         zaloOaId: form.zaloOaId,
         draftRetentionDays: Number(form.draftRetentionDays) || 0,
         publishedRetentionDays: Number(form.publishedRetentionDays) || 0,
@@ -355,7 +381,7 @@ export function SettingsForm() {
             <SavedBadge has={saved.openaiApiKey} />
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="info">AI tạo hình ảnh</Badge>
+            <Badge variant="info">Tạo ảnh + AI Council</Badge>
             <Button size="sm" variant="secondary" loading={tests.openai.status === "loading"} onClick={() => testConnection("openai")}>
               Test kết nối
             </Button>
@@ -384,6 +410,13 @@ export function SettingsForm() {
             onChange={set("imageModel")}
             hint="OpenAI: dall-e-3 · dall-e-2 | 9router: cx/gpt-5.5-image · cx/gpt-5.4-image"
           />
+          <Input
+            label="Model AI Council (chat)"
+            placeholder="gpt-5"
+            value={f.openaiChatModel}
+            onChange={set("openaiChatModel")}
+            hint="Model dùng cho bàn luận đa AI: gpt-5 · gpt-5.5 · gpt-4o · gpt-4-turbo · cx/gpt-5.5..."
+          />
         </div>
         <TestResult test={tests.openai} />
       </Card>
@@ -405,10 +438,10 @@ export function SettingsForm() {
         {fbPages.length > 0 && (
           <div className="space-y-2 mb-3">
             {fbPages.map((p) => {
-              const isEditingAd = p.id in editingAdAccount;
-              const adVal = isEditingAd ? editingAdAccount[p.id] : (p.adAccountId ?? "");
+              const isEditing = editingPage === p.id;
               return (
-                <div key={p.id} className="rounded-lg overflow-hidden" style={{ background: "var(--bg-subtle)" }}>
+                <div key={p.id} className="rounded-lg overflow-hidden border" style={{ background: "var(--bg-subtle)", borderColor: "var(--border)" }}>
+                  {/* Row summary */}
                   <div className="flex items-center justify-between gap-2 px-3 py-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -416,26 +449,57 @@ export function SettingsForm() {
                         <Badge variant={p.isActive ? "success" : "neutral"}>{p.isActive ? "Bật" : "Tắt"}</Badge>
                         {p.adAccountId && <Badge variant="info">Ads</Badge>}
                       </div>
-                      <p className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>ID: {p.fbPageId} · Token: {p.accessTokenHint}</p>
+                      <p className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>
+                        ID: {p.fbPageId} · Token: {p.accessTokenHint}
+                      </p>
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      <Button size="sm" variant="secondary" onClick={() => toggleFbPage(p.id)}>{p.isActive ? "Tắt" : "Bật"}</Button>
-                      <Button size="sm" variant="danger" onClick={() => deleteFbPage(p.id)}><Trash size={11} /></Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => isEditing ? setEditingPage(null) : openEditPage(p)}
+                      >
+                        {isEditing ? <X size={11} /> : <PencilSimple size={11} />}
+                        {isEditing ? "Hủy" : "Sửa"}
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => toggleFbPage(p.id)}>
+                        {p.isActive ? "Tắt" : "Bật"}
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => deleteFbPage(p.id)}>
+                        <Trash size={11} />
+                      </Button>
                     </div>
                   </div>
-                  <div className="px-3 pb-2 flex items-center gap-2">
-                    <label className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>Ad Account ID:</label>
-                    <input
-                      className="flex-1 text-xs px-2 py-1 rounded border outline-none font-mono"
-                      style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
-                      placeholder="act_XXXXXXXXX"
-                      value={adVal}
-                      onChange={(e) => setEditingAdAccount((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                    />
-                    {isEditingAd && (
-                      <Button size="sm" onClick={() => saveAdAccount(p.id)}>Lưu</Button>
-                    )}
-                  </div>
+
+                  {/* Inline edit form */}
+                  {isEditing && (
+                    <div className="px-3 pb-3 pt-1 space-y-2 border-t" style={{ borderColor: "var(--border)" }}>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          label="Tên Page"
+                          placeholder={p.pageName}
+                          value={editPageForm.pageName}
+                          onChange={(e) => setEditPageForm((f) => ({ ...f, pageName: e.target.value }))}
+                        />
+                        <Input
+                          label="Ad Account ID"
+                          placeholder="act_XXXXXXXXX"
+                          value={editPageForm.adAccountId}
+                          onChange={(e) => setEditPageForm((f) => ({ ...f, adAccountId: e.target.value }))}
+                        />
+                      </div>
+                      <Input
+                        label="Access Token mới (để trống = giữ token cũ)"
+                        type="password"
+                        placeholder="EAAxxxx... (để trống nếu không đổi)"
+                        value={editPageForm.accessToken}
+                        onChange={(e) => setEditPageForm((f) => ({ ...f, accessToken: e.target.value }))}
+                      />
+                      <Button size="sm" loading={savingEdit} onClick={saveEditPage}>
+                        <FloppyDisk size={11} /> Lưu thay đổi
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -759,6 +823,38 @@ export function SettingsForm() {
               </div>
             </div>
           </div>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <FloppyDisk size={16} style={{ color: "var(--accent)" }} weight="fill" />
+            <CardTitle>Backup dữ liệu</CardTitle>
+          </div>
+        </CardHeader>
+        <div className="space-y-3 text-xs">
+          <p style={{ color: "var(--text-secondary)" }}>
+            Tự động: Neon Postgres có Point-in-Time Recovery 7 ngày. Mỗi Chủ nhật 3h sáng, Zalo nhắc tải backup tuần này.
+          </p>
+          <p style={{ color: "var(--text-secondary)" }}>
+            Manual download: tải file JSON gzipped chứa toàn bộ data — settings, posts, customers, leads, memory, mọi thứ.
+          </p>
+          <a
+            href="/api/backup"
+            download
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
+            style={{
+              background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)",
+              color: "white",
+              boxShadow: "0 1px 6px rgba(45,106,79,0.22)",
+            }}
+          >
+            <DownloadSimple size={13} weight="bold" /> Download backup ngay
+          </a>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Tip: Giữ ít nhất 4 backup gần nhất (1 tháng). Upload lên Google Drive / iCloud / external drive là an toàn nhất.
+          </p>
         </div>
       </Card>
 

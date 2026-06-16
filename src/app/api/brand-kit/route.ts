@@ -18,19 +18,23 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { facebookPageId: rawPageId, logoUrl, primaryColor, accentColor, fontStyle, spaName, tagline } = body;
     const facebookPageId = rawPageId || null;
-    const kit = await prisma.brandKit.upsert({
-      where: { facebookPageId },
-      create: {
-        facebookPageId,
-        logoUrl,
-        primaryColor: primaryColor ?? "#2d6a4f",
-        accentColor: accentColor ?? "#40c074",
-        fontStyle: fontStyle ?? "elegant",
-        spaName,
-        tagline,
-      },
-      update: { logoUrl, primaryColor, accentColor, fontStyle, spaName, tagline },
-    });
+    const existing = await prisma.brandKit.findFirst({ where: { facebookPageId } });
+    const kit = existing
+      ? await prisma.brandKit.update({
+          where: { id: existing.id },
+          data: { logoUrl, primaryColor, accentColor, fontStyle, spaName, tagline },
+        })
+      : await prisma.brandKit.create({
+          data: {
+            facebookPageId,
+            logoUrl,
+            primaryColor: primaryColor ?? "#2d6a4f",
+            accentColor: accentColor ?? "#40c074",
+            fontStyle: fontStyle ?? "elegant",
+            spaName,
+            tagline,
+          },
+        });
     return NextResponse.json({ data: kit, success: true });
   } catch {
     return NextResponse.json({ error: "Lỗi khi lưu", success: false }, { status: 500 });

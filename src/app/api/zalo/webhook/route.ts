@@ -4,6 +4,7 @@ import { resolveApprovalByCode } from "@/lib/approval-gate";
 import { setCampaignStatus, updateCampaignBudget } from "@/lib/facebook-ads";
 import { getOrCreateConversation, processIncomingMessage, executeHandoff } from "@/lib/lead-agent";
 import { postToZalo } from "@/lib/zalo";
+import { matchMessageRule } from "@/lib/message-rules";
 
 // Zalo OA webhook verification
 export async function GET(req: NextRequest) {
@@ -50,6 +51,17 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ status: "ok" });
+  }
+
+  // MessageRule pattern matching — runs first, before Lead Agent
+  const ruleMatch = await matchMessageRule(text, "zalo");
+  if (ruleMatch) {
+    try {
+      await postToZalo(ruleMatch.reply, undefined, senderId);
+      return NextResponse.json({ status: "ok" });
+    } catch {
+      // rule send failed — fall through to Lead Agent
+    }
   }
 
   // Lead Agent — runs when automationLevel is semi or full

@@ -45,7 +45,17 @@ export function ReportsDashboard() {
     } finally { setGenLoading(false); }
   };
 
-  if (!data) return <div className="text-center py-16" style={{ color: "var(--text-muted)" }}>Đang tải...</div>;
+  if (!data) return (
+    <div className="space-y-4 max-w-5xl">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[1,2,3,4].map(i => <div key={i} className="skeleton h-24 rounded-xl" />)}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[1,2,3,4].map(i => <div key={i} className="skeleton h-24 rounded-xl" />)}
+      </div>
+      <div className="skeleton h-64 rounded-xl" />
+    </div>
+  );
 
   return (
     <div className="space-y-4 max-w-5xl">

@@ -1,5 +1,8 @@
 import { prisma } from "./db";
 import { generateContent, getBrandContext } from "./claude";
+import { generateChatCompletion } from "./openai";
+import { getTopCompetitorPosts } from "./competitor-research";
+import { reviewContent } from "./reviewer";
 
 interface ContentIdea {
   topic: string;
@@ -18,7 +21,7 @@ export async function generateContentPlan(
   const now = new Date();
 
   // Gather context in parallel
-  const [services, topPosts, holidays, brandCtx] = await Promise.all([
+  const [services, topPosts, holidays, brandCtx, competitorPosts] = await Promise.all([
     prisma.service.findMany({ select: { name: true, description: true }, take: 10 }),
     prisma.post.findMany({
       where: { status: "published" },
@@ -32,6 +35,7 @@ export async function generateContentPlan(
       take: 20,
     }),
     getBrandContext(),
+    getTopCompetitorPosts(7, 5).catch(() => []),
   ]);
 
   const serviceList = services.map((s: { name: string; description: string | null }) => `- ${s.name}${s.description ? `: ${s.description}` : ""}`).join("\n");
@@ -53,6 +57,7 @@ ${holidayList || "Không có"}
 Bài đăng hiệu quả nhất gần đây:
 ${topCaptions || "Chưa có dữ liệu"}
 
+${competitorPosts.length > 0 ? `Bài viral của đối thủ tuần qua (để tham khảo hướng nội dung, KHÔNG copy):\n${competitorPosts.map((p, i) => `${i + 1}. [${p.competitor.name}] ${p.message.slice(0, 150)}... (${p.likes} likes)`).join("\n")}\n` : ""}
 ${brandCtx ? `Thông tin thương hiệu:\n${brandCtx}\n` : ""}
 
 Tạo kế hoạch nội dung ${totalPosts} bài cho ${daysAhead} ngày tới (${postsPerDay} bài/ngày). Trả về JSON array, mỗi phần tử:
@@ -68,9 +73,46 @@ Tạo kế hoạch nội dung ${totalPosts} bài cho ${daysAhead} ngày tới ($
 dayOffset: 1 = ngày mai, 2 = ngày kia... Phân bổ đều các ngày. hour: giờ đăng tốt nhất (8/9/11/17/20).
 Chỉ trả về JSON array, không giải thích.`;
 
-  const raw = await generateContent(prompt,
+  // Vòng 1: Claude đề xuất plan
+  const claudeRaw = await generateContent(prompt,
     "Bạn là chuyên gia marketing spa tại Việt Nam. Tạo nội dung hấp dẫn, phù hợp văn hóa Việt, tập trung vào lợi ích cho khách hàng."
   );
+
+  // Vòng 2: GPT phản biện plan của Claude
+  let revisedRaw = claudeRaw;
+  try {
+    const critiquePrompt = `Đây là kế hoạch content do Claude vừa tạo cho spa Việt Nam:
+
+${claudeRaw}
+
+BỐI CẢNH GỐC:
+${prompt}
+
+Hãy phản biện ngắn gọn (5-8 câu, gạch đầu dòng): Có gì trùng đề tài? Có thiếu pillar nào không? Tone có phù hợp khách spa nữ Việt Nam? Có rủi ro vi phạm chính sách FB ngành làm đẹp không?`;
+
+    const gptCritique = await generateChatCompletion(
+      critiquePrompt,
+      "Bạn là chuyên gia kiểm duyệt content marketing spa. Phản biện xây dựng, cụ thể, không lan man."
+    );
+
+    // Vòng 3: Claude revise plan dựa trên critique
+    const revisePrompt = `Kế hoạch ban đầu của bạn (JSON):
+${claudeRaw}
+
+Phản biện từ chuyên gia kiểm duyệt:
+${gptCritique}
+
+Hãy điều chỉnh kế hoạch để khắc phục các điểm phản biện. Giữ NGUYÊN định dạng JSON array với cùng các field (topic, caption, hashtags, postType, tone, dayOffset, hour). Chỉ trả JSON, không giải thích thêm.`;
+
+    revisedRaw = await generateContent(revisePrompt,
+      "Bạn là chuyên gia marketing spa tại Việt Nam. Phản hồi phản biện bằng cách điều chỉnh kế hoạch. Luôn trả JSON hợp lệ."
+    );
+  } catch {
+    // Council bị lỗi (vd OpenAI chưa cấu hình) → dùng plan gốc của Claude
+    revisedRaw = claudeRaw;
+  }
+
+  const raw = revisedRaw;
 
   // Parse JSON — handle markdown code blocks
   let ideas: ContentIdea[] = [];
@@ -104,6 +146,19 @@ Chỉ trả về JSON array, không giải thích.`;
         },
       });
     })
+  );
+
+  // Auto-review tất cả drafts vừa tạo — không chờ user click publish mới phát hiện vi phạm
+  await Promise.allSettled(
+    created.map((post) =>
+      reviewContent({
+        id: post.id,
+        caption: post.caption,
+        hashtags: post.hashtags,
+        platform: post.platform,
+        facebookPageId: post.facebookPageId,
+      })
+    )
   );
 
   return { created: created.length, ideas };

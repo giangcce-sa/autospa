@@ -51,6 +51,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data: page, success: true });
     }
 
+    if (action === "update") {
+      const { id, pageName, accessToken, adAccountId } = body;
+      if (!id) return NextResponse.json({ error: "Thiếu id", success: false }, { status: 400 });
+      const data: Record<string, string | null> = {};
+      if (pageName?.trim()) data.pageName = pageName.trim();
+      if (accessToken?.trim()) data.accessToken = accessToken.trim();
+      if ("adAccountId" in body) data.adAccountId = adAccountId?.trim() || null;
+      await prisma.facebookPage.update({ where: { id }, data });
+      return NextResponse.json({ success: true });
+    }
+
     if (action === "update-ad-account") {
       const { id, adAccountId } = body;
       if (!id) return NextResponse.json({ error: "Thiếu id", success: false }, { status: 400 });

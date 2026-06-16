@@ -1,4 +1,9 @@
 import { prisma } from "./db";
+import { withRateLimit } from "./rate-limiter";
+
+// Zalo OA: 25 message/giây (giữ buffer so với 30/s limit chính thức)
+const ZALO_LIMIT = 25;
+const ZALO_WINDOW = 1;
 
 export async function postToZalo(message: string, imageUrl?: string, recipientId?: string): Promise<string> {
   const settings = await prisma.settings.findFirst();
@@ -20,12 +25,16 @@ export async function postToZalo(message: string, imageUrl?: string, recipientId
       : { text: message },
   };
 
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", access_token: settings.zaloToken },
-    body: JSON.stringify(payload),
+  const rateLimitKey = `zalo:${settings.zaloOaId ?? "default"}`;
+
+  return withRateLimit(rateLimitKey, ZALO_LIMIT, ZALO_WINDOW, async () => {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", access_token: settings.zaloToken! },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.error !== 0) throw new Error(data.message ?? "Lỗi Zalo API");
+    return data.data?.message_id ?? "ok";
   });
-  const data = await res.json();
-  if (data.error !== 0) throw new Error(data.message ?? "Lỗi Zalo API");
-  return data.data?.message_id ?? "ok";
 }

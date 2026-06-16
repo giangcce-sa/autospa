@@ -49,6 +49,26 @@ export async function POST(req: NextRequest) {
         if (lead) {
           await prisma.lead.update({ where: { id: lead.id }, data: { stage: "closed", lastAction: "Đã thanh toán" } });
         }
+        // Record revenue with attribution if amount provided
+        const amount = Number(body.amount ?? 0);
+        if (amount > 0 && body.bookingId) {
+          const existing = await prisma.bookingRevenue.findUnique({ where: { bookingId: body.bookingId } });
+          if (!existing) {
+            await prisma.bookingRevenue.create({
+              data: {
+                bookingId: body.bookingId,
+                leadId: lead?.id ?? null,
+                customerId: lead?.customerId ?? null,
+                service: body.service ?? lead?.service ?? null,
+                amount,
+                paidAt: body.paidAt ? new Date(body.paidAt) : new Date(),
+                fromPostId: lead?.fromPostId ?? null,
+                fromCampaignId: lead?.fromCampaignId ?? null,
+                fromAdId: lead?.fromAdId ?? null,
+              },
+            });
+          }
+        }
       }
       return NextResponse.json({ received: true });
     }

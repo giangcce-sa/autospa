@@ -6,10 +6,16 @@ import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import { UserCircle, Plus, Star, Users, Crown, ArrowLeft, PencilSimple, Trash, Note } from "@phosphor-icons/react";
+import { UserCircle, Plus, Star, Users, Crown, ArrowLeft, PencilSimple, Trash, Note, ClockCounterClockwise } from "@phosphor-icons/react";
+import { CustomerTimeline } from "./CustomerTimeline";
 
 interface Customer { id: string; name: string; phone?: string | null; fbName?: string | null; email?: string | null; birthday?: string | null; segment: string; leadScore: number; lastContact?: string | null; note?: string | null; tags?: string | null; createdAt: string; }
-interface CustomerDetail extends Customer { notes: { id: string; content: string; type: string; createdAt: string }[]; appointments: { id: string; service?: string | null; preferredAt?: string | null; status: string }[]; }
+interface CustomerDetail extends Customer {
+  notes: { id: string; content: string; type: string; createdAt: string }[];
+  appointments: { id: string; service?: string | null; preferredAt?: string | null; status: string; createdAt?: string }[];
+  careMessages: { id: string; type: string; content: string; status: string; sentAt?: string | null; createdAt: string }[];
+  messages: { id: string; message: string; reply?: string | null; isAutoReply: boolean; createdAt: string }[];
+}
 interface Stats { total: number; new: number; regular: number; vip: number; }
 
 const SegmentBadge = ({ s }: { s: string }) => {
@@ -94,31 +100,30 @@ export function CRMManager() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle>Ghi chú</CardTitle></CardHeader>
-              <div className="space-y-2 mb-3">
+              <CardHeader><CardTitle>Thêm ghi chú</CardTitle></CardHeader>
+              <div className="space-y-2">
                 <Textarea rows={2} placeholder="Thêm ghi chú..." value={noteContent} onChange={(e) => setNoteContent(e.target.value)} />
                 <Button size="sm" onClick={addNote}><Note size={12} /> Lưu ghi chú</Button>
-              </div>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {selected.notes.map((n) => (
-                  <div key={n.id} className="p-2 rounded-lg text-xs" style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)" }}>
-                    <p>{n.content}</p>
-                    <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>{new Date(n.createdAt).toLocaleDateString("vi-VN")}</p>
-                  </div>
-                ))}
               </div>
             </Card>
           </div>
 
           <div className="space-y-3">
             <Card>
-              <CardTitle className="mb-2">Lịch hẹn gần đây</CardTitle>
-              {selected.appointments.length === 0 ? <p className="text-xs" style={{ color: "var(--text-muted)" }}>Chưa có</p> : selected.appointments.map((a) => (
-                <div key={a.id} className="py-1.5 border-b text-xs" style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}>
-                  <p>{a.service || "Chưa xác định"}</p>
-                  <p style={{ color: "var(--text-muted)" }}>{a.preferredAt || "Chưa có giờ"} · {a.status}</p>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <ClockCounterClockwise size={14} style={{ color: "var(--accent)" }} weight="fill" />
+                  <CardTitle>Lịch sử tương tác</CardTitle>
                 </div>
-              ))}
+              </CardHeader>
+              <div className="max-h-96 overflow-y-auto pr-1">
+                <CustomerTimeline
+                  notes={selected.notes}
+                  appointments={selected.appointments}
+                  careMessages={selected.careMessages ?? []}
+                  messages={selected.messages ?? []}
+                />
+              </div>
             </Card>
           </div>
         </div>

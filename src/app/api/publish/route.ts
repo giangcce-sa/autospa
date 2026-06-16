@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { postToFacebook } from "@/lib/facebook";
+import { reviewContent } from "@/lib/reviewer";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -17,7 +18,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { postId, action, scheduledAt, caption, hashtags, imageUrl, platform, tone, postType, facebookPageId } = await req.json();
+    const body = await req.json();
+    const { postId, action, scheduledAt, caption, hashtags, imageUrl, platform, tone, postType, facebookPageId, force } = body;
 
     if (action === "schedule" || action === "draft") {
       if (postId) {
@@ -53,6 +55,23 @@ export async function POST(req: NextRequest) {
       const post = postId ? await prisma.post.findUnique({ where: { id: postId } }) : null;
       const text = post ? `${post.caption}\n\n${post.hashtags ?? ""}`.trim() : `${caption}\n\n${hashtags ?? ""}`.trim();
       const img = post?.imageUrl ?? imageUrl;
+
+      // Reviewer Agent gate — must pass before publishing
+      const reviewInput = post
+        ? { id: post.id, caption: post.caption, hashtags: post.hashtags, platform: post.platform, facebookPageId: post.facebookPageId }
+        : null;
+
+      // Skip review only for ad-hoc publish (no postId) — but warn user
+      if (reviewInput) {
+        const review = await reviewContent(reviewInput).catch(() => null);
+        if (review && review.status === "fail" && !force) {
+          return NextResponse.json({
+            error: "REVIEW_BLOCKED",
+            review,
+            success: false,
+          }, { status: 422 });
+        }
+      }
 
       const fbPostId = await postToFacebook(text, img ?? undefined, facebookPageId ?? undefined);
 

@@ -164,7 +164,9 @@ export function ContentResearch() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>Đang tải...</p>
+          <div className="space-y-3">
+            {[1,2,3].map(i => <div key={i} className="skeleton h-32 rounded-xl" />)}
+          </div>
         ) : drafts.length === 0 ? (
           <Card>
             <div className="px-5 py-10 text-center">

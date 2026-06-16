@@ -9,8 +9,9 @@ import { useRouter } from "next/navigation";
 import {
   FacebookLogo, PaperPlaneTilt, CalendarBlank, FloppyDisk,
   User, ThumbsUp, ChatCircle, Share, CaretDown, Image as ImageIcon,
-  CheckCircle, Sparkle, Megaphone,
+  CheckCircle, Sparkle, Megaphone, Clock,
 } from "@phosphor-icons/react";
+import { ReviewBadge, type ReviewIssue } from "@/components/ui/ReviewBadge";
 
 interface FbPage { id: string; fbPageId: string; pageName: string; isActive: boolean; }
 
@@ -48,6 +49,14 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
   const [showDrafts, setShowDrafts] = useState(false);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
 
+  // Best time suggestion
+  const [bestTimeHint, setBestTimeHint] = useState<string | null>(null);
+  const [loadingBestTime, setLoadingBestTime] = useState(false);
+
+  // Reviewer state
+  const [review, setReview] = useState<{ status: "pass" | "warn" | "fail"; score: number; issues: ReviewIssue[] } | null>(null);
+  const [reviewBlocked, setReviewBlocked] = useState(false);
+
   // Facebook pages
   const [fbPages, setFbPages] = useState<FbPage[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string>("");
@@ -78,6 +87,14 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
           setHashtags(res.data.hashtags ?? "");
           setImageUrl(res.data.imageUrl ?? "");
           setSourceLabel(res.data.service?.name ? `Từ nội dung AI · ${res.data.service.name}` : "Từ nội dung AI");
+          // Trigger reviewer
+          fetch("/api/reviewer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ postId: initialPostId }),
+          }).then((r) => r.json()).then((rev) => {
+            if (rev.success) setReview(rev.data);
+          });
         }
       });
   }, [initialPostId]);
@@ -105,10 +122,11 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
     setShowDrafts(false);
   };
 
-  const handleAction = async (action: string) => {
+  const handleAction = async (action: string, force = false) => {
     if (!caption.trim()) return;
     setLoading(action);
     setError("");
+    setReviewBlocked(false);
     try {
       const res = await fetch("/api/publish", {
         method: "POST",
@@ -121,13 +139,38 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
           imageUrl: imageUrl.trim() || undefined,
           scheduledAt: scheduledAt || undefined,
           facebookPageId: selectedPageId || undefined,
+          force,
         }),
       });
       const data = await res.json();
+      if (res.status === 422 && data.error === "REVIEW_BLOCKED") {
+        setReview(data.review);
+        setReviewBlocked(true);
+        setError("Reviewer Agent đã chặn vì có vấn đề nghiêm trọng. Sửa nội dung hoặc nhấn 'Đăng mặc dù' để bỏ qua.");
+        return;
+      }
       if (!res.ok) { setError(data.error); return; }
       setStatus(data.data.status);
       if (!postId && data.data.id) setPostId(data.data.id);
     } finally { setLoading(null); }
+  };
+
+  const suggestBestTime = async () => {
+    setLoadingBestTime(true);
+    try {
+      const res = await fetch("/api/analytics?action=best-times");
+      const data = await res.json();
+      if (data.success && data.data.suggestion !== null) {
+        const hour = data.data.suggestion as number;
+        const now = new Date();
+        now.setHours(hour, 0, 0, 0);
+        if (now <= new Date()) now.setDate(now.getDate() + 1);
+        setScheduledAt(now.toISOString().slice(0, 16));
+        setBestTimeHint(data.data.message);
+      } else {
+        setBestTimeHint(data.data?.message ?? "Chưa đủ dữ liệu");
+      }
+    } finally { setLoadingBestTime(false); }
   };
 
   const fullText = [caption, hashtags].filter(Boolean).join("\n\n");
@@ -225,7 +268,18 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
 
             {/* Schedule */}
             <div className="space-y-1">
-              <label className="block text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Lên lịch đăng (tùy chọn)</label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Lên lịch đăng (tùy chọn)</label>
+                <button
+                  onClick={suggestBestTime}
+                  disabled={loadingBestTime}
+                  className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full transition-opacity hover:opacity-70"
+                  style={{ background: "var(--accent-light)", color: "var(--accent)" }}
+                >
+                  <Clock size={10} />
+                  {loadingBestTime ? "..." : "AI gợi ý giờ"}
+                </button>
+              </div>
               <input
                 type="datetime-local"
                 className="w-full px-3 py-2 text-sm rounded-lg border outline-none"
@@ -234,6 +288,11 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
                 onChange={(e) => setScheduledAt(e.target.value)}
                 min={new Date().toISOString().slice(0, 16)}
               />
+              {bestTimeHint && (
+                <p className="text-[10px] px-2 py-1 rounded" style={{ background: "var(--accent-light)", color: "var(--accent)" }}>
+                  {bestTimeHint}
+                </p>
+              )}
             </div>
 
             {/* Page selector */}
@@ -295,6 +354,9 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
               </div>
             )}
 
+            {/* Reviewer Agent badge */}
+            {review && <ReviewBadge review={review} />}
+
             <div className="flex gap-2 flex-wrap">
               <Button variant="secondary" onClick={() => handleAction("draft")} loading={loading === "draft"} className="flex-1">
                 <FloppyDisk size={13} /> Lưu nháp
@@ -304,9 +366,15 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
                   <CalendarBlank size={13} /> Lên lịch
                 </Button>
               )}
-              <Button onClick={() => handleAction("publish-now")} loading={loading === "publish-now"} className="flex-1">
-                <PaperPlaneTilt size={13} weight="fill" /> Đăng ngay
-              </Button>
+              {reviewBlocked ? (
+                <Button onClick={() => handleAction("publish-now", true)} loading={loading === "publish-now"} variant="danger" className="flex-1">
+                  <PaperPlaneTilt size={13} weight="fill" /> Đăng mặc dù
+                </Button>
+              ) : (
+                <Button onClick={() => handleAction("publish-now")} loading={loading === "publish-now"} className="flex-1">
+                  <PaperPlaneTilt size={13} weight="fill" /> Đăng ngay
+                </Button>
+              )}
             </div>
           </div>
         </Card>

@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
     if (claudeBaseUrl) updateData.claudeBaseUrl = claudeBaseUrl;
     if (openaiBaseUrl) updateData.openaiBaseUrl = openaiBaseUrl;
     if (imageModel) updateData.imageModel = imageModel;
+    if (body.openaiChatModel) updateData.openaiChatModel = body.openaiChatModel;
     if (zaloOaId !== undefined) updateData.zaloOaId = zaloOaId;
     if (draftRetentionDays !== undefined) updateData.draftRetentionDays = Number(draftRetentionDays);
     if (publishedRetentionDays !== undefined) updateData.publishedRetentionDays = Number(publishedRetentionDays);

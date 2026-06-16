@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
-import { Sparkle, Copy, BookmarkSimple, CheckCircle, PaperPlaneTilt, Image as ImageIcon } from "@phosphor-icons/react";
+import { Sparkle, Copy, CheckCircle, PaperPlaneTilt, Image as ImageIcon, ArrowsSplit, BookOpen } from "@phosphor-icons/react";
 
 interface Service { id: string; name: string; category: string | null; }
+interface Story { id: string; type: string; customerName: string | null; content: string; service: string | null; }
 
 interface Props {
   facebookPageId?: string;
@@ -32,7 +33,10 @@ const tones = [
 
 export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToPublish }: Props) {
   const [services, setServices] = useState<Service[]>([]);
+  const [stories, setStories] = useState<Story[]>([]);
   const [styleSampleCount, setStyleSampleCount] = useState(0);
+  const [includeStory, setIncludeStory] = useState(false);
+  const [selectedStoryId, setSelectedStoryId] = useState("");
   const [form, setForm] = useState({ serviceId: "", postType: "service", tone: "friendly", customNote: "", platform: "facebook" });
   const [result, setResult] = useState<{ caption: string; hashtags: string; postId?: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,6 +44,10 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [repurposed, setRepurposed] = useState<Record<string, string> | null>(null);
+  const [repurposing, setRepurposing] = useState(false);
+  const [abGroup, setAbGroup] = useState<{ abGroupId: string; captionA: string; captionB: string } | null>(null);
+  const [creatingAb, setCreatingAb] = useState(false);
 
   useEffect(() => {
     const url = facebookPageId ? `/api/services?facebookPageId=${facebookPageId}` : "/api/services";
@@ -48,6 +56,11 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
     const styleUrl = facebookPageId ? `/api/style-training?facebookPageId=${facebookPageId}` : "/api/style-training";
     fetch(styleUrl).then((r) => r.json()).then((res) => {
       if (res.data) setStyleSampleCount(res.data.samples?.length ?? 0);
+    });
+
+    const storyUrl = facebookPageId ? `/api/stories?facebookPageId=${facebookPageId}` : "/api/stories";
+    fetch(storyUrl).then((r) => r.json()).then((res) => {
+      if (res.data) setStories(res.data);
     });
   }, [facebookPageId]);
 
@@ -59,7 +72,7 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
       const res = await fetch("/api/content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, saveToLibrary, facebookPageId }),
+        body: JSON.stringify({ ...form, saveToLibrary, facebookPageId, includeStory, storyId: selectedStoryId || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
@@ -81,7 +94,7 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
         const res = await fetch("/api/content", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, saveToLibrary: true, facebookPageId }),
+          body: JSON.stringify({ ...form, saveToLibrary: true, facebookPageId, includeStory, storyId: selectedStoryId || undefined }),
         });
         const data = await res.json();
         if (!res.ok) { setError(data.error); return; }
@@ -100,6 +113,45 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
     navigator.clipboard.writeText(`${result.caption}\n\n${result.hashtags}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCreateAb = async () => {
+    if (!result) return;
+    setCreatingAb(true);
+    setAbGroup(null);
+    try {
+      const res = await fetch("/api/ab-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          caption: result.caption,
+          platform: form.platform,
+          tone: form.tone,
+          serviceId: form.serviceId || undefined,
+          facebookPageId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAbGroup({ abGroupId: data.data.abGroupId, captionA: data.data.postA.caption, captionB: data.data.postB.caption });
+      }
+    } finally { setCreatingAb(false); }
+  };
+
+  const handleRepurpose = async () => {
+    if (!result) return;
+    setRepurposing(true);
+    setRepurposed(null);
+    try {
+      const res = await fetch("/api/repurpose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caption: result.caption, hashtags: result.hashtags, platform: form.platform, facebookPageId }),
+      });
+      const data = await res.json();
+      if (data.success) setRepurposed(data.data);
+    } finally { setRepurposing(false); }
   };
 
   return (
@@ -135,6 +187,53 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
             value={form.customNote}
             onChange={(e) => setForm({ ...form, customNote: e.target.value })}
           />
+          {/* Story toggle */}
+          <div className="rounded-xl p-3 space-y-2" style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)" }}>
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeStory}
+                onChange={(e) => setIncludeStory(e.target.checked)}
+                className="w-3.5 h-3.5 accent-[var(--accent)]"
+              />
+              <BookOpen size={13} style={{ color: "var(--accent)" }} weight="fill" />
+              <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
+                Kết hợp câu chuyện thực tế
+              </span>
+              {stories.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full ml-auto" style={{ background: "var(--accent)", color: "white" }}>
+                  {stories.length} câu chuyện
+                </span>
+              )}
+            </label>
+
+            {includeStory && (
+              <div>
+                {stories.length === 0 ? (
+                  <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    Chưa có câu chuyện nào — vào{" "}
+                    <a href="/stories" className="underline" style={{ color: "var(--accent)" }}>Câu chuyện thực tế</a>{" "}
+                    để thêm phản hồi khách hàng, kết quả điều trị...
+                  </p>
+                ) : (
+                  <select
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border outline-none"
+                    style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
+                    value={selectedStoryId}
+                    onChange={(e) => setSelectedStoryId(e.target.value)}
+                  >
+                    <option value="">AI tự chọn câu chuyện phù hợp nhất</option>
+                    {stories.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.customerName ? `${s.customerName} — ` : ""}{s.content.slice(0, 50)}...
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+          </div>
+
           {error && <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
           <Button onClick={() => handleGenerate(true)} loading={loading} className="w-full">
             <Sparkle size={14} weight="fill" /> Tạo nội dung
@@ -188,7 +287,54 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
                   <PaperPlaneTilt size={14} weight="fill" /> Gửi sang Đăng bài
                 </Button>
               )}
+              <div className="flex gap-2">
+                <Button onClick={handleRepurpose} loading={repurposing} variant="secondary" className="flex-1">
+                  <ArrowsSplit size={14} /> Đa kênh
+                </Button>
+                <Button onClick={handleCreateAb} loading={creatingAb} variant="secondary" className="flex-1">
+                  A/B Test
+                </Button>
+              </div>
             </div>
+
+            {abGroup && (
+              <div className="pt-2 border-t space-y-3" style={{ borderColor: "var(--border)" }}>
+                <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>A/B Test — Hai phiên bản đã lưu nháp</p>
+                {[{ label: "A (Gốc)", text: abGroup.captionA }, { label: "B (Biến thể AI)", text: abGroup.captionB }].map(({ label, text }) => (
+                  <div key={label}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-bold" style={{ color: "var(--accent)" }}>Phiên bản {label}</span>
+                      <button onClick={() => navigator.clipboard.writeText(text)} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "var(--bg-subtle)", color: "var(--text-muted)" }}>Copy</button>
+                    </div>
+                    <p className="text-xs leading-relaxed p-2 rounded whitespace-pre-wrap" style={{ background: "var(--bg-subtle)", color: "var(--text)" }}>{text}</p>
+                  </div>
+                ))}
+                <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Đăng cả 2 bài, sau 48h so sánh engagement trong Thư viện → A/B</p>
+              </div>
+            )}
+
+            {repurposed && (
+              <div className="pt-2 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
+                <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>Phiên bản đa kênh</p>
+                {Object.entries(repurposed).map(([channel, text]) => (
+                  <div key={channel}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>{channel}</span>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(text); }}
+                        className="text-[10px] px-1.5 py-0.5 rounded"
+                        style={{ background: "var(--bg-subtle)", color: "var(--text-muted)" }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p className="text-xs leading-relaxed p-2 rounded whitespace-pre-wrap" style={{ background: "var(--bg-subtle)", color: "var(--text)" }}>
+                      {text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-16 text-center">

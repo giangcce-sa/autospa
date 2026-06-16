@@ -26,7 +26,8 @@ async function extractInfo(field: string, text: string): Promise<string | null> 
 export async function getOrCreateConversation(
   senderId: string,
   facebookPageId?: string | null,
-  channel: "facebook" | "zalo" = "facebook"
+  channel: "facebook" | "zalo" = "facebook",
+  attribution?: { fromPostId?: string; fromCampaignId?: string; fromAdId?: string }
 ) {
   const existing = await prisma.leadConversation.findFirst({
     where: { senderId, facebookPageId: facebookPageId ?? null, isComplete: false },
@@ -41,6 +42,9 @@ export async function getOrCreateConversation(
       source: channel,
       channelType: channel,
       channelId: senderId,
+      fromPostId: attribution?.fromPostId ?? null,
+      fromCampaignId: attribution?.fromCampaignId ?? null,
+      fromAdId: attribution?.fromAdId ?? null,
     },
   });
 

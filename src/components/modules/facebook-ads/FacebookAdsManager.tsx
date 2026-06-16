@@ -4,13 +4,15 @@ import { useState } from "react";
 import { CampaignList } from "./CampaignList";
 import { CreateAd } from "./CreateAd";
 import { AdsInsights } from "./AdsInsights";
+import { AdCreativeAssistant } from "./AdCreativeAssistant";
 import { useActivePage } from "@/contexts/ActivePageContext";
-import { ListBullets, Megaphone, ChartBar } from "@phosphor-icons/react";
+import { ListBullets, Megaphone, ChartBar, Sparkle } from "@phosphor-icons/react";
 
-type Tab = "campaigns" | "create" | "insights";
+type Tab = "campaigns" | "create" | "assistant" | "insights";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "campaigns", label: "Chiến dịch", icon: <ListBullets size={14} /> },
+  { id: "assistant", label: "AI Assistant", icon: <Sparkle size={14} weight="fill" /> },
   { id: "create", label: "Tạo quảng cáo", icon: <Megaphone size={14} weight="fill" /> },
   { id: "insights", label: "Insights", icon: <ChartBar size={14} /> },
 ];
@@ -57,6 +59,7 @@ export function FacebookAdsManager({ initialPostId }: Props) {
       )}
 
       {tab === "campaigns" && <CampaignList facebookPageId={fbPageId} />}
+      {tab === "assistant" && <AdCreativeAssistant />}
       {tab === "create" && <CreateAd facebookPageId={fbPageId} initialPostId={initialPostId} />}
       {tab === "insights" && <AdsInsights facebookPageId={fbPageId} />}
     </div>

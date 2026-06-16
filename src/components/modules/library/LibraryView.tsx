@@ -78,8 +78,8 @@ export function LibraryView() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16" style={{ color: "var(--text-muted)" }}>
-          <span className="text-sm">Đang tải...</span>
+        <div className="space-y-2">
+          {[1,2,3,4].map(i => <div key={i} className="skeleton h-24 rounded-xl" />)}
         </div>
       ) : posts.length === 0 ? (
         <EmptyState icon={<Archive size={40} />} title="Chưa có bài viết nào" description="Tạo nội dung và lưu vào thư viện" />

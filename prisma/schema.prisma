@@ -6,6 +6,25 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String?
+  hashedPwd   String                                  // bcrypt
+  role        String    @default("owner")             // owner | viewer
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model RateLimit {
+  id          String   @id                            // composite: "provider:scope"
+  count       Int      @default(0)
+  windowStart DateTime
+  limit       Int                                      // configured cap
+  windowSec   Int                                      // window size in seconds
+  updatedAt   DateTime @updatedAt
+}
+
 model Settings {
   id            String   @id @default("1")
   claudeApiKey  String?
@@ -13,6 +32,7 @@ model Settings {
   openaiApiKey  String?
   openaiBaseUrl String   @default("https://api.openai.com/v1")
   imageModel    String   @default("dall-e-3")
+  openaiChatModel String @default("gpt-5")        // chat completion model for AI Council
   zaloToken              String?
   zaloOaId               String?
   draftRetentionDays     Int      @default(30)
@@ -134,6 +154,7 @@ model Post {
   fbCampaignId String?
   qualityScore Int?
   qualityNotes String?
+  abGroupId    String?
   serviceId      String?
   bulkPlanId     String?
   facebookPageId String?
@@ -141,6 +162,7 @@ model Post {
   bulkPlan       BulkPlan?       @relation(fields: [bulkPlanId], references: [id])
   facebookPage   FacebookPage?   @relation(fields: [facebookPageId], references: [id])
   analytics    PostAnalytics?
+  review       ContentReview?
   comments     PostComment[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
@@ -155,6 +177,17 @@ model BulkPlan {
   posts       Post[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model ContentReview {
+  id          String   @id @default(cuid())
+  postId      String   @unique
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  status      String                                 // "pass" | "warn" | "fail"
+  score       Int      @default(0)                   // 0-100
+  issues      String                                 // JSON: [{ type, severity, message, suggestion }]
+  reviewer    String   @default("ai_reviewer")
+  reviewedAt  DateTime @default(now())
 }
 
 model PostAnalytics {
@@ -189,6 +222,17 @@ model CommentRule {
   id        String   @id @default(cuid())
   trigger   String
   reply     String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model MessageRule {
+  id        String   @id @default(cuid())
+  trigger   String                                // keyword hoặc regex pattern
+  reply     String                                // text trả lời cố định
+  matchMode String   @default("contains")        // contains | exact | regex
+  priority  Int      @default(0)                  // rule cao hơn match trước
+  channel   String   @default("both")            // facebook | zalo | both
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 }
@@ -236,6 +280,8 @@ model Customer {
   lastContact  DateTime?
   note         String?
   tags         String?
+  npsScore     Int?
+  npsAt        DateTime?
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   messages     InboxMessage[]
@@ -264,6 +310,139 @@ model CareMessage {
   sentAt      DateTime?
   status      String    @default("pending")
   createdAt   DateTime  @default(now())
+}
+
+model Competitor {
+  id          String   @id @default(cuid())
+  fbPageId    String   @unique           // public page ID (e.g. "12345...")
+  name        String                     // tên đối thủ (do user nhập)
+  notes       String?                    // ghi chú nội bộ
+  accessToken String?                    // optional — page access token nếu có
+  isActive    Boolean  @default(true)
+  lastFetchAt DateTime?
+  createdAt   DateTime @default(now())
+  posts       CompetitorPost[]
+}
+
+model CompetitorPost {
+  id           String     @id @default(cuid())
+  competitorId String
+  competitor   Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  fbPostId     String     @unique
+  message      String
+  likes        Int        @default(0)
+  comments     Int        @default(0)
+  shares       Int        @default(0)
+  publishedAt  DateTime
+  fetchedAt    DateTime   @default(now())
+}
+
+model IntelligenceSignal {
+  id        String   @id @default(cuid())
+  source    String                            // "fb_ads_library" | "google_trends" | "fb_competitor" | "manual"
+  topic     String                            // "triệt lông bikini", "facial Hàn Quốc"
+  volume    Float                             // search index | active ads count | likes
+  trend     String   @default("stable")       // "rising" | "stable" | "falling"
+  details   String?                            // JSON: raw data
+  fetchedAt DateTime @default(now())
+
+  @@index([source, topic])
+  @@index([trend, fetchedAt])
+}
+
+model SpaStory {
+  id             String   @id @default(cuid())
+  facebookPageId String?
+  type           String   @default("testimonial") // testimonial | result | event | staff | behind-scenes
+  customerName   String?
+  content        String
+  service        String?
+  imageUrl       String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model RealtimeAlert {
+  id            String   @id @default(cuid())
+  type          String                          // "revenue_drop" | "negative_spike" | "ad_anomaly" | "lead_pile"
+  signal        String                          // detail string
+  severity      String                          // "warning" | "critical"
+  workflowRunId String?                          // if a workflow was triggered
+  acknowledged  Boolean  @default(false)
+  detectedAt    DateTime @default(now())
+
+  @@index([type, detectedAt])
+  @@index([acknowledged])
+}
+
+model WorkflowRun {
+  id          String   @id @default(cuid())
+  name        String                          // "revenue_drop" | "competitor_surge" | "engagement_drop"
+  trigger     String                          // signal label
+  context     String                          // full context
+  steps       String                          // JSON: [{ agent, label, input, output, status, durationMs }]
+  plan        String?                         // CEO synthesis output
+  status      String   @default("running")    // running | completed | failed
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([name, startedAt])
+  @@index([status])
+}
+
+model OrchestratorRun {
+  id          String   @id @default(cuid())
+  runAt       DateTime @default(now())
+  signals     String                            // JSON state snapshot
+  priorities  String                            // JSON [{ agent, score, reason }]
+  actions     String                            // JSON actions taken/queued
+  mode        String   @default("recommend")    // recommend | auto
+}
+
+model CEODecision {
+  id              String   @id @default(cuid())
+  date            DateTime @default(now())
+  topic           String                          // chủ đề (dùng để fuzzy match khi truy vấn)
+  topicKey        String                          // normalized: lowercase + keywords (cho query nhanh)
+  context         String                          // bối cảnh input
+  synthesis       String                          // quyết định cuối từ Council
+  debate          String?                         // JSON turns transcript
+  source          String   @default("council")    // council | morning_brief | content_research | ab_test | manual
+  // Outcome tracking
+  outcomeCheckAt  DateTime?                       // khi nào sẽ check kết quả (date + N ngày)
+  outcomeMetric   String?                         // metric đo (revenue | leads | engagement)
+  outcomeBefore   Float?                          // baseline trước
+  outcomeAfter    Float?                          // sau X ngày
+  outcomeStatus   String?                         // "success" | "fail" | "neutral" | "pending"
+  outcomeNotes    String?                         // AI nhận định
+  createdAt       DateTime @default(now())
+
+  @@index([topicKey])
+  @@index([outcomeStatus])
+}
+
+model RevenueForecast {
+  id             String   @id @default(cuid())
+  generatedAt    DateTime @default(now())
+  horizonDays    Int
+  scenario       String   @default("baseline")  // baseline | ads_2x | promo_30 | tet_boost
+  forecast       String                          // JSON array: [{ date, predicted, lowerBound, upperBound, factors }]
+  totalPredicted Int                             // sum of predicted across horizon (VND)
+  confidence     Float    @default(0.5)          // 0.0-1.0
+  notes          String?                          // AI Council reasoning
+}
+
+model MorningBrief {
+  id          String   @id @default(cuid())
+  date        String   @unique
+  summary     String                        // CEO synthesis
+  actions     String                        // JSON BriefAction[] — legacy compat
+  debate      String?                       // JSON CouncilTurn[]
+  subReports  String?                       // JSON { intelligence, ads, content, sales }
+  assignments String?                       // JSON Assignment[]
+  dismissed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
 }
 
 model HolidayEvent {
@@ -306,9 +485,30 @@ model Lead {
   spaBookingId   String?
   nurtureStep    Int      @default(0)
   nurtureSentAt  DateTime?
+  // Revenue attribution
+  fromPostId     String?           // organic post that drove this lead
+  fromCampaignId String?           // FB ad campaign that drove this lead
+  fromAdId       String?           // specific ad creative
   conversations  LeadConversation[]
+  bookings       BookingRevenue[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model BookingRevenue {
+  id             String   @id @default(cuid())
+  leadId         String?
+  lead           Lead?    @relation(fields: [leadId], references: [id])
+  bookingId      String   @unique
+  customerId     String?
+  service        String?
+  amount         Int                              // VND
+  paidAt         DateTime
+  // Denormalized attribution for fast group-by queries
+  fromPostId     String?
+  fromCampaignId String?
+  fromAdId       String?
+  createdAt      DateTime @default(now())
 }
 
 model LeadConversation {

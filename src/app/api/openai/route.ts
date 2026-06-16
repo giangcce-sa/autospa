@@ -1,4 +1,5 @@
-import { generateImage } from "@/lib/openai";
+import { generateImage, type ImageFormat } from "@/lib/openai";
+import { applyOverlay } from "@/lib/image-overlay";
 import { prisma } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -20,7 +21,11 @@ const EQUIPMENT_PROMPTS: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { serviceId, style, customPrompt, postId, character, equipment: equipmentKey, referenceDesc } = await req.json();
+    const {
+      serviceId, style, customPrompt, postId, character, equipment: equipmentKey,
+      referenceDesc, format,
+      overlayCaption, overlayLogo, overlayPosition,
+    } = await req.json();
 
     let basePrompt = customPrompt ?? "";
 
@@ -47,7 +52,17 @@ export async function POST(req: NextRequest) {
 
     const fullPrompt = parts.join(". ");
 
-    const imageUrl = await generateImage(fullPrompt);
+    const rawImageUrl = await generateImage(fullPrompt, (format as ImageFormat) ?? "feed");
+
+    // Apply optional overlay (caption + logo)
+    let imageUrl = rawImageUrl;
+    if (overlayCaption || overlayLogo) {
+      imageUrl = await applyOverlay(rawImageUrl, {
+        caption: overlayCaption,
+        showLogo: overlayLogo !== false,
+        position: overlayPosition ?? "top-right",
+      });
+    }
 
     if (postId) {
       await prisma.post.update({ where: { id: postId }, data: { imageUrl, imagePrompt: fullPrompt } });

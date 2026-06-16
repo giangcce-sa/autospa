@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { generateContent } from "@/lib/claude";
 import { replyToFbComment, replyToFbConversation } from "@/lib/facebook";
 import { getOrCreateConversation, processIncomingMessage, executeHandoff } from "@/lib/lead-agent";
+import { matchMessageRule } from "@/lib/message-rules";
 
 // Facebook webhook verification (GET)
 export async function GET(req: NextRequest) {
@@ -154,10 +155,39 @@ async function handleMessage(
     },
   });
 
+  // MessageRule pattern matching — runs first, before Lead Agent
+  const ruleMatch = await matchMessageRule(text, "facebook");
+  if (ruleMatch) {
+    try {
+      await replyToFbConversation(senderId, ruleMatch.reply, facebookPageId);
+      await prisma.inboxMessage.update({
+        where: { id: inboxMsg.id },
+        data: { reply: ruleMatch.reply, isAutoReply: true },
+      });
+      return;
+    } catch {
+      // rule send failed — fall through to Lead Agent / generic AI
+    }
+  }
+
+  // Attribution from FB referral payload (m.me/[page]?ref=postId__campaign:abc__ad:xyz)
+  const referral = msg.referral as { ref?: string } | undefined;
+  const postback = msg.postback as { referral?: { ref?: string } } | undefined;
+  const refStr = referral?.ref ?? postback?.referral?.ref;
+  const attribution: { fromPostId?: string; fromCampaignId?: string; fromAdId?: string } = {};
+  if (refStr) {
+    for (const part of refStr.split("__")) {
+      if (part.startsWith("campaign:")) attribution.fromCampaignId = part.slice(9);
+      else if (part.startsWith("ad:")) attribution.fromAdId = part.slice(3);
+      else if (part.startsWith("post:")) attribution.fromPostId = part.slice(5);
+      else if (!attribution.fromPostId) attribution.fromPostId = part; // bare ref → treat as postId
+    }
+  }
+
   // Lead Agent — runs when automationLevel is semi or full
   if (settings?.automationLevel && settings.automationLevel !== "supervised") {
     try {
-      const conv = await getOrCreateConversation(senderId, facebookPageId);
+      const conv = await getOrCreateConversation(senderId, facebookPageId, "facebook", attribution);
       if (!conv.isComplete) {
         const { replyText, isComplete } = await processIncomingMessage(conv.id, text);
         if (replyText) {

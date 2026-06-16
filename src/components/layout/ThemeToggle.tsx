@@ -11,10 +11,16 @@ export function ThemeToggle() {
   useEffect(() => setMounted(true), []);
   if (!mounted) return <div className="w-8 h-8" />;
 
+  const toggle = () => {
+    document.documentElement.classList.add("theme-transitioning");
+    setTheme(theme === "dark" ? "light" : "dark");
+    setTimeout(() => document.documentElement.classList.remove("theme-transitioning"), 300);
+  };
+
   return (
     <button
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-200 hover:bg-[var(--bg-subtle)] text-[var(--text-secondary)] hover:text-[var(--text)]"
+      onClick={toggle}
+      className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--bg-subtle)] text-[var(--text-secondary)] hover:text-[var(--text)]"
       title="Đổi giao diện"
     >
       {theme === "dark" ? <Sun size={16} weight="duotone" /> : <Moon size={16} weight="duotone" />}

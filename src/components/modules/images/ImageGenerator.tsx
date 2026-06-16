@@ -49,6 +49,13 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
     character: "",
     equipment: "",
     referenceDesc: "",
+    format: "feed",
+  });
+  const [overlay, setOverlay] = useState({
+    enabled: false,
+    caption: "",
+    showLogo: true,
+    position: "top-right" as "top-right" | "top-left" | "bottom-right" | "bottom-left",
   });
   const [result, setResult] = useState<{ imageUrl: string; prompt: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -66,7 +73,13 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
       const res = await fetch("/api/openai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, postId }),
+        body: JSON.stringify({
+          ...form,
+          postId,
+          overlayCaption: overlay.enabled ? overlay.caption.trim() || undefined : undefined,
+          overlayLogo: overlay.enabled ? overlay.showLogo : false,
+          overlayPosition: overlay.position,
+        }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
@@ -109,6 +122,13 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
           <Select label="Thiết bị / dụng cụ" value={form.equipment} onChange={(e) => setForm({ ...form, equipment: e.target.value })}>
             {equipment.map((eq) => <option key={eq.value} value={eq.value}>{eq.label}</option>)}
           </Select>
+          <Select label="Định dạng" value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value })}>
+            <option value="feed">FB Feed — vuông 1:1 (1024×1024)</option>
+            <option value="cover">FB Cover — ngang 16:9 (1792×1024)</option>
+            <option value="story">Story/Reels — dọc 9:16 (1024×1792)</option>
+            <option value="thumbnail">Video Thumbnail — ngang 16:9</option>
+            <option value="zalo">Zalo OA — vuông + safe area</option>
+          </Select>
           <Input
             label="Phong cách ảnh mẫu (tùy chọn)"
             placeholder="VD: Phong cách Hàn Quốc, nền trắng tối giản, ánh sáng dịu..."
@@ -123,6 +143,52 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
             value={form.customPrompt}
             onChange={(e) => setForm({ ...form, customPrompt: e.target.value })}
           />
+          {/* Brand overlay */}
+          <div className="rounded-xl p-3 space-y-2" style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)" }}>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={overlay.enabled}
+                onChange={(e) => setOverlay({ ...overlay, enabled: e.target.checked })}
+                className="w-3.5 h-3.5 accent-[var(--accent)]"
+              />
+              <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
+                Overlay logo + caption thương hiệu
+              </span>
+            </label>
+            {overlay.enabled && (
+              <>
+                <Input
+                  label="Caption hiển thị trên ảnh (tùy chọn)"
+                  placeholder="VD: Trẻ hóa da chuyên sâu — giảm 30%"
+                  value={overlay.caption}
+                  onChange={(e) => setOverlay({ ...overlay, caption: e.target.value })}
+                />
+                <div className="grid grid-cols-2 gap-2 items-end">
+                  <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+                    <input
+                      type="checkbox"
+                      checked={overlay.showLogo}
+                      onChange={(e) => setOverlay({ ...overlay, showLogo: e.target.checked })}
+                      className="w-3.5 h-3.5 accent-[var(--accent)]"
+                    />
+                    Hiện logo (từ Brand Kit)
+                  </label>
+                  <Select
+                    label="Vị trí logo"
+                    value={overlay.position}
+                    onChange={(e) => setOverlay({ ...overlay, position: e.target.value as typeof overlay.position })}
+                  >
+                    <option value="top-right">Góc trên phải</option>
+                    <option value="top-left">Góc trên trái</option>
+                    <option value="bottom-right">Góc dưới phải</option>
+                    <option value="bottom-left">Góc dưới trái</option>
+                  </Select>
+                </div>
+              </>
+            )}
+          </div>
+
           {error && <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
           <Button onClick={handleGenerate} loading={loading} className="w-full">
             <Sparkle size={14} weight="fill" /> Tạo hình ảnh

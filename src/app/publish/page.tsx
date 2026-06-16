@@ -1,4 +1,4 @@
-import { PublishManager } from "@/components/modules/publish/PublishManager";
+import { PublishPageClient } from "@/components/modules/publish/PublishPageClient";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 interface Props {
@@ -13,7 +13,7 @@ export default async function PublishPage({ searchParams }: Props) {
         title="Đăng bài"
         description="Xem trước bài viết và đăng lên Facebook — ngay bây giờ hoặc lên lịch"
       />
-      <PublishManager initialPostId={params.postId} initialImageUrl={params.imageUrl} />
+      <PublishPageClient initialPostId={params.postId} initialImageUrl={params.imageUrl} />
     </>
   );
 }

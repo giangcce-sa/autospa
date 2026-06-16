@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { generateContent, getBrandContext, getStyleProfile } from "@/lib/claude";
+import { reviewContent } from "@/lib/reviewer";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
@@ -80,6 +81,19 @@ Chỉ trả về JSON, không thêm gì khác.`;
       },
       include: { posts: true },
     });
+
+    // Auto-review từng bài trong bulk plan — quan trọng vì 30+ bài/tháng
+    await Promise.allSettled(
+      plan.posts.map((post) =>
+        reviewContent({
+          id: post.id,
+          caption: post.caption,
+          hashtags: post.hashtags,
+          platform: post.platform,
+          facebookPageId: post.facebookPageId,
+        })
+      )
+    );
 
     return NextResponse.json({ data: plan, success: true });
   } catch (err) {

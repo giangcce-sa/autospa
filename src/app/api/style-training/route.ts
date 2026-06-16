@@ -123,11 +123,12 @@ export async function POST(req: NextRequest) {
       const systemPrompt = `Bạn là chuyên gia phân tích văn phong. Hãy phân tích kỹ và trả về hồ sơ văn phong gồm: cách xưng hô, tone giọng, cách dùng emoji, độ dài câu, cách mở đầu/kết thúc, cách gọi khách hàng, phong cách hashtag, và các đặc điểm nổi bật khác. Viết bằng tiếng Việt, súc tích và có thể dùng làm hướng dẫn viết bài sau này.`;
 
       const profile = await generateContent(prompt, systemPrompt);
-      await prisma.styleProfile.upsert({
-        where: { facebookPageId: facebookPageId ?? null },
-        create: { facebookPageId: facebookPageId ?? null, profile },
-        update: { profile },
-      });
+      const existing = await prisma.styleProfile.findFirst({ where: { facebookPageId: facebookPageId ?? null } });
+      if (existing) {
+        await prisma.styleProfile.update({ where: { id: existing.id }, data: { profile } });
+      } else {
+        await prisma.styleProfile.create({ data: { facebookPageId: facebookPageId ?? null, profile } });
+      }
       return NextResponse.json({ data: { profile }, success: true });
     }
 
