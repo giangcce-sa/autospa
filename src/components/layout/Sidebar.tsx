@@ -48,7 +48,7 @@ const GROUPS: NavGroup[] = [
       { label: "Viết bài", href: "/content", icon: PencilSimple },
       { label: "Đăng & Lịch", href: "/publish", icon: PaperPlaneTilt },
       { label: "Thư viện", href: "/library", icon: Archive },
-      { label: "Flash Deal", href: "/promotions", icon: Tag },
+      { label: "Flash Deal", href: "/flash-deal", icon: Tag },
       { label: "Nghiên cứu", href: "/content-research", icon: Sparkle },
       { label: "Tạo ảnh AI", href: "/images", icon: Image },
       { label: "Hàng loạt", href: "/bulk", icon: Stack },
