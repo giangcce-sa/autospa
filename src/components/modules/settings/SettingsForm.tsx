@@ -9,6 +9,7 @@ import { Key, Robot, FacebookLogo, CheckCircle, Lightning, Spinner, Archive, Glo
 import { TelegramSettings } from "./TelegramSettings";
 import { InstagramSettings } from "./InstagramSettings";
 import { TikTokSettings } from "./TikTokSettings";
+import { GoogleBusinessSettings } from "./GoogleBusinessSettings";
 
 // Non-secret fields pre-filled normally.
 // Secret fields (keys/tokens) are NEVER pre-filled — empty = keep existing value in DB.
@@ -864,6 +865,7 @@ export function SettingsForm() {
       <TelegramSettings />
       <InstagramSettings />
       <TikTokSettings />
+      <GoogleBusinessSettings />
 
       <Button onClick={handleSave} loading={loading} size="lg" className="w-full">
         {saveOk ? <><CheckCircle size={14} weight="fill" /> Đã lưu!</> : "Lưu cài đặt"}

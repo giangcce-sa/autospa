@@ -64,6 +64,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { label: "Facebook Ads", href: "/facebook-ads", icon: Megaphone },
       { label: "TikTok / IG", href: "/tiktok-ig", icon: Sparkle },
+      { label: "Google Business", href: "/google-business", icon: MagnifyingGlass },
       { label: "Phân tích", href: "/analytics", icon: ChartBar },
       { label: "Intelligence", href: "/competitors", icon: TrendUp },
       { label: "Listening", href: "/listening", icon: Eye },

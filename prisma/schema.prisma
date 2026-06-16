@@ -623,6 +623,56 @@ model JobRun {
   @@index([status, startedAt])
 }
 
+// ─── Google Business Profile Models ─────────────────────────────────────────
+
+model GoogleAccount {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  displayName  String?
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  accountId    String?   // Google Business accountName (e.g. "accounts/123456")
+  locationId   String?   // Google Business locationName (e.g. "accounts/123/locations/456")
+  locationName String?   // Human-readable business name
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model GoogleReview {
+  id            String   @id @default(cuid())
+  reviewId      String   @unique  // Google review name (e.g. "accounts/.../reviews/ABC123")
+  authorName    String
+  authorPhotoUrl String?
+  rating        Int      // 1-5
+  comment       String?
+  sentiment     String?  // positive | neutral | negative
+  reply         String?
+  repliedAt     DateTime?
+  isReplied     Boolean  @default(false)
+  isAlerted     Boolean  @default(false)
+  googleAccountId String?
+  createdAt     DateTime @default(now())
+  updateTime    DateTime @default(now())
+
+  @@index([rating])
+  @@index([isReplied])
+}
+
+model GooglePost {
+  id           String   @id @default(cuid())
+  googlePostId String?  @unique
+  summary      String
+  callToAction String?  // BOOK | CALL | LEARN_MORE | ORDER | SHOP | SIGN_UP
+  callToActionUrl String?
+  mediaUrl     String?
+  status       String   @default("draft")  // draft | published | failed
+  publishedAt  DateTime?
+  googleAccountId String?
+  createdAt    DateTime @default(now())
+}
+
 // ─── AI Self-Learning Models ─────────────────────────────────────────────────
 
 model ContentMemory {
