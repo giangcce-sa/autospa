@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { generateContent, getBrandContext, getStyleProfile, getStyleSamples } from "@/lib/claude";
 import { reviewContent } from "@/lib/reviewer";
+import { getContentContext } from "@/lib/learning/content-memory";
 import { NextRequest, NextResponse } from "next/server";
 
 const POST_TYPE_LABELS: Record<string, string> = {
@@ -21,11 +22,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { serviceId, postType, tone, customNote, platform, saveToLibrary, facebookPageId, includeStory, storyId } = body;
 
-    const [brandContext, styleProfile, styleSamples, service] = await Promise.all([
+    const [brandContext, styleProfile, styleSamples, service, learningCtx] = await Promise.all([
       getBrandContext(),
       getStyleProfile(facebookPageId),
       getStyleSamples(5, facebookPageId),
       serviceId ? prisma.service.findUnique({ where: { id: serviceId } }) : null,
+      getContentContext(),
     ]);
 
     // Pick a real spa story to weave into the post
@@ -75,6 +77,8 @@ export async function POST(req: NextRequest) {
 ${brandContext ? `\nThông tin thương hiệu:\n${brandContext}` : ""}
 ${styleProfile ? `\nVăn phong cần theo:\n${styleProfile}` : ""}
 ${styleSamples ? `\nCác bài mẫu tham khảo văn phong:\n${styleSamples}` : ""}
+${learningCtx.insight ? `\nHọc từ lịch sử: ${learningCtx.insight}` : ""}
+${learningCtx.topKeywords.length > 0 ? `Từ khóa resonates với khách: ${learningCtx.topKeywords.slice(0, 5).join(", ")}` : ""}
 
 Quy tắc bắt buộc:
 - Viết hoàn toàn bằng tiếng Việt

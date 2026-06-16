@@ -36,6 +36,7 @@ const PINNED: NavItem[] = [
   { label: "Orchestrator", href: "/orchestrator", icon: Robot, premium: true },
   { label: "AI Council", href: "/council", icon: ChatsTeardrop, premium: true },
   { label: "CEO Memory", href: "/ceo-memory", icon: Brain, premium: true },
+  { label: "Self-Learning", href: "/learning", icon: Brain, premium: true },
 ];
 
 const GROUPS: NavGroup[] = [

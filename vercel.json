@@ -7,6 +7,7 @@
     { "path": "/api/cron/backup-reminder", "schedule": "0 3 * * 0" },
     { "path": "/api/cron/weekly-report", "schedule": "0 8 * * 1" },
     { "path": "/api/crm/insights?action=refresh", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/flash-deal", "schedule": "0 6 * * *" }
+    { "path": "/api/cron/flash-deal", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/learning", "schedule": "0 2 * * *" }
   ]
 }

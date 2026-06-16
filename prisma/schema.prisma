@@ -593,6 +593,54 @@ model JobRun {
   @@index([status, startedAt])
 }
 
+// ─── AI Self-Learning Models ─────────────────────────────────────────────────
+
+model ContentMemory {
+  id            String   @id @default(cuid())
+  tone          String?  // friendly | professional | urgent | emotional
+  postType      String?  // service | promotion | education | story
+  topKeywords   String   // JSON string[]
+  topHashtags   String?  // JSON string[]
+  avgEngagement Float    @default(0)
+  sampleCount   Int      @default(0)
+  bestHour      Int?     // 0-23
+  bestDayOfWeek Int?     // 0-6
+  platform      String   @default("facebook")
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+}
+
+model LeadSourceWeight {
+  id             String   @id @default(cuid())
+  source         String   @unique
+  totalLeads     Int      @default(0)
+  converted      Int      @default(0)
+  conversionRate Float    @default(0)
+  avgRevenue     Int      @default(0)
+  weight         Float    @default(1.0)
+  updatedAt      DateTime @updatedAt
+}
+
+model BookingPattern {
+  id          String   @id @default(cuid())
+  patternType String   // peak_hour | popular_service | seasonal
+  key         String
+  value       Float
+  label       String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([patternType, key])
+}
+
+model LearningInsight {
+  id         String   @id @default(cuid())
+  loop       String   // content | lead | ab | decision | behavior
+  insight    String
+  confidence Float    @default(0.5)
+  appliedTo  String?
+  createdAt  DateTime @default(now())
+}
+
 model SpaSync {
   id                String    @id @default("1")
   lastSyncAt        DateTime?
