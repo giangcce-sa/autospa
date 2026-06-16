@@ -74,6 +74,9 @@ model FacebookPage {
   accessToken  String
   isActive     Boolean  @default(true)
   adAccountId  String?
+  // Linked Instagram Business account
+  igAccountId  String?  // Instagram Business Account ID (from Graph API)
+  igUsername   String?
   createdAt    DateTime @default(now())
 
   posts         Post[]
@@ -83,6 +86,19 @@ model FacebookPage {
   styleProfile  StyleProfile?
   styleSamples  StyleSample[]
   services      Service[]
+}
+
+model TikTokAccount {
+  id           String   @id @default(cuid())
+  openId       String   @unique // TikTok user open_id
+  displayName  String
+  avatarUrl    String?
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model BrandKnowledge {
@@ -159,6 +175,8 @@ model Post {
   fbPostId     String?
   fbAdId       String?
   fbCampaignId String?
+  igPostId     String?   // Instagram media id
+  tiktokVideoId String?  // TikTok video id
   qualityScore Int?
   qualityNotes String?
   abGroupId    String?
@@ -198,15 +216,27 @@ model ContentReview {
 }
 
 model PostAnalytics {
-  id        String   @id @default(cuid())
-  postId    String   @unique
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  reach     Int      @default(0)
-  likes     Int      @default(0)
-  comments  Int      @default(0)
-  shares    Int      @default(0)
-  clicks    Int      @default(0)
-  fetchedAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  postId      String   @unique
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // Facebook metrics
+  reach       Int      @default(0)
+  likes       Int      @default(0)
+  comments    Int      @default(0)
+  shares      Int      @default(0)
+  clicks      Int      @default(0)
+  // Instagram metrics
+  igReach     Int      @default(0)
+  igLikes     Int      @default(0)
+  igComments  Int      @default(0)
+  igSaved     Int      @default(0)
+  igImpressions Int    @default(0)
+  // TikTok metrics
+  tiktokViews   Int    @default(0)
+  tiktokLikes   Int    @default(0)
+  tiktokComments Int   @default(0)
+  tiktokShares  Int    @default(0)
+  fetchedAt   DateTime @default(now())
 }
 
 model PostComment {

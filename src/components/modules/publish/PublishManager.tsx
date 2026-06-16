@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import {
   FacebookLogo, PaperPlaneTilt, CalendarBlank, FloppyDisk,
   User, ThumbsUp, ChatCircle, Share, CaretDown, Image as ImageIcon,
-  CheckCircle, Sparkle, Megaphone, Clock,
+  CheckCircle, Sparkle, Megaphone, Clock, InstagramLogo,
 } from "@phosphor-icons/react";
 import { ReviewBadge, type ReviewIssue } from "@/components/ui/ReviewBadge";
 
@@ -61,6 +61,12 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
   const [fbPages, setFbPages] = useState<FbPage[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string>("");
 
+  // Multi-platform
+  const [publishToInstagram, setPublishToInstagram] = useState(false);
+  const [publishToTikTok, setPublishToTikTok] = useState(false);
+  const [igConnected, setIgConnected] = useState(false);
+  const [tiktokConnected, setTiktokConnected] = useState(false);
+
   useEffect(() => {
     fetch("/api/facebook-pages").then((r) => r.json()).then((res) => {
       if (res.data) {
@@ -68,6 +74,12 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
         setFbPages(active);
         if (active.length > 0) setSelectedPageId(active[0].id);
       }
+    });
+    fetch("/api/instagram").then((r) => r.json()).then((res) => {
+      if (res.success) setIgConnected(res.data.some((p: { igAccountId: string | null }) => p.igAccountId));
+    });
+    fetch("/api/tiktok?action=accounts").then((r) => r.json()).then((res) => {
+      if (res.success) setTiktokConnected(res.data.some((a: { isActive: boolean }) => a.isActive));
     });
   }, []);
 
@@ -140,6 +152,8 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
           scheduledAt: scheduledAt || undefined,
           facebookPageId: selectedPageId || undefined,
           force,
+          publishToInstagram: action === "publish-now" ? publishToInstagram : false,
+          publishToTikTok: action === "publish-now" ? publishToTikTok : false,
         }),
       });
       const data = await res.json();
@@ -356,6 +370,33 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
 
             {/* Reviewer Agent badge */}
             {review && <ReviewBadge review={review} />}
+
+            {/* Multi-platform targets */}
+            <div className="flex items-center gap-3 flex-wrap text-[12px]">
+              <span className="font-semibold" style={{ color: "var(--text-muted)" }}>Đăng lên:</span>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <FacebookLogo size={14} style={{ color: "#1877F2" }} />
+                <input type="checkbox" checked disabled className="w-3 h-3 accent-blue-500" />
+                <span style={{ color: "var(--text)" }}>Facebook</span>
+              </label>
+              {igConnected && (
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <InstagramLogo size={14} style={{ color: "#E1306C" }} />
+                  <input type="checkbox" checked={publishToInstagram} onChange={(e) => setPublishToInstagram(e.target.checked)} className="w-3 h-3 accent-pink-500" />
+                  <span style={{ color: "var(--text)" }}>Instagram</span>
+                </label>
+              )}
+              {tiktokConnected && (
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <span style={{ color: "var(--text)", fontSize: 14, fontWeight: "bold" }}>TT</span>
+                  <input type="checkbox" checked={publishToTikTok} onChange={(e) => setPublishToTikTok(e.target.checked)} className="w-3 h-3" />
+                  <span style={{ color: "var(--text)" }}>TikTok</span>
+                </label>
+              )}
+              {!igConnected && !tiktokConnected && (
+                <a href="/settings" className="text-[11px] underline" style={{ color: "var(--text-muted)" }}>Thêm Instagram / TikTok →</a>
+              )}
+            </div>
 
             <div className="flex gap-2 flex-wrap">
               <Button variant="secondary" onClick={() => handleAction("draft")} loading={loading === "draft"} className="flex-1">

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Key, Robot, FacebookLogo, CheckCircle, Lightning, Spinner, Archive, Globe, Copy, Plus, Trash, FloppyDisk, DownloadSimple, PencilSimple, X } from "@phosphor-icons/react";
 import { TelegramSettings } from "./TelegramSettings";
+import { InstagramSettings } from "./InstagramSettings";
+import { TikTokSettings } from "./TikTokSettings";
 
 // Non-secret fields pre-filled normally.
 // Secret fields (keys/tokens) are NEVER pre-filled — empty = keep existing value in DB.
@@ -860,6 +862,8 @@ export function SettingsForm() {
       </Card>
 
       <TelegramSettings />
+      <InstagramSettings />
+      <TikTokSettings />
 
       <Button onClick={handleSave} loading={loading} size="lg" className="w-full">
         {saveOk ? <><CheckCircle size={14} weight="fill" /> Đã lưu!</> : "Lưu cài đặt"}

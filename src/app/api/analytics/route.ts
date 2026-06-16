@@ -109,6 +109,67 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  if (action === "platform-breakdown") {
+    try {
+      const posts = await prisma.post.findMany({
+        where: { status: "published", analytics: { isNot: null } },
+        include: { analytics: true },
+        orderBy: { publishedAt: "desc" },
+        take: 500,
+      });
+
+      const platforms: Record<string, { reach: number; engagement: number; count: number; topEng: number; topCaption: string }> = {};
+
+      for (const post of posts) {
+        const a = post.analytics!;
+        const fbEng = a.likes + a.comments * 2 + a.shares * 3;
+
+        // Facebook
+        const fb = platforms["facebook"] ?? { reach: 0, engagement: 0, count: 0, topEng: 0, topCaption: "" };
+        fb.reach += a.reach;
+        fb.engagement += fbEng;
+        fb.count += 1;
+        if (fbEng > fb.topEng) { fb.topEng = fbEng; fb.topCaption = post.caption; }
+        platforms["facebook"] = fb;
+
+        // Instagram
+        if (post.igPostId && (a.igLikes + a.igComments + a.igSaved) > 0) {
+          const igEng = a.igLikes + a.igComments * 2 + a.igSaved * 1.5;
+          const ig = platforms["instagram"] ?? { reach: 0, engagement: 0, count: 0, topEng: 0, topCaption: "" };
+          ig.reach += a.igReach;
+          ig.engagement += igEng;
+          ig.count += 1;
+          if (igEng > ig.topEng) { ig.topEng = igEng; ig.topCaption = post.caption; }
+          platforms["instagram"] = ig;
+        }
+
+        // TikTok
+        if (post.tiktokVideoId && a.tiktokViews > 0) {
+          const ttEng = a.tiktokLikes + a.tiktokComments * 2 + a.tiktokShares * 3;
+          const tt = platforms["tiktok"] ?? { reach: 0, engagement: 0, count: 0, topEng: 0, topCaption: "" };
+          tt.reach += a.tiktokViews;
+          tt.engagement += ttEng;
+          tt.count += 1;
+          if (ttEng > tt.topEng) { tt.topEng = ttEng; tt.topCaption = post.caption; }
+          platforms["tiktok"] = tt;
+        }
+      }
+
+      const breakdown = Object.entries(platforms).map(([platform, d]) => ({
+        platform,
+        postCount: d.count,
+        totalReach: d.reach,
+        totalEngagement: Math.round(d.engagement),
+        avgEngagement: d.count > 0 ? Math.round(d.engagement / d.count) : 0,
+        topPost: d.topEng > 0 ? { caption: d.topCaption, engagement: Math.round(d.topEng) } : null,
+      }));
+
+      return NextResponse.json({ success: true, data: breakdown });
+    } catch {
+      return NextResponse.json({ error: "Lỗi platform breakdown", success: false }, { status: 500 });
+    }
+  }
+
   try {
     const [posts, analytics] = await Promise.all([
       prisma.post.findMany({

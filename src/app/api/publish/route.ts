@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
 import { postToFacebook } from "@/lib/facebook";
+import { postToInstagram } from "@/lib/instagram";
+import { postPhotoToTikTok } from "@/lib/tiktok";
 import { reviewContent } from "@/lib/reviewer";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -19,7 +21,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { postId, action, scheduledAt, caption, hashtags, imageUrl, platform, tone, postType, facebookPageId, force } = body;
+    const {
+      postId, action, scheduledAt, caption, hashtags, imageUrl,
+      platform, tone, postType, facebookPageId, force,
+      // Multi-platform targets
+      publishToInstagram, publishToTikTok,
+    } = body;
 
     if (action === "schedule" || action === "draft") {
       if (postId) {
@@ -56,32 +63,89 @@ export async function POST(req: NextRequest) {
       const text = post ? `${post.caption}\n\n${post.hashtags ?? ""}`.trim() : `${caption}\n\n${hashtags ?? ""}`.trim();
       const img = post?.imageUrl ?? imageUrl;
 
-      // Reviewer Agent gate — must pass before publishing
+      // Reviewer gate
       const reviewInput = post
         ? { id: post.id, caption: post.caption, hashtags: post.hashtags, platform: post.platform, facebookPageId: post.facebookPageId }
         : null;
 
-      // Skip review only for ad-hoc publish (no postId) — but warn user
       if (reviewInput) {
         const review = await reviewContent(reviewInput).catch(() => null);
         if (review && review.status === "fail" && !force) {
-          return NextResponse.json({
-            error: "REVIEW_BLOCKED",
-            review,
-            success: false,
-          }, { status: 422 });
+          return NextResponse.json({ error: "REVIEW_BLOCKED", review, success: false }, { status: 422 });
         }
       }
 
-      const fbPostId = await postToFacebook(text, img ?? undefined, facebookPageId ?? undefined);
+      const results: Record<string, string | null> = { facebook: null, instagram: null, tiktok: null };
+
+      // ── Facebook (always)
+      try {
+        results.facebook = await postToFacebook(text, img ?? undefined, facebookPageId ?? undefined);
+      } catch (e) {
+        results.facebook = `error:${e instanceof Error ? e.message : String(e)}`;
+      }
+
+      // ── Instagram (optional, requires igAccountId on page)
+      if (publishToInstagram && img) {
+        try {
+          const fbPage = facebookPageId
+            ? await prisma.facebookPage.findUnique({ where: { id: facebookPageId } })
+            : await prisma.facebookPage.findFirst({ where: { isActive: true, igAccountId: { not: null } } });
+
+          if (fbPage?.igAccountId) {
+            results.instagram = await postToInstagram(fbPage.igAccountId, fbPage.accessToken, text, img);
+          } else {
+            results.instagram = "error:Chưa kết nối Instagram";
+          }
+        } catch (e) {
+          results.instagram = `error:${e instanceof Error ? e.message : String(e)}`;
+        }
+      }
+
+      // ── TikTok (optional, requires image URL)
+      if (publishToTikTok && img) {
+        try {
+          const tiktokAccount = await prisma.tikTokAccount.findFirst({ where: { isActive: true } });
+          if (tiktokAccount) {
+            const { publishId } = await postPhotoToTikTok(tiktokAccount.accessToken, tiktokAccount.openId, text, [img]);
+            results.tiktok = publishId;
+          } else {
+            results.tiktok = "error:Chưa kết nối TikTok";
+          }
+        } catch (e) {
+          results.tiktok = `error:${e instanceof Error ? e.message : String(e)}`;
+        }
+      }
+
+      const fbPostId = results.facebook?.startsWith("error:") ? undefined : results.facebook ?? undefined;
+      const igPostId = results.instagram?.startsWith("error:") ? undefined : results.instagram ?? undefined;
+      const tiktokVideoId = results.tiktok?.startsWith("error:") ? undefined : results.tiktok ?? undefined;
 
       const updated = await prisma.post.upsert({
         where: { id: postId ?? "new" },
-        create: { caption: caption ?? "", hashtags, imageUrl, platform: "facebook", tone: "friendly", postType: "service", status: "published", publishedAt: new Date(), fbPostId, facebookPageId: facebookPageId ?? null },
-        update: { status: "published", publishedAt: new Date(), fbPostId, facebookPageId: facebookPageId ?? null },
+        create: {
+          caption: caption ?? "",
+          hashtags, imageUrl,
+          platform: platform ?? "facebook",
+          tone: "friendly",
+          postType: "service",
+          status: "published",
+          publishedAt: new Date(),
+          fbPostId,
+          igPostId,
+          tiktokVideoId,
+          facebookPageId: facebookPageId ?? null,
+        },
+        update: {
+          status: "published",
+          publishedAt: new Date(),
+          fbPostId,
+          ...(igPostId && { igPostId }),
+          ...(tiktokVideoId && { tiktokVideoId }),
+          facebookPageId: facebookPageId ?? null,
+        },
       });
 
-      return NextResponse.json({ data: updated, success: true });
+      return NextResponse.json({ data: updated, results, success: true });
     }
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });

@@ -9,6 +9,7 @@ import { ChartBar, Eye, ThumbsUp, ChatCircle, Share, Plus, Trophy, TrendUp, User
 import { truncate } from "@/lib/utils";
 import { EngagementTrend } from "./EngagementTrend";
 import { LeadConversionChart } from "./LeadConversionChart";
+import { PlatformBreakdown } from "./PlatformBreakdown";
 
 interface Post { id: string; caption: string; publishedAt: string | null; analytics: { reach: number; likes: number; comments: number; shares: number } | null; }
 interface Stats { totalReach: number; totalLikes: number; totalComments: number; totalShares: number; avgEngagement: number; topPosts: Post[]; posts: Post[]; }
@@ -98,6 +99,8 @@ export function AnalyticsDashboard() {
           <LeadConversionChart />
         </Card>
       </div>
+
+      <PlatformBreakdown />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
