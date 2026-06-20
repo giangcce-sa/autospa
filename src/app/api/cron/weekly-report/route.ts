@@ -1,8 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { sendWeeklyReport } from "@/lib/weekly-report";
 import { prisma } from "@/lib/db";
+import { verifyCronAuth } from "@/lib/cron-auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = verifyCronAuth(req);
+  if (denied) return denied;
+
   try {
     const s = await prisma.settings.findFirst();
     if (!s?.weeklyReportEnabled) {
@@ -16,7 +20,10 @@ export async function GET() {
 }
 
 // Manual trigger
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const denied = verifyCronAuth(req);
+  if (denied) return denied;
+
   try {
     const result = await sendWeeklyReport();
     return NextResponse.json({ success: true, data: result });

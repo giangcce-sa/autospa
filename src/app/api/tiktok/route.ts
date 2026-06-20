@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getTikTokOAuthUrl, getTikTokUser } from "@/lib/tiktok";
+import { createOAuthState, setOAuthStateCookie, TIKTOK_OAUTH_STATE_COOKIE } from "@/lib/oauth-state";
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,9 +9,11 @@ export async function GET(req: NextRequest) {
     const action = searchParams.get("action");
 
     if (action === "auth-url") {
-      const state = Math.random().toString(36).slice(2);
+      const state = createOAuthState();
       const url = getTikTokOAuthUrl(state);
-      return NextResponse.json({ success: true, data: { url, state } });
+      const res = NextResponse.json({ success: true, data: { url } });
+      setOAuthStateCookie(res, TIKTOK_OAUTH_STATE_COOKIE, state);
+      return res;
     }
 
     if (action === "accounts") {

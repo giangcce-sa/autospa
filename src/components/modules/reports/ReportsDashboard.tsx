@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { ChartBar, Eye, ThumbsUp, Users, Flame, Heart, ChatCircle, Sparkle } from "@phosphor-icons/react";
+import { ChartBar, Eye, ThumbsUp, Users, Flame, Heart, Sparkle } from "@phosphor-icons/react";
 import { truncate } from "@/lib/utils";
 
 interface ReportData {

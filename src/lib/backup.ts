@@ -1,6 +1,31 @@
 import { prisma } from "./db";
 import { gzipSync } from "zlib";
 
+type Row = Record<string, unknown>;
+
+const SECRET_FIELDS = new Set([
+  "accessToken",
+  "refreshToken",
+  "claudeApiKey",
+  "openaiApiKey",
+  "zaloToken",
+  "spaApiKey",
+  "spaWebhookSecret",
+  "telegramBotToken",
+  "telegramChatId",
+  "webhookVerifyToken",
+]);
+
+function stripSecrets<T extends Row>(row: T): T {
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [key, SECRET_FIELDS.has(key) ? null : value])
+  ) as T;
+}
+
+function stripSecretsFromRows<T extends Row>(rows: T[]): T[] {
+  return rows.map(stripSecrets);
+}
+
 /**
  * Export all user data as a single JSON object.
  * Excludes RateLimit (transient), RealtimeAlert (transient), and tokens that don't make sense to backup.
@@ -59,13 +84,15 @@ export async function exportAllData(): Promise<Record<string, unknown[]>> {
 
   return {
     _meta: [{ exportedAt: new Date().toISOString(), version: "2.3.0" }],
-    settings, facebookPages,
+    settings: stripSecretsFromRows(settings),
+    facebookPages: stripSecretsFromRows(facebookPages),
     services, brandKit, brandKnowledge, styleSamples, styleProfiles, spaStories,
     posts, postAnalytics, contentReviews,
     customers, customerNotes, leads, leadConversations,
     inboxMessages, postComments, commentRules, messageRules,
     appointments, careMessages, holidayEvents,
-    competitors, competitorPosts,
+    competitors: stripSecretsFromRows(competitors),
+    competitorPosts,
     pendingApprovals, adOptimizationLogs, spaSync,
     bookingRevenue, revenueForecasts,
     morningBriefs, ceoDecisions, workflowRuns, orchestratorRuns,

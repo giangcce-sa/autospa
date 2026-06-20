@@ -20,7 +20,7 @@ interface FbPost {
 }
 
 export function StyleTraining() {
-  const { pages, selectedPageId, selectedPage } = useActivePage();
+  const { selectedPageId, selectedPage } = useActivePage();
   const [samples, setSamples] = useState<Sample[]>([]);
   const [profile, setProfile] = useState<string | null>(null);
   const [form, setForm] = useState({ content: "", likes: "", comments: "", shares: "" });
@@ -139,7 +139,12 @@ export function StyleTraining() {
   };
 
   const toggleSelect = (id: string) => {
-    setSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const selectAll = () => setSelected(new Set(fetchedPosts.map((p) => p.id)));

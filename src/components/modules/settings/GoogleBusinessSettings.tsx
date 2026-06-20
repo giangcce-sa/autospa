@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { CheckCircle, XCircle, ArrowsClockwise, MapPin, Trash, LinkSimple } from "@phosphor-icons/react";
+import { CheckCircle, XCircle, MapPin, Trash, LinkSimple } from "@phosphor-icons/react";
 
 // Google "G" logo
 function GoogleIcon({ size = 16 }: { size?: number }) {

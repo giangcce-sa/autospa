@@ -2,13 +2,12 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Command } from "cmdk";
 import {
   Gauge, PencilSimple, PaperPlaneTilt, Archive, Tag, Image, Stack,
   ChartBar, Eye, ChartLine, ChatCircleDots, UsersThree, Flame,
   Gear, Briefcase, Buildings, Palette, Brain, BookOpen, Scan,
   Robot, ChatsTeardrop, Lightning, ArrowsSplit, Megaphone, Sparkle,
-  MagnifyingGlass, X, TrendUp,
+  MagnifyingGlass, TrendUp,
 } from "@phosphor-icons/react";
 
 interface PaletteItem {

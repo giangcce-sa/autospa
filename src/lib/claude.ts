@@ -1,26 +1,94 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "./db";
 
-async function getClient() {
+const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
+const DIRECT_CLAUDE_MODEL = "claude-sonnet-4-6";
+const GATEWAY_CLAUDE_MODEL = "spa-assistant";
+
+type AnthropicMessageResponse = {
+  content?: Array<{ type: string; text?: string }>;
+};
+
+type OpenAiCompatibleResponse = {
+  choices?: Array<{ message?: { content?: string } }>;
+};
+
+function normalizeBaseUrl(url: string) {
+  return url.replace(/\/$/, "");
+}
+
+function isAnthropicBaseUrl(url: string) {
+  return normalizeBaseUrl(url).includes("anthropic.com");
+}
+
+async function getSettings() {
   const settings = await prisma.settings.findFirst();
   if (!settings?.claudeApiKey) throw new Error("Chưa cấu hình Claude API Key");
 
-  return new Anthropic({
+  return {
     apiKey: settings.claudeApiKey,
-    baseURL: settings.claudeBaseUrl ?? "https://api.anthropic.com",
-  });
+    baseURL: normalizeBaseUrl(settings.claudeBaseUrl || ANTHROPIC_BASE_URL),
+  };
 }
 
 export async function generateContent(prompt: string, systemPrompt: string): Promise<string> {
-  const client = await getClient();
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1024,
-    system: systemPrompt,
-    messages: [{ role: "user", content: prompt }],
+  const { apiKey, baseURL } = await getSettings();
+
+  if (!isAnthropicBaseUrl(baseURL)) {
+    const endpoint = baseURL.endsWith("/chat/completions")
+      ? baseURL
+      : `${baseURL}/chat/completions`;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: GATEWAY_CLAUDE_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 1024,
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => `HTTP ${res.status}`);
+      throw new Error(`Claude gateway lỗi (${res.status}): ${text.slice(0, 200)}`);
+    }
+
+    const data = (await res.json()) as OpenAiCompatibleResponse;
+    const text = data.choices?.[0]?.message?.content;
+    if (typeof text !== "string") throw new Error("Claude gateway không trả về text");
+    return text;
+  }
+
+  const res = await fetch(`${baseURL}/v1/messages`, {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: DIRECT_CLAUDE_MODEL,
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: "user", content: prompt }],
+    }),
   });
-  const block = response.content[0];
-  if (block.type !== "text") throw new Error("Phản hồi không hợp lệ");
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => `HTTP ${res.status}`);
+    throw new Error(`Claude API lỗi (${res.status}): ${text.slice(0, 200)}`);
+  }
+
+  const response = (await res.json()) as AnthropicMessageResponse;
+  const block = response.content?.[0];
+  if (block?.type !== "text" || typeof block.text !== "string") {
+    throw new Error("Phản hồi không hợp lệ");
+  }
   return block.text;
 }
 

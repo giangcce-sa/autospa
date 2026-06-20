@@ -21,6 +21,7 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "internal-ai-gateway/**",
     "next-env.d.ts",
   ]),
 ]);

@@ -1,22 +1,39 @@
 import { prisma } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
+const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
+const GATEWAY_CLAUDE_MODEL = "spa-assistant";
+const DIRECT_CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+
+function normalizeBaseUrl(url: string) {
+  return url.replace(/\/$/, "");
+}
+
+function isAnthropicBaseUrl(url: string) {
+  return normalizeBaseUrl(url).includes("anthropic.com");
+}
+
+function safeSettings(settings: NonNullable<Awaited<ReturnType<typeof prisma.settings.findFirst>>>) {
+  return {
+    ...settings,
+    claudeApiKey: settings.claudeApiKey ? "••••••••" + settings.claudeApiKey.slice(-4) : null,
+    openaiApiKey: settings.openaiApiKey ? "••••••••" + settings.openaiApiKey.slice(-4) : null,
+    zaloToken: settings.zaloToken ? "••••••••" + settings.zaloToken.slice(-4) : null,
+    spaApiKey: settings.spaApiKey ? "••••••••" + settings.spaApiKey.slice(-4) : null,
+    spaWebhookSecret: settings.spaWebhookSecret ? "••••••••" + settings.spaWebhookSecret.slice(-4) : null,
+    telegramBotToken: settings.telegramBotToken ? "••••••••" + settings.telegramBotToken.slice(-4) : null,
+    hasSpaApiKey: !!settings.spaApiKey,
+    hasSpaWebhookSecret: !!settings.spaWebhookSecret,
+    hasTelegramBotToken: !!settings.telegramBotToken,
+  };
+}
+
 export async function GET() {
   try {
     const settings = await prisma.settings.findFirst();
     if (!settings) return NextResponse.json({ data: null, success: true });
 
-    const safe = {
-      ...settings,
-      claudeApiKey: settings.claudeApiKey ? "••••••••" + settings.claudeApiKey.slice(-4) : null,
-      openaiApiKey: settings.openaiApiKey ? "••••••••" + settings.openaiApiKey.slice(-4) : null,
-      zaloToken: settings.zaloToken ? "••••••••" + settings.zaloToken.slice(-4) : null,
-      spaApiKey: settings.spaApiKey ? "••••••••" + settings.spaApiKey.slice(-4) : null,
-      openaiBaseUrl: settings.openaiBaseUrl,
-      imageModel: settings.imageModel,
-      hasSpaApiKey: !!settings.spaApiKey,
-    };
-    return NextResponse.json({ data: safe, success: true });
+    return NextResponse.json({ data: safeSettings(settings), success: true });
   } catch {
     return NextResponse.json({ error: "Lỗi khi tải cài đặt", success: false }, { status: 500 });
   }
@@ -28,7 +45,7 @@ export async function POST(req: NextRequest) {
     const { action } = body;
 
     if (action === "test") {
-      const { service, apiKey, baseUrl, pageId } = body;
+      const { service, apiKey, baseUrl } = body;
       // Use value passed from form; fall back to DB only if form field is masked/empty
       const settings = await prisma.settings.findFirst();
       const resolveKey = (formVal: string | undefined, dbVal: string | null | undefined) => {
@@ -38,14 +55,24 @@ export async function POST(req: NextRequest) {
 
       if (service === "claude") {
         const key = resolveKey(apiKey, settings?.claudeApiKey);
-        const url = (baseUrl && !baseUrl.includes("••")) ? baseUrl : (settings?.claudeBaseUrl || "https://api.anthropic.com");
+        const url = normalizeBaseUrl((baseUrl && !baseUrl.includes("••")) ? baseUrl : (settings?.claudeBaseUrl || ANTHROPIC_BASE_URL));
         if (!key) return NextResponse.json({ success: false, message: "Chưa có API key — nhập key rồi test" });
         try {
-          const res = await fetch(`${url}/v1/messages`, {
-            method: "POST",
-            headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-            body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 10, messages: [{ role: "user", content: "hi" }] }),
-          });
+          const res = isAnthropicBaseUrl(url)
+            ? await fetch(`${url}/v1/messages`, {
+                method: "POST",
+                headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+                body: JSON.stringify({ model: DIRECT_CLAUDE_MODEL, max_tokens: 10, messages: [{ role: "user", content: "hi" }] }),
+              })
+            : await fetch(`${url}/chat/completions`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+                body: JSON.stringify({
+                  model: GATEWAY_CLAUDE_MODEL,
+                  max_tokens: 10,
+                  messages: [{ role: "user", content: "hi" }],
+                }),
+              });
           if (res.ok) return NextResponse.json({ success: true, message: "Kết nối thành công!" });
           const err = await res.json().catch(() => ({}));
           return NextResponse.json({ success: false, message: err.error?.message || `Lỗi ${res.status}` });
@@ -59,10 +86,17 @@ export async function POST(req: NextRequest) {
         const oBaseUrl = (body.openaiBaseUrl && !body.openaiBaseUrl.includes("••"))
           ? body.openaiBaseUrl
           : (settings?.openaiBaseUrl || "https://api.openai.com/v1");
+        const model = settings?.openaiChatModel || "auto";
         if (!key) return NextResponse.json({ success: false, message: "Chưa có API key — nhập key rồi test" });
         try {
-          const res = await fetch(`${oBaseUrl.replace(/\/$/, "")}/models`, {
-            headers: { Authorization: `Bearer ${key}` },
+          const res = await fetch(`${oBaseUrl.replace(/\/$/, "")}/chat/completions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+            body: JSON.stringify({
+              model,
+              max_tokens: 10,
+              messages: [{ role: "user", content: "hi" }],
+            }),
           });
           if (res.ok) return NextResponse.json({ success: true, message: "Kết nối thành công!" });
           const err = await res.json().catch(() => ({}));
@@ -134,12 +168,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({
-      data: {
-        ...settings,
-        claudeApiKey: settings.claudeApiKey ? true : null,
-        openaiApiKey: settings.openaiApiKey ? true : null,
-        zaloToken: settings.zaloToken ? true : null,
-      },
+      data: safeSettings(settings),
       success: true,
     });
   } catch (e) {

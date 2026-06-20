@@ -1,9 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { runFlashDealDetection, postFlashDeal } from "@/lib/flash-deal-engine";
 import { prisma } from "@/lib/db";
 import { sendAlert } from "@/lib/telegram";
+import { verifyCronAuth } from "@/lib/cron-auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = verifyCronAuth(req);
+  if (denied) return denied;
+
   try {
     const settings = await prisma.settings.findFirst();
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { SignOut, User } from "@phosphor-icons/react";
+import { SignOut } from "@phosphor-icons/react";
 
 export function UserMenu() {
   const { data: session } = useSession();

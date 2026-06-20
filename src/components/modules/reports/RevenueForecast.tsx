@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { TrendUp, Calendar, ChatsTeardrop, Sparkle, Lightning } from "@phosphor-icons/react";
 
 interface ForecastDay {

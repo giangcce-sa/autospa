@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
-  getGoogleOAuthUrl, listGbpAccounts, listGbpLocations,
+  getGoogleOAuthUrl, listGbpLocations,
   listGbpReviews, replyToGbpReview, deleteGbpReviewReply,
-  createGbpPost, listGbpPosts, fetchGbpInsights, refreshGoogleToken,
+  createGbpPost, fetchGbpInsights, refreshGoogleToken,
 } from "@/lib/google-business";
 import { generateChatCompletion } from "@/lib/openai";
+import { createOAuthState, GOOGLE_OAUTH_STATE_COOKIE, setOAuthStateCookie } from "@/lib/oauth-state";
 
 // Ensure access token is fresh, refresh if needed
 async function getValidToken(accountId: string): Promise<{ token: string; account: { id: string; locationId: string | null; accountId: string | null; locationName: string | null } }> {
@@ -36,9 +37,11 @@ export async function GET(req: NextRequest) {
     const action = searchParams.get("action");
 
     if (action === "auth-url") {
-      const state = Math.random().toString(36).slice(2);
+      const state = createOAuthState();
       const url = getGoogleOAuthUrl(state);
-      return NextResponse.json({ success: true, data: { url, state } });
+      const res = NextResponse.json({ success: true, data: { url } });
+      setOAuthStateCookie(res, GOOGLE_OAUTH_STATE_COOKIE, state);
+      return res;
     }
 
     if (action === "accounts") {

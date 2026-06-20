@@ -1,0 +1,16 @@
+.git
+.next
+.vercel
+node_modules
+dev.db
+*.db
+*.sqlite
+.env
+.env.*
+Dockerfile
+docker-compose*.yml
+Don_de_nghi_hoan_tien_Duong_Thi_Dung.docx
+autospa.code-workspace
+internal-ai-gateway
+tsconfig.tsbuildinfo
+npm-debug.log*

@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Bell, Warning, Fire, TrendUp, ChatCircleDots, Sparkle, CheckCircle } from "@phosphor-icons/react";
-import { truncate } from "@/lib/utils";
 
 interface SocialAlert { id: string; type: string; content: string; source: string; severity: string; isRead: boolean; createdAt: string; }
 interface Stats { total: number; unread: number; critical: number; high: number; }

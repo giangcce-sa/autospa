@@ -1,0 +1,24 @@
+services:
+  autospa:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      AUTH_URL: "https://autospa.somail.us"
+      NEXTAUTH_URL: "https://autospa.somail.us"
+      NEXT_PUBLIC_APP_URL: "https://autospa.somail.us"
+      AUTH_TRUST_HOST: "true"
+    expose:
+      - "3000"
+    networks:
+      - caddy
+
+networks:
+  caddy:
+    external: true
+    name: internal-ai-gateway_default

@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const { action } = body;
 
     if (action === "auto-reply") {
-      const { messageId, senderName, message } = body;
+      const { messageId, message } = body;
       const brandContext = await getBrandContext();
       const systemPrompt = `Bạn là nhân viên tư vấn của spa, trả lời tin nhắn khách hàng trên Facebook.
 ${brandContext ? `Thông tin spa:\n${brandContext}` : ""}

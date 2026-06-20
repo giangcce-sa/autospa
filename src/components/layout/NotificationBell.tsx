@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Bell, X, Checks, WarningCircle, Info, Warning, Fire } from "@phosphor-icons/react";
+import { Bell, X, Checks, Info, Warning, Fire } from "@phosphor-icons/react";
 
 interface Alert {
   id: string;

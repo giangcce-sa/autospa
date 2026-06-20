@@ -41,7 +41,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data: note });
     }
 
-    const { id, action: _a, ...data } = body;
+    const { id, ...data } = body;
+    delete data.action;
     if (id) {
       const customer = await prisma.customer.update({ where: { id }, data: { ...data, updatedAt: new Date() } });
       return NextResponse.json({ data: customer });

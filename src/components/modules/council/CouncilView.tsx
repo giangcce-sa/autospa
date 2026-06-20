@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
-import { ChatsTeardrop, Sparkle, Lightning, ArrowsClockwise, CheckCircle } from "@phosphor-icons/react";
+import { ChatsTeardrop, Sparkle, ArrowsClockwise, CheckCircle } from "@phosphor-icons/react";
 
 interface Turn {
   speaker: string;
