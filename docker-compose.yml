@@ -15,8 +15,14 @@ services:
       AUTH_TRUST_HOST: "true"
     expose:
       - "3000"
+    volumes:
+      - autospa_uploads:/app/public/uploads
     networks:
       - caddy
+
+volumes:
+  autospa_uploads:
+    name: autospa_uploads
 
 networks:
   caddy:
