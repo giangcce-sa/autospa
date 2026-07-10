@@ -12,6 +12,17 @@ interface Stage {
   key: string;
 }
 
+function softTone(color: string) {
+  const tones: Record<string, string> = {
+    "var(--blue)": "var(--blue-light)",
+    "var(--accent)": "var(--accent-light)",
+    "var(--rose)": "var(--rose-light)",
+    "var(--premium)": "var(--premium-light)",
+    "var(--success)": "var(--success-light)",
+  };
+  return tones[color] ?? `color-mix(in srgb, ${color} 14%, transparent)`;
+}
+
 export function LeadPipeline() {
   const [stages, setStages] = useState<Stage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +57,7 @@ export function LeadPipeline() {
 
   if (loading) {
     return <div className="space-y-2">{[85, 70, 55, 40, 25].map((w, i) => (
-      <div key={i} className="skeleton rounded-lg" style={{ height: 32, width: `${w}%`, margin: "0 auto" }} />
+      <div key={i} className="skeleton rounded-md" style={{ height: 32, width: `${w}%`, margin: "0 auto" }} />
     ))}</div>;
   }
 
@@ -63,18 +74,17 @@ export function LeadPipeline() {
         return (
           <div key={stage.label} style={{ width: `${widthPct}%`, margin: "0 auto" }}>
             <div
-              className="relative flex items-center justify-between px-3 py-2.5 rounded-xl overflow-hidden transition-all hover:scale-[1.02]"
+              className="relative flex items-center justify-between px-3 py-2.5 rounded-md overflow-hidden transition-all hover:-translate-y-px"
               style={{
-                background: `linear-gradient(135deg, ${stage.color}22 0%, ${stage.color}10 100%)`,
-                border: `1px solid ${stage.color}44`,
+                background: softTone(stage.color),
+                border: `1px solid color-mix(in srgb, ${stage.color} 44%, var(--border))`,
               }}
             >
-              {/* animated fill bar */}
               <div
                 className="absolute left-0 top-0 h-full"
                 style={{
                   width: `${barWidthPct}%`,
-                  background: `linear-gradient(90deg, ${stage.color}28, ${stage.color}08)`,
+                  background: `color-mix(in srgb, ${stage.color} 10%, transparent)`,
                   transition: "width 1s cubic-bezier(0.4,0,0.2,1)",
                 }}
               />
@@ -85,7 +95,7 @@ export function LeadPipeline() {
               <div className="relative flex items-center gap-2">
                 <span className="text-sm font-bold tabular-nums" style={{ color: stage.color }}>{stage.count}</span>
                 {convRate !== null && (
-                  <span className="text-[9px] px-1 py-0.5 rounded-full font-semibold" style={{ background: stage.color + "20", color: stage.color }}>
+                  <span className="text-[9px] px-1 py-0.5 rounded-md font-semibold" style={{ background: softTone(stage.color), color: stage.color }}>
                     {convRate}%
                   </span>
                 )}

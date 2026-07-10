@@ -1,37 +1,34 @@
 @import "tailwindcss";
 
-/*  ═══ AutoSpa UI v3 — Hybrid AI + Spa ═══
-    Foundation tokens. Spacing grid: 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48
-    Premium accent (gold) reserved for strategic AI agents:
-    Orchestrator · Council · CEO Memory · Daily Standup
-*/
+/* AutoSpa UI foundation. Spacing grid: 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48 */
 
 @layer base {
   :root {
-    /* Surfaces — warm neutrals */
-    --bg: #f7f6f3;
+    /* Surfaces */
+    --bg: #f4f5f1;
     --bg-card: #ffffff;
-    --bg-subtle: #f0efeb;
-    --bg-elevated: #fafaf7;
+    --bg-subtle: #eceee8;
+    --bg-elevated: #fafbf8;
 
     /* Borders */
-    --border: #e5e4e0;
-    --border-strong: #d0cfc9;
+    --border: #dde2d9;
+    --border-strong: #c6cec1;
 
     /* Typography */
-    --text: #111111;
-    --text-secondary: #5e5d59;        /* ↑ contrast (was #787774) */
-    --text-muted: #908e87;             /* ↑ contrast (was #a8a6a1) */
+    --text: #171b16;
+    --text-secondary: #525b50;
+    --text-muted: #788174;
 
     /* Spa accent (primary) — wellness green */
-    --accent: #2d6a4f;
-    --accent-light: #edf7f0;
-    --accent-hover: #235a42;
+    --accent: #2f6f54;
+    --accent-light: #e5f1ea;
+    --accent-soft: #f2f8f4;
+    --accent-hover: #245a43;
 
     /* Premium accent — AI strategic agents (gold/champagne) */
-    --premium: #b08940;
-    --premium-light: #faf3e3;
-    --premium-hover: #946f30;
+    --premium: #a3762c;
+    --premium-light: #f4ecd9;
+    --premium-hover: #835d21;
 
     /* Status colors (semantic) */
     --success: #2d6a4f;
@@ -44,45 +41,45 @@
     --info-light: #eff6ff;
 
     /* Legacy aliases (keep until full migration) */
-    --rose: #e76f6f;
-    --rose-light: #fdf0f0;
-    --amber: #d97706;
-    --amber-light: #fffbeb;
-    --blue: #2563eb;
-    --blue-light: #eff6ff;
+    --rose: #c95a5a;
+    --rose-light: #faeeee;
+    --amber: #bd720f;
+    --amber-light: #fbf2df;
+    --blue: #2f6da8;
+    --blue-light: #e7eff7;
 
-    /* Shadows — refined */
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03);
-    --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.05);
-    --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 8px 32px rgba(0,0,0,0.06);
-    --shadow-premium: 0 2px 12px rgba(176,137,64,0.18);
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(24, 36, 26, 0.035), 0 1px 6px rgba(24, 36, 26, 0.04);
+    --shadow-md: 0 10px 28px rgba(24, 36, 26, 0.07);
+    --shadow-lg: 0 18px 44px rgba(24, 36, 26, 0.1);
+    --shadow-premium: 0 10px 28px rgba(163, 118, 44, 0.16);
 
     /* Layout */
-    --sidebar-width: 220px;
+    --sidebar-width: 232px;
     --sidebar-width-collapsed: 64px;
     --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 18px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
+    --radius-xl: 12px;
   }
 
   .dark {
-    --bg: #0a0a09;                     /* ↓ deeper black (was #111110) */
-    --bg-card: #16161410;              /* with alpha for layering */
-    --bg-card: #161614;
-    --bg-subtle: #1f1f1c;
-    --bg-elevated: #1c1c19;
+    --bg: #0d100d;
+    --bg-card: #171b17;
+    --bg-subtle: #20261f;
+    --bg-elevated: #1c211b;
 
-    --border: #2a2a27;
-    --border-strong: #3d3d39;
+    --border: #293127;
+    --border-strong: #3a4637;
 
-    --text: #f5f5f0;
-    --text-secondary: #c4c2b8;          /* ↑↑ (was #9a9990) */
-    --text-muted: #8a887e;               /* ↑ (was #6b6a65) */
+    --text: #f4f7f0;
+    --text-secondary: #c2cabd;
+    --text-muted: #8e9989;
 
-    --accent: #40c074;
-    --accent-light: #142b1f;
-    --accent-hover: #34a061;
+    --accent: #65c08b;
+    --accent-light: #183125;
+    --accent-soft: #12251c;
+    --accent-hover: #7ad69f;
 
     --premium: #d4a554;
     --premium-light: #2a2010;
@@ -97,27 +94,32 @@
     --info: #60a5fa;
     --info-light: #0f1f3a;
 
-    --rose: #f08080;
+    --rose: #e18181;
     --rose-light: #2a1818;
     --amber: #f0a040;
     --amber-light: #2a2010;
-    --blue: #60a5fa;
+    --blue: #7eb0e6;
     --blue-light: #0f1f3a;
 
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
-    --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
-    --shadow-premium: 0 2px 16px rgba(212,165,84,0.25);
+    --shadow-sm: 0 1px 4px rgba(0,0,0,0.32);
+    --shadow-md: 0 12px 30px rgba(0,0,0,0.42);
+    --shadow-lg: 0 20px 52px rgba(0,0,0,0.52);
+    --shadow-premium: 0 12px 30px rgba(212,165,84,0.18);
   }
 
   * { box-sizing: border-box; border-color: var(--border); }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    background-color: var(--bg);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--accent-light) 42%, var(--bg)) 0%, var(--bg) 260px);
     color: var(--text);
     font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;                  /* ↓ from 1.6 — denser */
+    font-size: 15px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     transition: background-color 0.2s ease, color 0.2s ease;
@@ -126,13 +128,13 @@
   /* Display font (Manrope) for headings */
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display, var(--font-geist-sans)), system-ui, sans-serif;
-    letter-spacing: -0.018em;
-    line-height: 1.2;
+    letter-spacing: 0;
+    line-height: 1.16;
     color: var(--text);
   }
-  h1 { font-size: 28px; font-weight: 700; }
-  h2 { font-size: 22px; font-weight: 700; }
-  h3 { font-size: 17px; font-weight: 600; }
+  h1 { font-size: 30px; font-weight: 800; }
+  h2 { font-size: 23px; font-weight: 700; }
+  h3 { font-size: 18px; font-weight: 700; }
 
   /* Tabular numerals everywhere — important for metrics consistency */
   .tabular-nums, .stat-num, [data-numeric] {
@@ -165,11 +167,6 @@
   60%       { box-shadow: 0 0 0 4px rgba(176,137,64,0); }
 }
 
-@keyframes logo-pulse {
-  0%, 100% { box-shadow: 0 2px 8px rgba(45,106,79,0.32); }
-  50%       { box-shadow: 0 4px 18px rgba(45,106,79,0.5); }
-}
-
 @keyframes skeleton-shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -178,17 +175,17 @@
 /* ═══ Page entrance ═══════════════════════════════════════ */
 
 .page-enter {
-  animation: fadeInUp 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: fadeInUp 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
 /* ═══ Card hover (subtler) ════════════════════════════════ */
 
 .card-hover {
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease !important;
   cursor: pointer;
 }
 .card-hover:hover {
-  transform: translateY(-1px);        /* ↓ from 2px — subtler */
+  transform: translateY(-2px);
   box-shadow: var(--shadow-md) !important;
 }
 
@@ -200,9 +197,7 @@
 
 /* ═══ Logo icon — slow breath ═════════════════════════════ */
 
-.logo-icon {
-  animation: logo-pulse 6s ease-in-out infinite;   /* ↓ from 3s — calmer */
-}
+.logo-icon {}
 
 /* ═══ Sidebar nav item hover ══════════════════════════════ */
 
@@ -262,8 +257,8 @@ button, a {
    The dashboard is action-heavy, so tiny utility labels need to remain compact
    but readable on laptop screens. Scoped to avoid changing dense tables elsewhere. */
 .dashboard-readable {
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 15.5px;
+  line-height: 1.58;
 }
 
 .dashboard-readable .text-\[9px\] {
@@ -292,12 +287,12 @@ button, a {
 }
 
 .dashboard-readable h1 {
-  letter-spacing: -0.012em;
+  letter-spacing: 0;
 }
 
 .dashboard-readable h2,
 .dashboard-readable h3 {
-  letter-spacing: -0.006em;
+  letter-spacing: 0;
 }
 
 /* ═══ Utilities ═══════════════════════════════════════════ */

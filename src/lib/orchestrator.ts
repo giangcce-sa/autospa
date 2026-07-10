@@ -3,6 +3,7 @@ import { computeForecast } from "./forecast";
 import { councilDebate } from "./ai-council";
 import { runProactiveOutreach } from "./proactive-sales";
 import { triggerWorkflow, type WorkflowName } from "./workflows";
+import { getCompetitorContext } from "./learning/competitor-learning";
 
 export type AgentKey =
   | "ads_creative"
@@ -38,6 +39,16 @@ export interface OrchestratorPlan {
   actions: { agent: AgentKey; action: string; status: "executed" | "queued" | "skipped"; result?: unknown }[];
   mode: "recommend" | "auto";
 }
+
+const AGENT_DOMAIN: Record<AgentKey, string> = {
+  ads_creative: "ads",
+  proactive_sales: "sales",
+  content_research: "content",
+  intelligence: "intelligence",
+  promotion: "content",
+  inbox_rules: "customer",
+  approval_review: "operation",
+};
 
 async function gatherSignals(): Promise<SignalSnapshot> {
   const now = new Date();
@@ -226,13 +237,18 @@ async function executeIntelligenceAgent(s: SignalSnapshot): Promise<unknown> {
     include: { competitor: { select: { name: true } } },
   });
   if (!topCompPost) return { skipped: "competitor post not found" };
+  const competitorCtx = await getCompetitorContext();
 
   const council = await councilDebate({
     topic: "Đối thủ vừa có bài viral — mình nên phản hồi thế nào?",
     context: `Đối thủ ${topCompPost.competitor.name} có bài (${topCompPost.likes} likes, ${topCompPost.comments} comments):
 "${topCompPost.message}"
 
-Đề xuất hướng content của mình để không bị tụt lại nhưng KHÔNG copy đối thủ.`,
+Competitor Memory:
+${competitorCtx.insight || "Chưa có memory dài hạn"}
+${competitorCtx.recommendations.length ? `Gợi ý phản ứng: ${competitorCtx.recommendations.join(" | ")}` : ""}
+
+Đề xuất hướng content của mình để không bị tụt lại nhưng KHÔNG copy đối thủ. Chỉ tạo draft, không đăng tự động.`,
   });
 
   // Save as Post draft with INTEL: prefix
@@ -315,6 +331,42 @@ async function decideActions(priorities: AgentPriority[], automationLevel: strin
       actions.push({ agent: p.agent, action: p.recommendedAction, status: "executed", result });
     } catch (e) {
       actions.push({ agent: p.agent, action: p.recommendedAction, status: "skipped", result: String(e) });
+    }
+  }
+
+  if (priorities.length > 0) {
+    const domains = [...new Set(priorities.map((p) => AGENT_DOMAIN[p.agent]))].filter(Boolean);
+    const activeSkills = await prisma.brainSkill.findMany({
+      where: {
+        status: "active",
+        domain: { in: domains },
+      },
+      orderBy: [{ confidence: "desc" }, { updatedAt: "desc" }],
+      take: 6,
+    });
+
+    for (const skill of activeSkills) {
+      const priority = priorities.find((p) => AGENT_DOMAIN[p.agent] === skill.domain);
+      if (!priority) continue;
+      const action = `Brain skill "${skill.name}" match tín hiệu: ${priority.reason}`;
+      const run = await prisma.brainSkillRun.create({
+        data: {
+          skillId: skill.id,
+          signal: JSON.stringify({ priority, signals }),
+          action,
+          status: skill.permissionLevel === "suggest" ? "queued" : "drafted",
+          result: JSON.stringify({
+            permissionLevel: skill.permissionLevel,
+            playbook: skill.playbook.slice(0, 800),
+          }),
+        },
+      });
+      actions.push({
+        agent: priority.agent,
+        action,
+        status: "queued",
+        result: { brainSkillId: skill.id, brainSkillRunId: run.id, permissionLevel: skill.permissionLevel },
+      });
     }
   }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { runAllLearningLoops } from "@/lib/learning";
 import { getBehaviorInsights } from "@/lib/learning/customer-behavior";
+import { getCompetitorMemory } from "@/lib/learning/competitor-learning";
 
 export async function GET(req: NextRequest) {
   try {
@@ -31,6 +32,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, data });
     }
 
+    if (action === "competitor-memory") {
+      const data = await getCompetitorMemory();
+      return NextResponse.json({ success: true, data });
+    }
+
     if (action === "decisions") {
       const decisions = await prisma.cEODecision.findMany({
         where: { outcomeStatus: { not: null } },
@@ -45,16 +51,17 @@ export async function GET(req: NextRequest) {
     }
 
     // Default: summary
-    const [contentMem, sourceWeights, recentInsights, behavior] = await Promise.all([
+    const [contentMem, sourceWeights, recentInsights, behavior, competitorMemory] = await Promise.all([
       prisma.contentMemory.findFirst({ where: { platform: "facebook" } }),
       prisma.leadSourceWeight.findMany({ orderBy: { weight: "desc" }, take: 5 }),
       prisma.learningInsight.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
       getBehaviorInsights(),
+      getCompetitorMemory(),
     ]);
 
     return NextResponse.json({
       success: true,
-      data: { contentMem, sourceWeights, recentInsights, behavior },
+      data: { contentMem, sourceWeights, recentInsights, behavior, competitorMemory },
     });
   } catch (e) {
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });

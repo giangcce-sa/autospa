@@ -3,6 +3,9 @@ import { generateContent, getBrandContext } from "./claude";
 import { generateChatCompletion } from "./openai";
 import { getTopCompetitorPosts } from "./competitor-research";
 import { reviewContent } from "./reviewer";
+import { scoreHumanWriting } from "./content-humanizer";
+import { getHumanVoiceProfile } from "./human-voice";
+import { getCompetitorContext } from "./learning/competitor-learning";
 
 interface ContentIdea {
   topic: string;
@@ -21,7 +24,7 @@ export async function generateContentPlan(
   const now = new Date();
 
   // Gather context in parallel
-  const [services, topPosts, holidays, brandCtx, competitorPosts] = await Promise.all([
+  const [services, topPosts, holidays, brandCtx, competitorPosts, competitorMemory] = await Promise.all([
     prisma.service.findMany({ select: { name: true, description: true }, take: 10 }),
     prisma.post.findMany({
       where: { status: "published" },
@@ -36,6 +39,7 @@ export async function generateContentPlan(
     }),
     getBrandContext(),
     getTopCompetitorPosts(7, 5).catch(() => []),
+    getCompetitorContext(),
   ]);
 
   const serviceList = services.map((s: { name: string; description: string | null }) => `- ${s.name}${s.description ? `: ${s.description}` : ""}`).join("\n");
@@ -58,6 +62,8 @@ Bài đăng hiệu quả nhất gần đây:
 ${topCaptions || "Chưa có dữ liệu"}
 
 ${competitorPosts.length > 0 ? `Bài viral của đối thủ tuần qua (để tham khảo hướng nội dung, KHÔNG copy):\n${competitorPosts.map((p, i) => `${i + 1}. [${p.competitor.name}] ${p.message.slice(0, 150)}... (${p.likes} likes)`).join("\n")}\n` : ""}
+${competitorMemory.insight ? `Competitor Memory 30 ngày (chỉ dùng để hiểu thị trường, KHÔNG copy):\n${competitorMemory.insight}\n` : ""}
+${competitorMemory.recommendations.length > 0 ? `Gợi ý phản ứng an toàn:\n${competitorMemory.recommendations.map((r) => `- ${r}`).join("\n")}\n` : ""}
 ${brandCtx ? `Thông tin thương hiệu:\n${brandCtx}\n` : ""}
 
 Tạo kế hoạch nội dung ${totalPosts} bài cho ${daysAhead} ngày tới (${postsPerDay} bài/ngày). Trả về JSON array, mỗi phần tử:
@@ -127,6 +133,49 @@ Hãy điều chỉnh kế hoạch để khắc phục các điểm phản biện
 
   if (!ideas.length) return { created: 0, ideas: [] };
 
+  const draftIdeas = ideas.map((idea) => ({ ...idea }));
+  const voiceProfile = await getHumanVoiceProfile(null);
+  const voiceRules = voiceProfile?.autoApply ? voiceProfile.rules : "";
+  const lowScoreItems = ideas
+    .map((idea, index) => ({ index, idea, score: scoreHumanWriting(idea.caption, Boolean(voiceRules)) }))
+    .filter((item) => item.score.score < 80);
+
+  if (lowScoreItems.length > 0) {
+    try {
+      const batch = lowScoreItems.map((item) => ({
+        index: item.index,
+        caption: item.idea.caption,
+        hashtags: item.idea.hashtags,
+        issues: item.score.issues.map((issue) => issue.message),
+      }));
+      const editedRaw = await generateContent(
+        `Biên tập các bài sau để nghe như người thật tại spa viết. Không thêm dữ kiện mới.
+${voiceRules ? `\nHuman Voice Profile:\n${voiceRules}\n` : ""}
+INPUT:
+${JSON.stringify(batch)}
+
+Trả JSON array đúng dạng:
+[{"index": 0, "caption": "bản đã sửa", "hashtags": "#..."}]`,
+        "Bạn là Human Editor tiếng Việt. Loại văn AI, câu sáo rỗng, emoji thừa và CTA máy móc. Giữ nguyên index. Chỉ trả JSON.",
+      );
+      const json = editedRaw.match(/\[[\s\S]*\]/)?.[0];
+      if (json) {
+        const edited = JSON.parse(json) as Array<{ index: number; caption: string; hashtags?: string }>;
+        for (const item of edited) {
+          if (ideas[item.index] && item.caption?.trim()) {
+            ideas[item.index] = {
+              ...ideas[item.index],
+              caption: item.caption.trim(),
+              hashtags: item.hashtags?.trim() || ideas[item.index].hashtags,
+            };
+          }
+        }
+      }
+    } catch {
+      // Keep the council version if batch humanization fails.
+    }
+  }
+
   // Create Post records
   const created = await prisma.$transaction(
     ideas.map((idea) => {
@@ -147,6 +196,26 @@ Hãy điều chỉnh kế hoạch để khắc phục các điểm phản biện
       });
     })
   );
+
+  await prisma.contentGeneration.createMany({
+    data: created.map((post, index) => {
+      const score = scoreHumanWriting(ideas[index].caption, Boolean(voiceRules));
+      return {
+        postId: post.id,
+        promptVersion: "research-human-v1",
+        mode: "research",
+        narrator: "brand",
+        brief: JSON.stringify({ topic: ideas[index].topic, daysAhead, postsPerDay }),
+        strategy: `AI Council content plan: ${ideas[index].topic}`,
+        draftCaption: draftIdeas[index]?.caption ?? ideas[index].caption,
+        editorCaption: ideas[index].caption,
+        finalCaption: ideas[index].caption,
+        hashtags: ideas[index].hashtags,
+        humanScore: score.score,
+        scoreDetails: JSON.stringify(score),
+      };
+    }),
+  });
 
   // Auto-review tất cả drafts vừa tạo — không chờ user click publish mới phát hiện vi phạm
   await Promise.allSettled(

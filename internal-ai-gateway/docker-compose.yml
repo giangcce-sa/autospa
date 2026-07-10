@@ -1,0 +1,11 @@
+services:
+  internal-ai-gateway:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./audit-logs:/app/audit-logs
+      - ./kiro-workspaces:/app/kiro-workspaces
+    restart: unless-stopped

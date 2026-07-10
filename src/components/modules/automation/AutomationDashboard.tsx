@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import {
   CheckCircle, XCircle, Clock, Robot, Megaphone,
-  ArrowsClockwise, ChatCircleDots, Warning, Spinner,
+  ArrowsClockwise, ChatCircleDots, Warning, Spinner, Play,
 } from "@phosphor-icons/react";
 
 interface Approval {
@@ -65,6 +65,16 @@ interface DashData {
   leadConversations: LeadConv[];
   nurtureLeads: NurtureLead[];
   nurtureDueCount: number;
+  adsReadiness: {
+    automationLevel: string;
+    pauseCtr: number;
+    scaleCtr: number;
+    maxBudget: number;
+    cooldownHours: number;
+    minRoas: number;
+    configuredAdsPages: number;
+    hasApprovalRecipient: boolean;
+  };
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -73,6 +83,9 @@ const ACTION_LABELS: Record<string, string> = {
   flagged_refresh: "Cần đổi creative",
   skipped: "Bỏ qua",
   pending_approval: "Chờ duyệt",
+  recommended: "Đề xuất",
+  dry_run: "Mô phỏng",
+  failed: "Thất bại",
 };
 
 const ACTION_BADGE: Record<string, "danger" | "success" | "warning" | "neutral" | "info"> = {
@@ -81,6 +94,9 @@ const ACTION_BADGE: Record<string, "danger" | "success" | "warning" | "neutral" 
   flagged_refresh: "warning",
   skipped: "neutral",
   pending_approval: "info",
+  recommended: "info",
+  dry_run: "neutral",
+  failed: "danger",
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -126,6 +142,8 @@ export function AutomationDashboard() {
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [resolving, setResolving] = useState<string | null>(null);
+  const [runningAds, setRunningAds] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/automation");
@@ -138,13 +156,33 @@ export function AutomationDashboard() {
 
   const resolve = async (id: string, decision: "approved" | "rejected") => {
     setResolving(id + decision);
-    await fetch("/api/approvals", {
+    const response = await fetch("/api/approvals", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id, decision }),
     });
+    const result = await response.json();
+    setNotice(result.success ? (decision === "approved" ? "Đã thực thi hành động được duyệt." : "Đã từ chối yêu cầu.") : result.error);
     await load();
     setResolving(null);
+  };
+
+  const runAdsDryRun = async () => {
+    setRunningAds(true);
+    setNotice(null);
+    const response = await fetch("/api/automation/ads-run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dryRun: true }),
+    });
+    const result = await response.json();
+    setNotice(
+      result.success
+        ? `Mô phỏng xong: ${result.data.checked} campaign, ${result.data.actions.length} quyết định.`
+        : result.error,
+    );
+    await load();
+    setRunningAds(false);
   };
 
   if (loading) {
@@ -155,10 +193,37 @@ export function AutomationDashboard() {
     );
   }
 
-  const { approvals = [], adLogs = [], adLogsCountToday = 0, spaSync, leadConversations = [], nurtureLeads = [], nurtureDueCount = 0 } = data ?? {};
+  const { approvals = [], adLogs = [], adLogsCountToday = 0, spaSync, leadConversations = [], nurtureLeads = [], nurtureDueCount = 0, adsReadiness } = data ?? {};
 
   return (
     <div className="space-y-5">
+      <Card>
+        <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <CardTitle>Ads Automation</CardTitle>
+              <Badge variant={adsReadiness?.automationLevel === "full" ? "warning" : "info"}>
+                {adsReadiness?.automationLevel ?? "supervised"}
+              </Badge>
+            </div>
+            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+              Pause dưới {adsReadiness?.pauseCtr ?? 0.5}% · Scale trên {adsReadiness?.scaleCtr ?? 2}% với ROAS ≥ {adsReadiness?.minRoas ?? 1.5} · Cooldown {adsReadiness?.cooldownHours ?? 24}h
+            </p>
+            <p className="text-xs mt-1" style={{ color: adsReadiness?.configuredAdsPages ? "var(--text-secondary)" : "var(--rose)" }}>
+              {adsReadiness?.configuredAdsPages
+                ? `${adsReadiness.configuredAdsPages} tài khoản quảng cáo sẵn sàng`
+                : "Chưa có Facebook Page nào được cấu hình Ad Account ID"}
+            </p>
+          </div>
+          <Button onClick={runAdsDryRun} loading={runningAds} disabled={!adsReadiness?.configuredAdsPages}>
+            <Play size={14} weight="fill" /> Chạy mô phỏng
+          </Button>
+        </div>
+        {notice && (
+          <div className="px-5 pb-4 text-xs" style={{ color: "var(--text-secondary)" }}>{notice}</div>
+        )}
+      </Card>
+
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard

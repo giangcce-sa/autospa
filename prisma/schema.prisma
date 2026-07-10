@@ -10,29 +10,29 @@ model User {
   id          String    @id @default(cuid())
   email       String    @unique
   name        String?
-  hashedPwd   String                                  // bcrypt
-  role        String    @default("owner")             // owner | viewer
+  hashedPwd   String // bcrypt
+  role        String    @default("owner") // owner | viewer
   lastLoginAt DateTime?
   createdAt   DateTime  @default(now())
 }
 
 model RateLimit {
-  id          String   @id                            // composite: "provider:scope"
+  id          String   @id // composite: "provider:scope"
   count       Int      @default(0)
   windowStart DateTime
-  limit       Int                                      // configured cap
-  windowSec   Int                                      // window size in seconds
+  limit       Int // configured cap
+  windowSec   Int // window size in seconds
   updatedAt   DateTime @updatedAt
 }
 
 model Settings {
-  id            String   @id @default("1")
-  claudeApiKey  String?
-  claudeBaseUrl String   @default("https://api.anthropic.com")
-  openaiApiKey  String?
-  openaiBaseUrl String   @default("https://api.openai.com/v1")
-  imageModel    String   @default("dall-e-3")
-  openaiChatModel String @default("gpt-5")        // chat completion model for AI Council
+  id                     String   @id @default("1")
+  claudeApiKey           String?
+  claudeBaseUrl          String   @default("https://api.anthropic.com")
+  openaiApiKey           String?
+  openaiBaseUrl          String   @default("https://api.openai.com/v1")
+  imageModel             String   @default("dall-e-3")
+  openaiChatModel        String   @default("gpt-5") // chat completion model for AI Council
   zaloToken              String?
   zaloOaId               String?
   draftRetentionDays     Int      @default(30)
@@ -46,20 +46,28 @@ model Settings {
   spaApiKey              String?
   spaWebhookSecret       String?
   // Lead Handoff
-  leadHandoffMode        String   @default("staff")       // "link" | "api" | "staff"
+  leadHandoffMode        String   @default("staff") // "link" | "api" | "staff"
   leadHandoffLink        String?
   // Automation
-  automationLevel        String   @default("supervised")  // "supervised" | "semi" | "full"
+  automationLevel        String   @default("supervised") // "supervised" | "semi" | "full"
   zaloApprovalRecipient  String?
   // Ads Optimization Thresholds
   adsOptimizePauseCtr    Float    @default(0.5)
   adsOptimizeScaleCtr    Float    @default(2.0)
   adsOptimizeFreqLimit   Float    @default(3.0)
   adsOptimizeScalePct    Int      @default(20)
+  adsOptimizeMinSpend    Int      @default(100000)
+  adsOptimizeMaxBudget   Int      @default(2000000)
+  adsOptimizeCooldownHrs Int      @default(24)
+  adsOptimizeMinRoas     Float    @default(1.5)
   // Telegram
   telegramBotToken       String?
   telegramChatId         String?
+  telegramAdminUserId    String?
   telegramAlerts         Boolean  @default(true)
+  telegramWebhookSecret  String?
+  telegramWebhookUrl     String?
+  telegramWebhookAt      DateTime?
   weeklyReportEnabled    Boolean  @default(true)
   weeklyReportDay        Int      @default(1)
   weeklyReportHour       Int      @default(8)
@@ -68,37 +76,39 @@ model Settings {
 }
 
 model FacebookPage {
-  id           String   @id @default(cuid())
-  fbPageId     String   @unique
-  pageName     String
-  accessToken  String
-  isActive     Boolean  @default(true)
-  adAccountId  String?
+  id          String   @id @default(cuid())
+  fbPageId    String   @unique
+  pageName    String
+  accessToken String
+  isActive    Boolean  @default(true)
+  adAccountId String?
   // Linked Instagram Business account
-  igAccountId  String?  // Instagram Business Account ID (from Graph API)
-  igUsername   String?
-  createdAt    DateTime @default(now())
+  igAccountId String? // Instagram Business Account ID (from Graph API)
+  igUsername  String?
+  createdAt   DateTime @default(now())
 
   posts         Post[]
   comments      PostComment[]
   inboxMessages InboxMessage[]
   brandKit      BrandKit?
   styleProfile  StyleProfile?
+  visualProfile VisualProfile?
   styleSamples  StyleSample[]
   services      Service[]
+  staffVisuals  StaffVisualProfile[]
 }
 
 model TikTokAccount {
-  id           String   @id @default(cuid())
-  openId       String   @unique // TikTok user open_id
+  id           String    @id @default(cuid())
+  openId       String    @unique // TikTok user open_id
   displayName  String
   avatarUrl    String?
   accessToken  String
   refreshToken String?
   expiresAt    DateTime?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 model BrandKnowledge {
@@ -149,6 +159,7 @@ model StyleSample {
   comments       Int           @default(0)
   shares         Int           @default(0)
   source         String        @default("manual")
+  learningStatus String        @default("approved")
   createdAt      DateTime      @default(now())
 }
 
@@ -160,83 +171,233 @@ model StyleProfile {
   updatedAt      DateTime      @updatedAt
 }
 
+model HumanVoiceProfile {
+  id             String   @id @default(cuid())
+  facebookPageId String?  @unique
+  rules          String
+  preferredWords String   @default("[]")
+  avoidedWords   String   @default("[]")
+  approvedEdits  Int      @default(0)
+  confidence     Float    @default(0)
+  autoApply      Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+}
+
+model VisualProfile {
+  id                String        @id @default(cuid())
+  facebookPageId    String?       @unique
+  facebookPage      FacebookPage? @relation(fields: [facebookPageId], references: [id])
+  promptRules       String?
+  preferredPalettes String        @default("[]")
+  preferredPresets  String        @default("[]")
+  preferredSubjects String        @default("[]")
+  avoidedElements   String        @default("[]")
+  approvedImages    Int           @default(0)
+  rejectedImages    Int           @default(0)
+  confidence        Float         @default(0)
+  autoApply         Boolean       @default(true)
+  updatedAt         DateTime      @updatedAt
+  createdAt         DateTime      @default(now())
+}
+
+model StaffVisualProfile {
+  id               String              @id @default(cuid())
+  facebookPageId   String?
+  facebookPage     FacebookPage?       @relation(fields: [facebookPageId], references: [id])
+  name             String
+  role             String?
+  gender           String              @default("female")
+  referenceImageUrl String?
+  promptDescriptor String
+  appearanceNotes  String?
+  uniformNotes     String?
+  usageNotes       String?
+  consentStatus    String              @default("consented")
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  samples          StaffVisualSample[]
+
+  @@index([facebookPageId, isActive])
+  @@index([consentStatus, isActive])
+}
+
+model StaffVisualSample {
+  id          String             @id @default(cuid())
+  staffId     String
+  staff       StaffVisualProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  imageUrl    String
+  angle       String?
+  expression  String?
+  outfit      String?
+  notes       String?
+  isPrimary   Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+
+  @@index([staffId, isPrimary])
+}
+
 model Post {
-  id           String          @id @default(cuid())
-  caption      String
-  hashtags     String?
-  imageUrl     String?
-  imagePrompt  String?
-  platform     String          @default("facebook")
-  postType     String          @default("service")
-  tone         String          @default("friendly")
-  status       String          @default("draft")
-  scheduledAt  DateTime?
-  publishedAt  DateTime?
-  fbPostId     String?
-  fbAdId       String?
-  fbCampaignId String?
-  igPostId     String?   // Instagram media id
-  tiktokVideoId String?  // TikTok video id
-  qualityScore Int?
-  qualityNotes String?
-  abGroupId    String?
+  id             String         @id @default(cuid())
+  caption        String
+  hashtags       String?
+  imageUrl       String?
+  imagePrompt    String?
+  platform       String         @default("facebook")
+  postType       String         @default("service")
+  tone           String         @default("friendly")
+  status         String         @default("draft")
+  scheduledAt    DateTime?
+  publishedAt    DateTime?
+  fbPostId       String?
+  fbAdId         String?
+  fbCampaignId   String?
+  igPostId       String? // Instagram media id
+  tiktokVideoId  String? // TikTok video id
+  qualityScore   Int?
+  qualityNotes   String?
+  abGroupId      String?
   serviceId      String?
   bulkPlanId     String?
   facebookPageId String?
-  service        Service?        @relation(fields: [serviceId], references: [id])
-  bulkPlan       BulkPlan?       @relation(fields: [bulkPlanId], references: [id])
-  facebookPage   FacebookPage?   @relation(fields: [facebookPageId], references: [id])
-  analytics    PostAnalytics?
-  review       ContentReview?
-  comments     PostComment[]
+  service        Service?       @relation(fields: [serviceId], references: [id])
+  bulkPlan       BulkPlan?      @relation(fields: [bulkPlanId], references: [id])
+  facebookPage   FacebookPage?  @relation(fields: [facebookPageId], references: [id])
+  analytics      PostAnalytics?
+  review         ContentReview?
+  comments       PostComment[]
+  generations    ContentGeneration[]
+  imageGenerations ImageGeneration[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model ContentGeneration {
+  id             String        @id @default(cuid())
+  postId         String?
+  post           Post?         @relation(fields: [postId], references: [id], onDelete: SetNull)
+  facebookPageId String?
+  promptVersion  String        @default("human-v1")
+  model          String?
+  mode           String        @default("quick")
+  narrator       String        @default("brand")
+  brief          String
+  strategy       String?
+  draftCaption   String
+  editorCaption  String
+  finalCaption   String
+  hashtags       String?
+  humanScore     Int           @default(0)
+  scoreDetails   String
+  userAccepted   Boolean?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  edits          ContentEdit[]
+
+  @@index([facebookPageId, createdAt])
+  @@index([postId])
+}
+
+model ContentEdit {
+  id              String            @id @default(cuid())
+  generationId    String            @unique
+  generation      ContentGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  originalContent String
+  finalContent    String
+  changeRatio     Float
+  changeSummary   String?
+  acceptedVoice   Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+
+}
+
+model ImageGeneration {
+  id              String          @id @default(cuid())
+  postId          String?
+  post            Post?           @relation(fields: [postId], references: [id], onDelete: SetNull)
+  facebookPageId  String?
+  serviceId       String?
+  promptVersion   String          @default("visual-v1")
+  model           String?
+  preset          String          @default("organic")
+  format          String          @default("feed")
+  sourceCaption   String?
+  visualBrief     String?
+  staffProfileId  String?
+  prompt          String
+  negativePrompt  String?
+  finalPrompt     String
+  imageUrl        String
+  overlayTemplate String          @default("none")
+  qualityScore    Int             @default(0)
+  scoreDetails    String
+  userAccepted    Boolean?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  feedback        ImageFeedback[]
+
+  @@index([facebookPageId, createdAt])
+  @@index([postId])
+  @@index([preset, format])
+}
+
+model ImageFeedback {
+  id           String          @id @default(cuid())
+  generationId String
+  generation   ImageGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  rating       String
+  notes        String?
   createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+
+  @@index([generationId, createdAt])
+  @@index([rating, createdAt])
 }
 
 model BulkPlan {
-  id          String   @id @default(cuid())
-  name        String
-  month       Int
-  year        Int
-  status      String   @default("draft")
-  posts       Post[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  month     Int
+  year      Int
+  status    String   @default("draft")
+  posts     Post[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ContentReview {
-  id          String   @id @default(cuid())
-  postId      String   @unique
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  status      String                                 // "pass" | "warn" | "fail"
-  score       Int      @default(0)                   // 0-100
-  issues      String                                 // JSON: [{ type, severity, message, suggestion }]
-  reviewer    String   @default("ai_reviewer")
-  reviewedAt  DateTime @default(now())
+  id         String   @id @default(cuid())
+  postId     String   @unique
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  status     String // "pass" | "warn" | "fail"
+  score      Int      @default(0) // 0-100
+  issues     String // JSON: [{ type, severity, message, suggestion }]
+  reviewer   String   @default("ai_reviewer")
+  reviewedAt DateTime @default(now())
 }
 
 model PostAnalytics {
-  id          String   @id @default(cuid())
-  postId      String   @unique
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  postId         String   @unique
+  post           Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   // Facebook metrics
-  reach       Int      @default(0)
-  likes       Int      @default(0)
-  comments    Int      @default(0)
-  shares      Int      @default(0)
-  clicks      Int      @default(0)
+  reach          Int      @default(0)
+  likes          Int      @default(0)
+  comments       Int      @default(0)
+  shares         Int      @default(0)
+  clicks         Int      @default(0)
   // Instagram metrics
-  igReach     Int      @default(0)
-  igLikes     Int      @default(0)
-  igComments  Int      @default(0)
-  igSaved     Int      @default(0)
-  igImpressions Int    @default(0)
+  igReach        Int      @default(0)
+  igLikes        Int      @default(0)
+  igComments     Int      @default(0)
+  igSaved        Int      @default(0)
+  igImpressions  Int      @default(0)
   // TikTok metrics
-  tiktokViews   Int    @default(0)
-  tiktokLikes   Int    @default(0)
-  tiktokComments Int   @default(0)
-  tiktokShares  Int    @default(0)
-  fetchedAt   DateTime @default(now())
+  tiktokViews    Int      @default(0)
+  tiktokLikes    Int      @default(0)
+  tiktokComments Int      @default(0)
+  tiktokShares   Int      @default(0)
+  fetchedAt      DateTime @default(now())
 }
 
 model PostComment {
@@ -265,11 +426,11 @@ model CommentRule {
 
 model MessageRule {
   id        String   @id @default(cuid())
-  trigger   String                                // keyword hoặc regex pattern
-  reply     String                                // text trả lời cố định
-  matchMode String   @default("contains")        // contains | exact | regex
-  priority  Int      @default(0)                  // rule cao hơn match trước
-  channel   String   @default("both")            // facebook | zalo | both
+  trigger   String // keyword hoặc regex pattern
+  reply     String // text trả lời cố định
+  matchMode String   @default("contains") // contains | exact | regex
+  priority  Int      @default(0) // rule cao hơn match trước
+  channel   String   @default("both") // facebook | zalo | both
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 }
@@ -305,34 +466,34 @@ model AppointmentRequest {
 }
 
 model Customer {
-  id           String               @id @default(cuid())
-  name         String
-  phone        String?
-  fbId         String?
-  fbName       String?
-  email        String?
-  birthday     String?
-  segment      String               @default("new")
-  leadScore    Int                  @default(0)
-  lastContact  DateTime?
-  note         String?
-  tags         String?
-  npsScore     Int?
-  npsAt        DateTime?
+  id            String               @id @default(cuid())
+  name          String
+  phone         String?
+  fbId          String?
+  fbName        String?
+  email         String?
+  birthday      String?
+  segment       String               @default("new")
+  leadScore     Int                  @default(0)
+  lastContact   DateTime?
+  note          String?
+  tags          String?
+  npsScore      Int?
+  npsAt         DateTime?
   // CLV & Churn (cached, updated by cron)
-  clvTotal     Int?                 // tổng doanh thu VND
-  clvTier      String?              // low | mid | high | premium
-  churnRisk    String?              // low | medium | high
-  rfmScore     Int?                 // 1-125
-  avgVisitDays Int?                 // trung bình số ngày giữa 2 lần visit
+  clvTotal      Int? // tổng doanh thu VND
+  clvTier       String? // low | mid | high | premium
+  churnRisk     String? // low | medium | high
+  rfmScore      Int? // 1-125
+  avgVisitDays  Int? // trung bình số ngày giữa 2 lần visit
   lastBookingAt DateTime?
-  clvUpdatedAt DateTime?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  messages     InboxMessage[]
-  appointments AppointmentRequest[]
-  notes        CustomerNote[]
-  careMessages CareMessage[]
+  clvUpdatedAt  DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  messages      InboxMessage[]
+  appointments  AppointmentRequest[]
+  notes         CustomerNote[]
+  careMessages  CareMessage[]
 }
 
 model CustomerNote {
@@ -358,14 +519,14 @@ model CareMessage {
 }
 
 model Competitor {
-  id          String   @id @default(cuid())
-  fbPageId    String   @unique           // public page ID (e.g. "12345...")
-  name        String                     // tên đối thủ (do user nhập)
-  notes       String?                    // ghi chú nội bộ
-  accessToken String?                    // optional — page access token nếu có
-  isActive    Boolean  @default(true)
+  id          String           @id @default(cuid())
+  fbPageId    String           @unique // public page ID (e.g. "12345...")
+  name        String // tên đối thủ (do user nhập)
+  notes       String? // ghi chú nội bộ
+  accessToken String? // optional — page access token nếu có
+  isActive    Boolean          @default(true)
   lastFetchAt DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime         @default(now())
   posts       CompetitorPost[]
 }
 
@@ -378,17 +539,52 @@ model CompetitorPost {
   likes        Int        @default(0)
   comments     Int        @default(0)
   shares       Int        @default(0)
+  engagementScore Int       @default(0)
+  viralLevel      String    @default("low")
+  detectedTopic   String?
+  contentFormat   String?
+  detectedService String?
+  hookType        String?
+  offerType       String?
+  ctaType         String?
+  aiSummary       String?
+  learningStatus  String    @default("approved")
+  analyzedAt      DateTime?
   publishedAt  DateTime
   fetchedAt    DateTime   @default(now())
+
+  @@index([learningStatus, publishedAt])
+  @@index([viralLevel, publishedAt])
+  @@index([detectedTopic])
+}
+
+model CompetitorMemory {
+  id                    String   @id @default(cuid())
+  windowDays            Int      @default(30)
+  topTopics             String   @default("[]")
+  topServices           String   @default("[]")
+  topFormats            String   @default("[]")
+  topHooks              String   @default("[]")
+  commonOffers          String   @default("[]")
+  competitorMomentum    String   @default("[]")
+  counterPositioning    String?
+  recommendations       String   @default("[]")
+  sampleCount           Int      @default(0)
+  confidence            Float    @default(0)
+  lastAnalyzedPostAt    DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([updatedAt])
 }
 
 model IntelligenceSignal {
   id        String   @id @default(cuid())
-  source    String                            // "fb_ads_library" | "google_trends" | "fb_competitor" | "manual"
-  topic     String                            // "triệt lông bikini", "facial Hàn Quốc"
-  volume    Float                             // search index | active ads count | likes
-  trend     String   @default("stable")       // "rising" | "stable" | "falling"
-  details   String?                            // JSON: raw data
+  source    String // "fb_ads_library" | "google_trends" | "fb_competitor" | "manual"
+  topic     String // "triệt lông bikini", "facial Hàn Quốc"
+  volume    Float // search index | active ads count | likes
+  trend     String   @default("stable") // "rising" | "stable" | "falling"
+  details   String? // JSON: raw data
   fetchedAt DateTime @default(now())
 
   @@index([source, topic])
@@ -410,10 +606,10 @@ model SpaStory {
 
 model RealtimeAlert {
   id            String   @id @default(cuid())
-  type          String                          // "revenue_drop" | "negative_spike" | "ad_anomaly" | "lead_pile"
-  signal        String                          // detail string
-  severity      String                          // "warning" | "critical"
-  workflowRunId String?                          // if a workflow was triggered
+  type          String // "revenue_drop" | "negative_spike" | "ad_anomaly" | "lead_pile"
+  signal        String // detail string
+  severity      String // "warning" | "critical"
+  workflowRunId String? // if a workflow was triggered
   acknowledged  Boolean  @default(false)
   detectedAt    DateTime @default(now())
 
@@ -422,14 +618,14 @@ model RealtimeAlert {
 }
 
 model WorkflowRun {
-  id          String   @id @default(cuid())
-  name        String                          // "revenue_drop" | "competitor_surge" | "engagement_drop"
-  trigger     String                          // signal label
-  context     String                          // full context
-  steps       String                          // JSON: [{ agent, label, input, output, status, durationMs }]
-  plan        String?                         // CEO synthesis output
-  status      String   @default("running")    // running | completed | failed
-  startedAt   DateTime @default(now())
+  id          String    @id @default(cuid())
+  name        String // "revenue_drop" | "competitor_surge" | "engagement_drop"
+  trigger     String // signal label
+  context     String // full context
+  steps       String // JSON: [{ agent, label, input, output, status, durationMs }]
+  plan        String? // CEO synthesis output
+  status      String    @default("running") // running | completed | failed
+  startedAt   DateTime  @default(now())
   completedAt DateTime?
 
   @@index([name, startedAt])
@@ -437,31 +633,31 @@ model WorkflowRun {
 }
 
 model OrchestratorRun {
-  id          String   @id @default(cuid())
-  runAt       DateTime @default(now())
-  signals     String                            // JSON state snapshot
-  priorities  String                            // JSON [{ agent, score, reason }]
-  actions     String                            // JSON actions taken/queued
-  mode        String   @default("recommend")    // recommend | auto
+  id         String   @id @default(cuid())
+  runAt      DateTime @default(now())
+  signals    String // JSON state snapshot
+  priorities String // JSON [{ agent, score, reason }]
+  actions    String // JSON actions taken/queued
+  mode       String   @default("recommend") // recommend | auto
 }
 
 model CEODecision {
-  id              String   @id @default(cuid())
-  date            DateTime @default(now())
-  topic           String                          // chủ đề (dùng để fuzzy match khi truy vấn)
-  topicKey        String                          // normalized: lowercase + keywords (cho query nhanh)
-  context         String                          // bối cảnh input
-  synthesis       String                          // quyết định cuối từ Council
-  debate          String?                         // JSON turns transcript
-  source          String   @default("council")    // council | morning_brief | content_research | ab_test | manual
+  id             String    @id @default(cuid())
+  date           DateTime  @default(now())
+  topic          String // chủ đề (dùng để fuzzy match khi truy vấn)
+  topicKey       String // normalized: lowercase + keywords (cho query nhanh)
+  context        String // bối cảnh input
+  synthesis      String // quyết định cuối từ Council
+  debate         String? // JSON turns transcript
+  source         String    @default("council") // council | morning_brief | content_research | ab_test | manual
   // Outcome tracking
-  outcomeCheckAt  DateTime?                       // khi nào sẽ check kết quả (date + N ngày)
-  outcomeMetric   String?                         // metric đo (revenue | leads | engagement)
-  outcomeBefore   Float?                          // baseline trước
-  outcomeAfter    Float?                          // sau X ngày
-  outcomeStatus   String?                         // "success" | "fail" | "neutral" | "pending"
-  outcomeNotes    String?                         // AI nhận định
-  createdAt       DateTime @default(now())
+  outcomeCheckAt DateTime? // khi nào sẽ check kết quả (date + N ngày)
+  outcomeMetric  String? // metric đo (revenue | leads | engagement)
+  outcomeBefore  Float? // baseline trước
+  outcomeAfter   Float? // sau X ngày
+  outcomeStatus  String? // "success" | "fail" | "neutral" | "pending"
+  outcomeNotes   String? // AI nhận định
+  createdAt      DateTime  @default(now())
 
   @@index([topicKey])
   @@index([outcomeStatus])
@@ -471,33 +667,33 @@ model RevenueForecast {
   id             String   @id @default(cuid())
   generatedAt    DateTime @default(now())
   horizonDays    Int
-  scenario       String   @default("baseline")  // baseline | ads_2x | promo_30 | tet_boost
-  forecast       String                          // JSON array: [{ date, predicted, lowerBound, upperBound, factors }]
-  totalPredicted Int                             // sum of predicted across horizon (VND)
-  confidence     Float    @default(0.5)          // 0.0-1.0
-  notes          String?                          // AI Council reasoning
+  scenario       String   @default("baseline") // baseline | ads_2x | promo_30 | tet_boost
+  forecast       String // JSON array: [{ date, predicted, lowerBound, upperBound, factors }]
+  totalPredicted Int // sum of predicted across horizon (VND)
+  confidence     Float    @default(0.5) // 0.0-1.0
+  notes          String? // AI Council reasoning
 }
 
 model MorningBrief {
   id          String   @id @default(cuid())
   date        String   @unique
-  summary     String                        // CEO synthesis
-  actions     String                        // JSON BriefAction[] — legacy compat
-  debate      String?                       // JSON CouncilTurn[]
-  subReports  String?                       // JSON { intelligence, ads, content, sales }
-  assignments String?                       // JSON Assignment[]
+  summary     String // CEO synthesis
+  actions     String // JSON BriefAction[] — legacy compat
+  debate      String? // JSON CouncilTurn[]
+  subReports  String? // JSON { intelligence, ads, content, sales }
+  assignments String? // JSON Assignment[]
   dismissed   Boolean  @default(false)
   createdAt   DateTime @default(now())
 }
 
 model HolidayEvent {
-  id          String   @id @default(cuid())
-  name        String
-  date        String
-  description String?
-  isVietnamese Boolean @default(true)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  name         String
+  date         String
+  description  String?
+  isVietnamese Boolean  @default(true)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
 }
 
 model SocialAlert {
@@ -511,33 +707,33 @@ model SocialAlert {
 }
 
 model Lead {
-  id           String   @id @default(cuid())
-  customerId   String?
-  name         String
-  phone        String?
-  source       String   @default("facebook")
-  score        Int      @default(0)
-  stage        String   @default("cold")
-  service      String?
-  lastAction   String?
-  nextFollowUp DateTime?
-  note         String?
+  id             String             @id @default(cuid())
+  customerId     String?
+  name           String
+  phone          String?
+  source         String             @default("facebook")
+  score          Int                @default(0)
+  stage          String             @default("cold")
+  service        String?
+  lastAction     String?
+  nextFollowUp   DateTime?
+  note           String?
   // Autonomous lead agent
   channelType    String?
   channelId      String?
   handoffAt      DateTime?
   handoffMode    String?
   spaBookingId   String?
-  nurtureStep    Int      @default(0)
+  nurtureStep    Int                @default(0)
   nurtureSentAt  DateTime?
   // Revenue attribution
-  fromPostId     String?           // organic post that drove this lead
-  fromCampaignId String?           // FB ad campaign that drove this lead
-  fromAdId       String?           // specific ad creative
+  fromPostId     String? // organic post that drove this lead
+  fromCampaignId String? // FB ad campaign that drove this lead
+  fromAdId       String? // specific ad creative
   conversations  LeadConversation[]
   bookings       BookingRevenue[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 }
 
 model BookingRevenue {
@@ -547,7 +743,7 @@ model BookingRevenue {
   bookingId      String   @unique
   customerId     String?
   service        String?
-  amount         Int                              // VND
+  amount         Int // VND
   paidAt         DateTime
   // Denormalized attribution for fast group-by queries
   fromPostId     String?
@@ -557,29 +753,31 @@ model BookingRevenue {
 }
 
 model LeadConversation {
-  id             String   @id @default(cuid())
-  leadId         String
-  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  senderId       String
-  facebookPageId String?
-  step           Int      @default(0)
+  id               String   @id @default(cuid())
+  leadId           String
+  lead             Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  senderId         String
+  facebookPageId   String?
+  step             Int      @default(0)
   collectedName    String?
   collectedService String?
-  isComplete     Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isComplete       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model PendingApproval {
-  id            String    @id @default(cuid())
-  type          String
-  payload       String
-  status        String    @default("pending")
-  shortCode     String    @unique
-  zaloMessageId String?
-  decidedAt     DateTime?
-  timeoutAt     DateTime
-  createdAt     DateTime  @default(now())
+  id             String    @id @default(cuid())
+  type           String
+  payload        String
+  status         String    @default("pending")
+  shortCode      String    @unique
+  zaloMessageId  String?
+  decidedAt      DateTime?
+  executedAt     DateTime?
+  executionError String?
+  timeoutAt      DateTime
+  createdAt      DateTime  @default(now())
 }
 
 model AdOptimizationLog {
@@ -591,6 +789,35 @@ model AdOptimizationLog {
   oldValue     String?
   newValue     String?
   createdAt    DateTime @default(now())
+
+  @@index([campaignId, action, createdAt])
+}
+
+model AutomationLock {
+  id          String   @id
+  lockedUntil DateTime
+  owner       String
+  updatedAt   DateTime @updatedAt
+}
+
+model TelegramDelivery {
+  id                String   @id @default(cuid())
+  type              String
+  chatId            String
+  status            String
+  telegramMessageId String?
+  error             String?
+  metadata          String?
+  createdAt         DateTime @default(now())
+
+  @@index([type, status, createdAt])
+}
+
+model TelegramUpdate {
+  updateId    String   @id
+  kind        String
+  chatId      String?
+  processedAt DateTime @default(now())
 }
 
 model ActivityLog {
@@ -632,59 +859,59 @@ model GoogleAccount {
   accessToken  String
   refreshToken String?
   expiresAt    DateTime?
-  accountId    String?   // Google Business accountName (e.g. "accounts/123456")
-  locationId   String?   // Google Business locationName (e.g. "accounts/123/locations/456")
-  locationName String?   // Human-readable business name
+  accountId    String? // Google Business accountName (e.g. "accounts/123456")
+  locationId   String? // Google Business locationName (e.g. "accounts/123/locations/456")
+  locationName String? // Human-readable business name
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
 
 model GoogleReview {
-  id            String   @id @default(cuid())
-  reviewId      String   @unique  // Google review name (e.g. "accounts/.../reviews/ABC123")
-  authorName    String
-  authorPhotoUrl String?
-  rating        Int      // 1-5
-  comment       String?
-  sentiment     String?  // positive | neutral | negative
-  reply         String?
-  repliedAt     DateTime?
-  isReplied     Boolean  @default(false)
-  isAlerted     Boolean  @default(false)
+  id              String    @id @default(cuid())
+  reviewId        String    @unique // Google review name (e.g. "accounts/.../reviews/ABC123")
+  authorName      String
+  authorPhotoUrl  String?
+  rating          Int // 1-5
+  comment         String?
+  sentiment       String? // positive | neutral | negative
+  reply           String?
+  repliedAt       DateTime?
+  isReplied       Boolean   @default(false)
+  isAlerted       Boolean   @default(false)
   googleAccountId String?
-  createdAt     DateTime @default(now())
-  updateTime    DateTime @default(now())
+  createdAt       DateTime  @default(now())
+  updateTime      DateTime  @default(now())
 
   @@index([rating])
   @@index([isReplied])
 }
 
 model GooglePost {
-  id           String   @id @default(cuid())
-  googlePostId String?  @unique
-  summary      String
-  callToAction String?  // BOOK | CALL | LEARN_MORE | ORDER | SHOP | SIGN_UP
+  id              String    @id @default(cuid())
+  googlePostId    String?   @unique
+  summary         String
+  callToAction    String? // BOOK | CALL | LEARN_MORE | ORDER | SHOP | SIGN_UP
   callToActionUrl String?
-  mediaUrl     String?
-  status       String   @default("draft")  // draft | published | failed
-  publishedAt  DateTime?
+  mediaUrl        String?
+  status          String    @default("draft") // draft | published | failed
+  publishedAt     DateTime?
   googleAccountId String?
-  createdAt    DateTime @default(now())
+  createdAt       DateTime  @default(now())
 }
 
 // ─── AI Self-Learning Models ─────────────────────────────────────────────────
 
 model ContentMemory {
   id            String   @id @default(cuid())
-  tone          String?  // friendly | professional | urgent | emotional
-  postType      String?  // service | promotion | education | story
-  topKeywords   String   // JSON string[]
-  topHashtags   String?  // JSON string[]
+  tone          String? // friendly | professional | urgent | emotional
+  postType      String? // service | promotion | education | story
+  topKeywords   String // JSON string[]
+  topHashtags   String? // JSON string[]
   avgEngagement Float    @default(0)
   sampleCount   Int      @default(0)
-  bestHour      Int?     // 0-23
-  bestDayOfWeek Int?     // 0-6
+  bestHour      Int? // 0-23
+  bestDayOfWeek Int? // 0-6
   platform      String   @default("facebook")
   updatedAt     DateTime @updatedAt
   createdAt     DateTime @default(now())
@@ -703,7 +930,7 @@ model LeadSourceWeight {
 
 model BookingPattern {
   id          String   @id @default(cuid())
-  patternType String   // peak_hour | popular_service | seasonal
+  patternType String // peak_hour | popular_service | seasonal
   key         String
   value       Float
   label       String?
@@ -714,11 +941,110 @@ model BookingPattern {
 
 model LearningInsight {
   id         String   @id @default(cuid())
-  loop       String   // content | lead | ab | decision | behavior
+  loop       String // content | lead | ab | decision | behavior
   insight    String
   confidence Float    @default(0.5)
   appliedTo  String?
   createdAt  DateTime @default(now())
+}
+
+// ─── AI Brain Skill Models ───────────────────────────────────────────────────
+
+model BrainSkill {
+  id                       String   @id @default(cuid())
+  name                     String
+  description              String?
+  domain                   String // sales | content | ads | intelligence | customer | operation | brand
+  category                 String
+  tags                     String   @default("[]") // JSON string[]
+  inputSignals             String   @default("[]") // JSON string[]
+  triggerType              String   @default("manual")
+  triggerConfig            String   @default("{}") // JSON object
+  playbook                 String
+  tools                    String   @default("[]") // JSON string[]
+  successMetric            String?
+  permissionLevel          String   @default("suggest") // suggest | draft | supervised | auto
+  riskLevel                String   @default("low") // low | medium | high
+  confidence               Float    @default(0.5)
+  classificationConfidence Float    @default(0.5)
+  status                   String   @default("draft") // draft | active | paused | deprecated
+  learnedFrom              String   @default("manual") // manual | outcome | council | user_feedback
+  councilNotes             String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  versions BrainSkillVersion[]
+  runs     BrainSkillRun[]
+  outcomes BrainSkillOutcome[]
+  feedback BrainSkillFeedback[]
+
+  @@index([domain, status])
+  @@index([category, status])
+  @@index([riskLevel, status])
+}
+
+model BrainSkillVersion {
+  id            String     @id @default(cuid())
+  skillId       String
+  skill         BrainSkill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  version       Int
+  playbook      String
+  triggerConfig String     @default("{}")
+  changeNote    String?
+  createdAt     DateTime   @default(now())
+
+  @@unique([skillId, version])
+}
+
+model BrainSkillRun {
+  id          String     @id @default(cuid())
+  skillId     String
+  skill       BrainSkill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  signal      String     @default("{}") // JSON object
+  action      String
+  status      String     @default("queued") // queued | drafted | executed | skipped | failed
+  result      String?
+  error       String?
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
+
+  outcomes BrainSkillOutcome[]
+
+  @@index([skillId, startedAt])
+  @@index([status, startedAt])
+}
+
+model BrainSkillOutcome {
+  id              String         @id @default(cuid())
+  skillId         String
+  skill           BrainSkill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  runId           String?
+  run             BrainSkillRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+  metric          String
+  beforeValue     Float?
+  afterValue      Float?
+  deltaPct        Float?
+  status          String         @default("pending") // pending | success | fail | neutral
+  notes           String?
+  confidenceDelta Float          @default(0)
+  createdAt       DateTime       @default(now())
+
+  @@index([skillId, createdAt])
+  @@index([status, createdAt])
+}
+
+model BrainSkillFeedback {
+  id        String     @id @default(cuid())
+  skillId   String
+  skill     BrainSkill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  type      String // approve | edit | reject | correction | note
+  field     String?
+  oldValue  String?
+  newValue  String?
+  note      String?
+  createdAt DateTime   @default(now())
+
+  @@index([skillId, createdAt])
 }
 
 model SpaSync {

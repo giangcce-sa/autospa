@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useSession } from "next-auth/react";
 
 interface FbPage { id: string; pageName: string; fbPageId: string; adAccountId?: string | null; }
 
@@ -19,18 +20,28 @@ const ActivePageContext = createContext<ActivePageContextValue>({
 });
 
 export function ActivePageProvider({ children }: { children: ReactNode }) {
+  const { status } = useSession();
   const [pages, setPages] = useState<FbPage[]>([]);
   const [selectedPageId, setSelectedPageIdState] = useState("");
 
   useEffect(() => {
-    fetch("/api/facebook-pages").then((r) => r.json()).then((res) => {
+    if (status !== "authenticated") {
+      setPages([]);
+      setSelectedPageIdState("");
+      return;
+    }
+
+    fetch("/api/facebook-pages").then((r) => r.ok ? r.json() : { data: [] }).then((res) => {
       const list: FbPage[] = res.data ?? [];
       setPages(list);
       const saved = typeof window !== "undefined" ? localStorage.getItem("activeFbPageId") : null;
       const exists = saved && list.some((p) => p.id === saved);
       setSelectedPageIdState(exists ? saved! : (list[0]?.id ?? ""));
+    }).catch(() => {
+      setPages([]);
+      setSelectedPageIdState("");
     });
-  }, []);
+  }, [status]);
 
   const setSelectedPageId = (id: string) => {
     setSelectedPageIdState(id);

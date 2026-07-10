@@ -111,9 +111,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data: sample, success: true });
     }
 
+    if (action === "set-learning-status") {
+      if (!body.id || !["approved", "rejected"].includes(body.learningStatus)) {
+        return NextResponse.json({ error: "Trạng thái học không hợp lệ", success: false }, { status: 400 });
+      }
+      const sample = await prisma.styleSample.update({
+        where: { id: body.id },
+        data: { learningStatus: body.learningStatus },
+      });
+      return NextResponse.json({ data: sample, success: true });
+    }
+
     if (action === "analyze") {
       const samples = await prisma.styleSample.findMany({
-        where: { facebookPageId: facebookPageId ?? undefined },
+        where: { facebookPageId: facebookPageId ?? undefined, learningStatus: "approved" },
         take: 20,
       });
       if (!samples.length) return NextResponse.json({ error: "Chưa có bài mẫu nào", success: false }, { status: 400 });

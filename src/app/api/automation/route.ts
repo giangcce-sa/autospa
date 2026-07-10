@@ -6,7 +6,7 @@ export async function GET() {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    const [approvals, adLogs, spaSync, leadConvs, nurtureLeads] = await Promise.all([
+    const [approvals, adLogs, spaSync, leadConvs, nurtureLeads, adsJobs, settings, configuredAdsPages] = await Promise.all([
       prisma.pendingApproval.findMany({
         where: { status: "pending" },
         orderBy: { createdAt: "desc" },
@@ -28,6 +28,23 @@ export async function GET() {
         orderBy: { nurtureSentAt: "asc" },
         take: 20,
       }),
+      prisma.jobRun.findMany({
+        where: { name: "ads_optimize" },
+        orderBy: { startedAt: "desc" },
+        take: 10,
+      }),
+      prisma.settings.findFirst({
+        select: {
+          automationLevel: true,
+          adsOptimizePauseCtr: true,
+          adsOptimizeScaleCtr: true,
+          adsOptimizeMaxBudget: true,
+          adsOptimizeCooldownHrs: true,
+          adsOptimizeMinRoas: true,
+          zaloApprovalRecipient: true,
+        },
+      }),
+      prisma.facebookPage.count({ where: { isActive: true, adAccountId: { not: null } } }),
     ]);
 
     // Auto-expire timed-out approvals
@@ -59,6 +76,17 @@ export async function GET() {
         leadConversations: leadConvs,
         nurtureLeads,
         nurtureDueCount: nurtureDue.length,
+        adsJobs,
+        adsReadiness: {
+          automationLevel: settings?.automationLevel ?? "supervised",
+          pauseCtr: settings?.adsOptimizePauseCtr ?? 0.5,
+          scaleCtr: settings?.adsOptimizeScaleCtr ?? 2,
+          maxBudget: settings?.adsOptimizeMaxBudget ?? 0,
+          cooldownHours: settings?.adsOptimizeCooldownHrs ?? 24,
+          minRoas: settings?.adsOptimizeMinRoas ?? 1.5,
+          configuredAdsPages,
+          hasApprovalRecipient: Boolean(settings?.zaloApprovalRecipient),
+        },
       },
     });
   } catch (e) {

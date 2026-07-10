@@ -10,13 +10,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", size = "md", loading, disabled, children, ...props }, ref) => {
     const base =
-      "inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap";
+      "inline-flex items-center justify-center gap-2 font-semibold rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap";
 
     const variants = {
-      primary: "text-white active:scale-[0.97] hover:brightness-110",
-      secondary: "border active:scale-[0.97] hover:opacity-80",
-      ghost: "hover:opacity-75 active:scale-[0.97]",
-      danger: "text-white active:scale-[0.97] hover:brightness-110",
+      primary: "text-white active:scale-[0.98] hover:-translate-y-px",
+      secondary: "border active:scale-[0.98] hover:-translate-y-px",
+      ghost: "hover:bg-[var(--bg-subtle)] active:scale-[0.98]",
+      danger: "text-white active:scale-[0.98] hover:-translate-y-px",
     };
 
     const sizes = {
@@ -27,11 +27,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const styles: Record<string, React.CSSProperties> = {
       primary: {
-        background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)",
+        background: "var(--accent)",
         color: "white",
-        boxShadow: "0 1px 6px rgba(45,106,79,0.22)",
+        boxShadow: "0 8px 18px rgba(47,111,84,0.2)",
       },
-      secondary: { background: "var(--bg-card)", color: "var(--text)", borderColor: "var(--border)" },
+      secondary: { background: "var(--bg-elevated)", color: "var(--text)", borderColor: "var(--border)", boxShadow: "var(--shadow-sm)" },
       ghost: { background: "transparent", color: "var(--text-secondary)" },
       danger: { background: "var(--rose)", color: "white" },
     };

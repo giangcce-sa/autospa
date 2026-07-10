@@ -37,6 +37,16 @@ const SEVERITY_COLOR: Record<string, string> = {
   danger: "var(--danger)",
 };
 
+function softTone(color: string) {
+  const tones: Record<string, string> = {
+    "var(--blue)": "var(--blue-light)",
+    "var(--success)": "var(--success-light)",
+    "var(--warning)": "var(--warning-light)",
+    "var(--danger)": "var(--danger-light)",
+  };
+  return tones[color] ?? `color-mix(in srgb, ${color} 14%, transparent)`;
+}
+
 function timeAgo(ts: string): string {
   const ms = Date.now() - new Date(ts).getTime();
   const min = Math.floor(ms / 60000);
@@ -83,12 +93,12 @@ export function ActivityFeed() {
           {items.map((item) => {
             const Icon = TYPE_ICON[item.type] ?? Pulse;
             const color = SEVERITY_COLOR[item.severity ?? "info"];
-            const className = "flex items-start gap-3 py-2.5 -mx-2 px-2 rounded-lg transition-colors hover:bg-[var(--bg-subtle)]";
+            const className = "flex items-start gap-3 py-2.5 -mx-2 px-2 rounded-md transition-colors hover:bg-[var(--bg-subtle)]";
             const inner = (
               <>
                 <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                  style={{ background: color + "18" }}
+                  className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 mt-0.5"
+                  style={{ background: softTone(color) }}
                 >
                   <Icon size={12} weight="fill" style={{ color }} />
                 </div>

@@ -58,7 +58,7 @@ const TYPE_META: Record<QueueType, { label: string; icon: React.ElementType; col
   lead: { label: "Lead", icon: Flame, color: "var(--rose)" },
   message: { label: "Inbox", icon: ChatCircleDots, color: "var(--blue)" },
   appointment: { label: "Lịch hẹn", icon: CalendarCheck, color: "var(--amber)" },
-  alert: { label: "Alert", icon: Bell, color: "var(--danger)" },
+  alert: { label: "Cảnh báo", icon: Bell, color: "var(--danger)" },
   care: { label: "Care", icon: FirstAidKit, color: "var(--success)" },
 };
 
@@ -80,11 +80,24 @@ function timeAgo(ts?: string) {
   return `${Math.floor(hr / 24)}d trước`;
 }
 
+function softTone(color: string) {
+  const tones: Record<string, string> = {
+    "var(--premium)": "var(--premium-light)",
+    "var(--rose)": "var(--rose-light)",
+    "var(--accent)": "var(--accent-light)",
+    "var(--blue)": "var(--blue-light)",
+    "var(--amber)": "var(--amber-light)",
+    "var(--danger)": "var(--rose-light)",
+    "var(--success)": "var(--accent-light)",
+  };
+  return tones[color] ?? `color-mix(in srgb, ${color} 14%, transparent)`;
+}
+
 function EmptyQueue() {
   return (
     <div className="py-10 text-center">
       <div
-        className="w-12 h-12 rounded-2xl mx-auto mb-3 flex items-center justify-center"
+        className="w-12 h-12 rounded-lg mx-auto mb-3 flex items-center justify-center"
         style={{ background: "var(--accent-light)", color: "var(--accent)" }}
       >
         <Sparkle size={20} weight="fill" />
@@ -93,19 +106,19 @@ function EmptyQueue() {
         Hôm nay chưa có việc gấp
       </p>
       <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-        Queue sạch. Có thể tạo nội dung mới hoặc kiểm tra lead chủ động.
+        Không còn việc gấp. Có thể tạo nội dung mới hoặc kiểm tra lead chủ động.
       </p>
       <div className="flex items-center justify-center gap-2 mt-4">
         <Link
           href="/content"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold"
           style={{ background: "var(--accent)", color: "white" }}
         >
           Tạo bài mới <ArrowRight size={11} />
         </Link>
         <Link
           href="/sale"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold"
           style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)" }}
         >
           Xem sales
@@ -142,12 +155,12 @@ export function TodayQueue() {
     { id: "critical", label: "Gấp", count: data?.kpis.criticalTasks ?? 0 },
     {
       id: "sales",
-      label: "Sales",
+      label: "Bán hàng",
       count: (data?.todayQueue ?? []).filter((item) => ["lead", "message", "appointment", "care"].includes(item.type)).length,
     },
     {
       id: "content",
-      label: "Content",
+      label: "Nội dung",
       count: (data?.todayQueue ?? []).filter((item) => ["publish", "review", "approval"].includes(item.type)).length,
     },
   ];
@@ -159,31 +172,31 @@ export function TodayQueue() {
           <div>
             <div className="flex items-center gap-2">
               <ClockCountdown size={15} style={{ color: "var(--accent)" }} weight="fill" />
-              <CardTitle>Today Queue</CardTitle>
+              <CardTitle>Việc cần làm</CardTitle>
             </div>
             <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
               Các việc cần xử lý trước khi AI chạy tiếp.
             </p>
           </div>
           <Link href="/automation" className="text-[11px] flex items-center gap-0.5 transition-opacity hover:opacity-80" style={{ color: "var(--text-muted)" }}>
-            Approval inbox <ArrowRight size={10} />
+            Xem việc chờ duyệt <ArrowRight size={10} />
           </Link>
         </CardHeader>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-          <div className="rounded-lg px-3 py-2" style={{ background: "var(--rose-light)" }}>
+          <div className="rounded-md px-3 py-2.5" style={{ background: "var(--rose-light)" }}>
             <p className="text-lg font-bold leading-none" style={{ color: "var(--rose)" }}>{data?.highlights.blockedPosts ?? 0}</p>
             <p className="text-[10px] mt-1" style={{ color: "var(--rose)" }}>Bài bị chặn</p>
           </div>
-          <div className="rounded-lg px-3 py-2" style={{ background: "var(--premium-light)" }}>
+          <div className="rounded-md px-3 py-2.5" style={{ background: "var(--premium-light)" }}>
             <p className="text-lg font-bold leading-none" style={{ color: "var(--premium)" }}>{data?.highlights.approvals ?? 0}</p>
             <p className="text-[10px] mt-1" style={{ color: "var(--premium)" }}>Cần duyệt</p>
           </div>
-          <div className="rounded-lg px-3 py-2" style={{ background: "var(--amber-light)" }}>
+          <div className="rounded-md px-3 py-2.5" style={{ background: "var(--amber-light)" }}>
             <p className="text-lg font-bold leading-none" style={{ color: "var(--amber)" }}>{data?.highlights.alerts ?? 0}</p>
-            <p className="text-[10px] mt-1" style={{ color: "var(--amber)" }}>Alert mở</p>
+            <p className="text-[10px] mt-1" style={{ color: "var(--amber)" }}>Cảnh báo mở</p>
           </div>
-          <div className="rounded-lg px-3 py-2" style={{ background: "var(--accent-light)" }}>
+          <div className="rounded-md px-3 py-2.5" style={{ background: "var(--accent-light)" }}>
             <p className="text-lg font-bold leading-none" style={{ color: "var(--accent)" }}>{data?.highlights.scheduledToday ?? 0}</p>
             <p className="text-[10px] mt-1" style={{ color: "var(--accent)" }}>Bài hôm nay</p>
           </div>
@@ -194,7 +207,7 @@ export function TodayQueue() {
             <button
               key={item.id}
               onClick={() => setFilter(item.id)}
-              className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all"
+              className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-all"
               style={filter === item.id
                 ? { background: "var(--accent)", color: "white" }
                 : { background: "var(--bg-subtle)", color: "var(--text-secondary)" }}
@@ -218,11 +231,11 @@ export function TodayQueue() {
             const priority = PRIORITY_META[item.priority];
             const Icon = meta.icon;
             return (
-              <div key={item.id} className="group px-5 py-3 transition-colors hover:bg-[var(--bg-subtle)]">
+              <div key={item.id} className="group px-5 py-3.5 transition-colors hover:bg-[var(--bg-subtle)]">
                 <div className="flex items-start gap-3">
                   <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: meta.color + "18", color: meta.color }}
+                    className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
+                    style={{ background: softTone(meta.color), color: meta.color }}
                   >
                     <Icon size={17} weight="fill" />
                   </div>
@@ -247,7 +260,7 @@ export function TodayQueue() {
                     )}
                     <Link
                       href={item.href}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all group-hover:translate-x-0.5"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-all group-hover:translate-x-0.5"
                       style={{ background: meta.color, color: "white" }}
                     >
                       {item.primaryAction}
@@ -258,7 +271,7 @@ export function TodayQueue() {
                 <div className="sm:hidden flex items-center gap-2 mt-2 pl-12">
                   <Link
                     href={item.href}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold"
                     style={{ background: meta.color, color: "white" }}
                   >
                     {item.primaryAction}

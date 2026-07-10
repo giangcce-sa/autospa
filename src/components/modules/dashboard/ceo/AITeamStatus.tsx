@@ -17,6 +17,17 @@ interface AgentStatus {
   detail: string;
 }
 
+function softTone(color: string) {
+  const tones: Record<string, string> = {
+    "var(--amber)": "var(--amber-light)",
+    "var(--blue)": "var(--blue-light)",
+    "var(--accent)": "var(--accent-light)",
+    "var(--rose)": "var(--rose-light)",
+    "var(--premium)": "var(--premium-light)",
+  };
+  return tones[color] ?? `color-mix(in srgb, ${color} 14%, transparent)`;
+}
+
 export function AITeamStatus() {
   const [agents, setAgents] = useState<AgentStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,10 +41,10 @@ export function AITeamStatus() {
         const actions: { agent: string; action: string; status: string }[] = plan?.actions ?? [];
 
         const base: Omit<AgentStatus, "status" | "statusLabel" | "detail">[] = [
-          { key: "intelligence", label: "Intelligence Agent", icon: Eye, color: "var(--amber)", href: "/competitors" },
-          { key: "ads_creative", label: "Ads Agent", icon: Megaphone, color: "var(--blue)", href: "/facebook-ads" },
-          { key: "content_research", label: "Content Agent", icon: PencilSimple, color: "var(--accent)", href: "/content-research" },
-          { key: "proactive_sales", label: "Sales Agent", icon: Flame, color: "var(--rose)", href: "/sale" },
+          { key: "intelligence", label: "AI đối thủ", icon: Eye, color: "var(--amber)", href: "/competitors" },
+          { key: "ads_creative", label: "AI quảng cáo", icon: Megaphone, color: "var(--blue)", href: "/facebook-ads" },
+          { key: "content_research", label: "AI nội dung", icon: PencilSimple, color: "var(--accent)", href: "/content-research" },
+          { key: "proactive_sales", label: "AI bán hàng", icon: Flame, color: "var(--rose)", href: "/sale" },
           { key: "orchestrator", label: "Orchestrator", icon: Robot, color: "var(--premium)", href: "/orchestrator" },
         ];
 
@@ -92,7 +103,7 @@ export function AITeamStatus() {
     return (
       <div className="space-y-2">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="skeleton h-12 rounded-xl" />
+          <div key={i} className="skeleton h-12 rounded-md" />
         ))}
       </div>
     );
@@ -106,10 +117,10 @@ export function AITeamStatus() {
           <Link
             key={a.key}
             href={a.href}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all hover:bg-[var(--bg-subtle)] group"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-md transition-all hover:bg-[var(--bg-subtle)] group"
             style={{ border: "1px solid var(--border)", background: "var(--bg-card)" }}
           >
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: a.color + "18" }}>
+            <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0" style={{ background: softTone(a.color) }}>
               <Icon size={13} weight="fill" style={{ color: a.color }} />
             </div>
             <div className="flex-1 min-w-0">
@@ -117,7 +128,7 @@ export function AITeamStatus() {
               <p className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>{a.detail}</p>
             </div>
             <span
-              className="flex items-center gap-1.5 text-[9px] font-semibold px-2 py-1 rounded-full shrink-0"
+              className="flex items-center gap-1.5 text-[9px] font-semibold px-2 py-1 rounded-md shrink-0"
               style={{ background: statusBg[a.status], color: statusTextColor[a.status] }}
             >
               <span

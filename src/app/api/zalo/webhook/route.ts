@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/db";
-import { resolveApprovalByCode } from "@/lib/approval-gate";
-import { setCampaignStatus, updateCampaignBudget } from "@/lib/facebook-ads";
+import { findApprovalByCode } from "@/lib/approval-gate";
+import { executeApproval } from "@/lib/approval-executor";
 import { getOrCreateConversation, processIncomingMessage, executeHandoff } from "@/lib/lead-agent";
 import { postToZalo } from "@/lib/zalo";
 import { matchMessageRule } from "@/lib/message-rules";
@@ -18,8 +19,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const rawBody = await req.text();
+  const webhookSecret = process.env.ZALO_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const received = (req.headers.get("x-zalo-signature") ?? "").replace(/^sha256=/, "");
+    const expected = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+    const valid = received.length === expected.length
+      && timingSafeEqual(Buffer.from(received), Buffer.from(expected));
+    if (!valid) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+
   let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return NextResponse.json({ status: "ok" }); }
+  try { body = JSON.parse(rawBody); } catch { return NextResponse.json({ status: "ok" }); }
 
   const eventName = body.event_name as string | undefined;
   if (eventName !== "user_send_text") return NextResponse.json({ status: "ok" });
@@ -31,24 +42,19 @@ export async function POST(req: NextRequest) {
 
   if (!senderId || !text) return NextResponse.json({ status: "ok" });
 
-  // Check for approval reply: Y1A2B or N1A2B (Y/N + 4-char code)
-  const approvalMatch = text.match(/^([YNyn])([A-Z0-9]{4})$/i);
+  // Approval codes are deliberately longer than normal chat content.
+  const approvalMatch = text.match(/^([YNyn])([A-F0-9]{10})$/i);
   if (approvalMatch) {
+    const approvalSettings = await prisma.settings.findFirst({
+      select: { zaloApprovalRecipient: true },
+    });
+    if (!approvalSettings?.zaloApprovalRecipient || senderId !== approvalSettings.zaloApprovalRecipient) {
+      return NextResponse.json({ error: "Approval sender is not allowed" }, { status: 403 });
+    }
     const decision = approvalMatch[1].toUpperCase() === "Y" ? "approved" : "rejected";
     const code = approvalMatch[2].toUpperCase();
-    const approval = await resolveApprovalByCode(code, decision as "approved" | "rejected");
-
-    if (approval && decision === "approved") {
-      // Execute the approved action
-      const payload = approval.payload as Record<string, unknown>;
-      try {
-        if (approval.type === "pause_campaign") {
-          await setCampaignStatus(payload.campaignId as string, "PAUSED");
-        } else if (approval.type === "budget_increase") {
-          await updateCampaignBudget(payload.campaignId as string, Number(payload.newBudget));
-        }
-      } catch { /* log silently */ }
-    }
+    const approval = await findApprovalByCode(code);
+    if (approval) await executeApproval(approval.id, decision as "approved" | "rejected").catch(() => null);
 
     return NextResponse.json({ status: "ok" });
   }

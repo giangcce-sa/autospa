@@ -13,6 +13,14 @@ function isAnthropicBaseUrl(url: string) {
   return normalizeBaseUrl(url).includes("anthropic.com");
 }
 
+function boundedNumber(value: unknown, min: number, max: number, field: string) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < min || number > max) {
+    throw new RangeError(`${field} phải nằm trong khoảng ${min}-${max}`);
+  }
+  return number;
+}
+
 function safeSettings(settings: NonNullable<Awaited<ReturnType<typeof prisma.settings.findFirst>>>) {
   return {
     ...settings,
@@ -22,6 +30,7 @@ function safeSettings(settings: NonNullable<Awaited<ReturnType<typeof prisma.set
     spaApiKey: settings.spaApiKey ? "••••••••" + settings.spaApiKey.slice(-4) : null,
     spaWebhookSecret: settings.spaWebhookSecret ? "••••••••" + settings.spaWebhookSecret.slice(-4) : null,
     telegramBotToken: settings.telegramBotToken ? "••••••••" + settings.telegramBotToken.slice(-4) : null,
+    telegramWebhookSecret: settings.telegramWebhookSecret ? "••••••••" : null,
     hasSpaApiKey: !!settings.spaApiKey,
     hasSpaWebhookSecret: !!settings.spaWebhookSecret,
     hasTelegramBotToken: !!settings.telegramBotToken,
@@ -154,12 +163,27 @@ export async function POST(req: NextRequest) {
     if (body.spaWebhookSecret !== undefined) updateData.spaWebhookSecret = body.spaWebhookSecret || null;
     if (body.leadHandoffMode) updateData.leadHandoffMode = body.leadHandoffMode;
     if (body.leadHandoffLink !== undefined) updateData.leadHandoffLink = body.leadHandoffLink || null;
-    if (body.automationLevel) updateData.automationLevel = body.automationLevel;
+    if (body.automationLevel) {
+      if (!["supervised", "semi", "full"].includes(body.automationLevel)) {
+        return NextResponse.json({ error: "Chế độ tự động không hợp lệ", success: false }, { status: 400 });
+      }
+      updateData.automationLevel = body.automationLevel;
+    }
     if (body.zaloApprovalRecipient !== undefined) updateData.zaloApprovalRecipient = body.zaloApprovalRecipient || null;
-    if (body.adsOptimizePauseCtr !== undefined) updateData.adsOptimizePauseCtr = Number(body.adsOptimizePauseCtr);
-    if (body.adsOptimizeScaleCtr !== undefined) updateData.adsOptimizeScaleCtr = Number(body.adsOptimizeScaleCtr);
-    if (body.adsOptimizeFreqLimit !== undefined) updateData.adsOptimizeFreqLimit = Number(body.adsOptimizeFreqLimit);
-    if (body.adsOptimizeScalePct !== undefined) updateData.adsOptimizeScalePct = Number(body.adsOptimizeScalePct);
+    if (body.adsOptimizePauseCtr !== undefined) updateData.adsOptimizePauseCtr = boundedNumber(body.adsOptimizePauseCtr, 0.1, 10, "Pause CTR");
+    if (body.adsOptimizeScaleCtr !== undefined) updateData.adsOptimizeScaleCtr = boundedNumber(body.adsOptimizeScaleCtr, 0.2, 20, "Scale CTR");
+    if (body.adsOptimizeFreqLimit !== undefined) updateData.adsOptimizeFreqLimit = boundedNumber(body.adsOptimizeFreqLimit, 1, 10, "Frequency");
+    if (body.adsOptimizeScalePct !== undefined) updateData.adsOptimizeScalePct = boundedNumber(body.adsOptimizeScalePct, 5, 50, "Phần trăm scale");
+    if (body.adsOptimizeMinSpend !== undefined) updateData.adsOptimizeMinSpend = boundedNumber(body.adsOptimizeMinSpend, 50_000, 100_000_000, "Chi tiêu tối thiểu");
+    if (body.adsOptimizeMaxBudget !== undefined) updateData.adsOptimizeMaxBudget = boundedNumber(body.adsOptimizeMaxBudget, 100_000, 1_000_000_000, "Trần ngân sách");
+    if (body.adsOptimizeCooldownHrs !== undefined) updateData.adsOptimizeCooldownHrs = boundedNumber(body.adsOptimizeCooldownHrs, 4, 168, "Cooldown");
+    if (body.adsOptimizeMinRoas !== undefined) updateData.adsOptimizeMinRoas = boundedNumber(body.adsOptimizeMinRoas, 0.5, 20, "ROAS tối thiểu");
+    if (
+      Number(updateData.adsOptimizePauseCtr ?? body.adsOptimizePauseCtr ?? 0.5)
+      >= Number(updateData.adsOptimizeScaleCtr ?? body.adsOptimizeScaleCtr ?? 2)
+    ) {
+      return NextResponse.json({ error: "Ngưỡng pause phải thấp hơn ngưỡng scale", success: false }, { status: 400 });
+    }
 
     const settings = await prisma.settings.upsert({
       where: { id: "1" },
@@ -173,6 +197,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return NextResponse.json({ error: msg, success: false }, { status: e instanceof RangeError ? 400 : 500 });
   }
 }

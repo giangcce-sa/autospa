@@ -5,10 +5,10 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Textarea, Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
-import { Plus, Trash, Brain, Sparkle, ThumbsUp, ChatCircle, Share, FacebookLogo, MagnifyingGlass, CheckSquare, Square } from "@phosphor-icons/react";
+import { Plus, Trash, Brain, Sparkle, ThumbsUp, ThumbsDown, ChatCircle, Share, FacebookLogo, MagnifyingGlass, CheckSquare, Square } from "@phosphor-icons/react";
 import { useActivePage } from "@/contexts/ActivePageContext";
 
-interface Sample { id: string; content: string; likes: number; comments: number; shares: number; platform: string; source: string; }
+interface Sample { id: string; content: string; likes: number; comments: number; shares: number; platform: string; source: string; learningStatus: string; }
 
 interface FbPost {
   id: string;
@@ -79,6 +79,15 @@ export function StyleTraining() {
 
   const handleDelete = async (id: string) => {
     await fetch("/api/style-training", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    load(selectedPageId || undefined);
+  };
+
+  const setLearningStatus = async (id: string, learningStatus: "approved" | "rejected") => {
+    await fetch("/api/style-training", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set-learning-status", id, learningStatus }),
+    });
     load(selectedPageId || undefined);
   };
 
@@ -419,7 +428,23 @@ export function StyleTraining() {
                       <span className="flex items-center gap-1"><ChatCircle size={10} />{s.comments}</span>
                       <span className="flex items-center gap-1"><Share size={10} />{s.shares}</span>
                     </div>
-                    <button onClick={() => handleDelete(s.id)} style={{ color: "var(--rose)" }}><Trash size={12} /></button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        title="Dùng để học"
+                        onClick={() => setLearningStatus(s.id, "approved")}
+                        style={{ color: s.learningStatus === "approved" ? "var(--success)" : "var(--text-muted)" }}
+                      >
+                        <ThumbsUp size={12} weight={s.learningStatus === "approved" ? "fill" : "regular"} />
+                      </button>
+                      <button
+                        title="Không dùng để học"
+                        onClick={() => setLearningStatus(s.id, "rejected")}
+                        style={{ color: s.learningStatus === "rejected" ? "var(--rose)" : "var(--text-muted)" }}
+                      >
+                        <ThumbsDown size={12} weight={s.learningStatus === "rejected" ? "fill" : "regular"} />
+                      </button>
+                      <button title="Xóa bài mẫu" onClick={() => handleDelete(s.id)} style={{ color: "var(--rose)" }}><Trash size={12} /></button>
+                    </div>
                   </div>
                 </div>
               ))}

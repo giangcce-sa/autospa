@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { councilDebate, type CouncilResult } from "./ai-council";
 import { generateContent } from "./claude";
+import { getCompetitorContext } from "./learning/competitor-learning";
 
 export interface AdSpec {
   captions: { text: string; hashtags: string; tone: string }[];
@@ -59,7 +60,7 @@ export async function generateAdCreative(opts: {
   const { serviceId, dailyBudget, objective = "conversions", notes } = opts;
 
   // Pull context: service, brand, top historical campaigns, top organic posts
-  const [service, brand, history, topPosts] = await Promise.all([
+  const [service, brand, history, topPosts, competitorCtx] = await Promise.all([
     serviceId ? prisma.service.findUnique({ where: { id: serviceId } }) : null,
     prisma.brandKit.findFirst(),
     getCampaignHistory(serviceId),
@@ -69,6 +70,7 @@ export async function generateAdCreative(opts: {
       include: { analytics: true },
       take: 3,
     }),
+    getCompetitorContext(),
   ]);
 
   const serviceInfo = service
@@ -92,6 +94,11 @@ ${historyText}
 
 TOP BÀI HỮU CƠ:
 ${topPostText}
+
+RADAR ĐỐI THỦ:
+${competitorCtx.insight || "Chưa có competitor memory"}
+${competitorCtx.recommendations.length ? `Gợi ý phản ứng: ${competitorCtx.recommendations.slice(0, 3).join(" | ")}` : ""}
+Quy tắc: chỉ dùng insight thị trường, không copy câu chữ/offer đối thủ, không tự động publish.
 
 Mục tiêu: ${objective}
 ${dailyBudget ? `Budget user đề xuất: ${dailyBudget.toLocaleString("vi-VN")}đ/ngày` : "Budget: tự đề xuất"}

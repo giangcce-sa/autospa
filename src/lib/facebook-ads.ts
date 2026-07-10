@@ -33,21 +33,48 @@ export interface Campaign {
   ctr?: string;
   startTime?: string;
   stopTime?: string;
+  budgetTarget?: { id: string; type: "campaign" | "adset"; dailyBudget: string };
+  budgetIssue?: string;
 }
 
 export async function getCampaigns(facebookPageId?: string): Promise<Campaign[]> {
   const { token, actId } = await getAdsCreds(facebookPageId);
-  const fields = "id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,insights{spend,reach,clicks,impressions,ctr}";
-  const url = `${FB}/${actId}/campaigns?fields=${fields}&limit=50&access_token=${token}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  detectAdsError(data);
-  return (data.data ?? []).map((c: {
+  const fields = "id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,insights.date_preset(last_7d){spend,reach,clicks,impressions,ctr}";
+  const campaigns: Array<{
     id: string; name: string; status: string; objective: string;
     daily_budget?: string; lifetime_budget?: string; start_time?: string; stop_time?: string;
     insights?: { data?: Array<{ spend?: string; reach?: string; clicks?: string; impressions?: string; ctr?: string }> };
-  }) => {
+  }> = [];
+  let nextUrl: string | null = `${FB}/${actId}/campaigns?fields=${fields}&limit=100&access_token=${token}`;
+  while (nextUrl) {
+    const res: Response = await fetch(nextUrl);
+    const data: { data?: typeof campaigns; paging?: { next?: string }; error?: { message: string; code?: number } } = await res.json();
+    detectAdsError(data);
+    campaigns.push(...(data.data ?? []));
+    nextUrl = data.paging?.next ?? null;
+  }
+
+  const adSetFields = "id,campaign_id,effective_status,daily_budget";
+  const adSets: Array<{ id: string; campaign_id: string; effective_status: string; daily_budget?: string }> = [];
+  nextUrl = `${FB}/${actId}/adsets?fields=${adSetFields}&limit=100&access_token=${token}`;
+  while (nextUrl) {
+    const res: Response = await fetch(nextUrl);
+    const data: { data?: typeof adSets; paging?: { next?: string }; error?: { message: string; code?: number } } = await res.json();
+    detectAdsError(data);
+    adSets.push(...(data.data ?? []));
+    nextUrl = data.paging?.next ?? null;
+  }
+
+  return campaigns.map((c) => {
     const ins = c.insights?.data?.[0] ?? {};
+    const campaignAdSets = adSets.filter(
+      (adSet) => adSet.campaign_id === c.id && adSet.effective_status === "ACTIVE" && Number(adSet.daily_budget) > 0,
+    );
+    const budgetTarget = c.daily_budget
+      ? { id: c.id, type: "campaign" as const, dailyBudget: c.daily_budget }
+      : campaignAdSets.length === 1
+        ? { id: campaignAdSets[0].id, type: "adset" as const, dailyBudget: campaignAdSets[0].daily_budget! }
+        : undefined;
     return {
       id: c.id,
       name: c.name,
@@ -62,6 +89,12 @@ export async function getCampaigns(facebookPageId?: string): Promise<Campaign[]>
       clicks: ins.clicks,
       impressions: ins.impressions,
       ctr: ins.ctr,
+      budgetTarget,
+      budgetIssue: budgetTarget
+        ? undefined
+        : campaignAdSets.length > 1
+          ? "Campaign có nhiều Ad Set đang đặt ngân sách"
+          : "Không tìm thấy ngân sách ngày ở Campaign hoặc Ad Set",
     };
   });
 }
@@ -123,9 +156,9 @@ export async function setCampaignStatus(fbCampaignId: string, status: "ACTIVE" |
   detectAdsError(data);
 }
 
-export async function updateCampaignBudget(fbCampaignId: string, dailyBudgetVnd: number, facebookPageId?: string): Promise<void> {
+export async function updateAdsBudget(targetId: string, dailyBudgetVnd: number, facebookPageId?: string): Promise<void> {
   const { token } = await getAdsCreds(facebookPageId);
-  const res = await fetch(`${FB}/${fbCampaignId}`, {
+  const res = await fetch(`${FB}/${targetId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ daily_budget: String(dailyBudgetVnd), access_token: token }),
@@ -133,6 +166,8 @@ export async function updateCampaignBudget(fbCampaignId: string, dailyBudgetVnd:
   const data = await res.json();
   detectAdsError(data);
 }
+
+export const updateCampaignBudget = updateAdsBudget;
 
 export interface CreateAdParams {
   name: string;

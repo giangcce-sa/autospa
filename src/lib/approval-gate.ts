@@ -1,8 +1,10 @@
 import { prisma } from "./db";
 import { postToZalo } from "./zalo";
+import { randomBytes } from "node:crypto";
+import { sendApprovalMessage } from "./telegram";
 
 function randomCode(): string {
-  return Math.random().toString(36).toUpperCase().slice(2, 6);
+  return randomBytes(5).toString("hex").toUpperCase();
 }
 
 const TIMEOUTS: Record<string, number> = {
@@ -17,6 +19,19 @@ export async function requestApproval(
   payload: Record<string, unknown>,
   recipientId?: string | null
 ): Promise<string> {
+  const campaignId = payload.campaignId ? String(payload.campaignId) : null;
+  if (campaignId) {
+    const existing = await prisma.pendingApproval.findFirst({
+      where: {
+        type,
+        status: "pending",
+        timeoutAt: { gt: new Date() },
+        payload: { contains: `"campaignId":"${campaignId}"` },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (existing) return existing.id;
+  }
   const timeoutMin = TIMEOUTS[type] ?? 60;
   const shortCode = randomCode();
   const timeoutAt = new Date(Date.now() + timeoutMin * 60 * 1000);
@@ -41,6 +56,19 @@ export async function requestApproval(
     }
   }
 
+  const telegramDetail = type === "budget_increase"
+    ? `Tăng ngân sách "${String(payload.campaignName ?? "")}" từ ${Number(payload.oldBudget ?? 0).toLocaleString("vi-VN")}đ lên ${Number(payload.newBudget ?? 0).toLocaleString("vi-VN")}đ/ngày.`
+    : type === "pause_campaign"
+      ? `Tạm dừng "${String(payload.campaignName ?? "")}". CTR ${String(payload.ctr ?? "?")}, chi ${Number(payload.spend ?? 0).toLocaleString("vi-VN")}đ.`
+      : type === "flash_deal"
+        ? `Chạy flash deal: ${String(payload.description ?? "")}`
+        : "Phê duyệt yêu cầu vận hành AutoSpa.";
+  await sendApprovalMessage({
+    approvalId: approval.id,
+    title: "AutoSpa cần phê duyệt",
+    detail: `${telegramDetail}\n\nHết hạn sau ${timeoutMin >= 60 ? `${timeoutMin / 60} giờ` : `${timeoutMin} phút`}.`,
+  }).catch(() => null);
+
   return approval.id;
 }
 
@@ -55,28 +83,14 @@ export async function checkApproval(id: string): Promise<"approved" | "rejected"
   return "pending";
 }
 
-export async function resolveApprovalByCode(
-  shortCode: string,
-  decision: "approved" | "rejected"
-): Promise<{ id: string; type: string; payload: Record<string, unknown> } | null> {
+export async function findApprovalByCode(shortCode: string): Promise<{ id: string } | null> {
   const approval = await prisma.pendingApproval.findUnique({ where: { shortCode } });
   if (!approval || approval.status !== "pending") return null;
   if (new Date() > approval.timeoutAt) {
     await prisma.pendingApproval.update({ where: { id: approval.id }, data: { status: "timed_out" } });
     return null;
   }
-  await prisma.pendingApproval.update({
-    where: { id: approval.id },
-    data: { status: decision, decidedAt: new Date() },
-  });
-  return { id: approval.id, type: approval.type, payload: JSON.parse(approval.payload) };
-}
-
-export async function resolveApproval(id: string, decision: "approved" | "rejected"): Promise<void> {
-  await prisma.pendingApproval.update({
-    where: { id },
-    data: { status: decision, decidedAt: new Date() },
-  });
+  return { id: approval.id };
 }
 
 function formatApprovalMessage(type: string, payload: Record<string, unknown>, code: string, timeoutMin: number): string {

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runFlashDealDetection, postFlashDeal } from "@/lib/flash-deal-engine";
 import { prisma } from "@/lib/db";
-import { sendAlert } from "@/lib/telegram";
 import { verifyCronAuth } from "@/lib/cron-auth";
+import { requestApproval } from "@/lib/approval-gate";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
@@ -25,13 +25,13 @@ export async function GET(req: NextRequest) {
         const posted = await postFlashDeal(deal.caption);
         results.push({ ...deal, posted });
       } else {
-        // Supervised: send to Telegram for approval
-        await sendAlert(
-          `Flash Deal Đề xuất — ${deal.slot.label}`,
-          `Lịch trống ${Math.round((1 - deal.slot.fillRate) * 100)}% · Giảm ${deal.discountPct}%\n\nCaption:\n${deal.caption.slice(0, 400)}\n\nVào Flash Deal để phê duyệt và đăng.`,
-          "info"
-        );
-        results.push({ ...deal, posted: null, status: "pending_approval" });
+        const approvalId = await requestApproval("flash_deal", {
+          description: `${deal.slot.label} · giảm ${deal.discountPct}%`,
+          caption: deal.caption,
+          slotLabel: deal.slot.label,
+          discountPct: deal.discountPct,
+        });
+        results.push({ ...deal, posted: null, status: "pending_approval", approvalId });
       }
     }
 

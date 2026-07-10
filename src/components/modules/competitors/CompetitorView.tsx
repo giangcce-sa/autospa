@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import {
   Plus, Pencil, Trash, X, ArrowsClockwise, Trophy, FacebookLogo, Eye,
-  ThumbsUp, ChatCircle, Share, ArrowSquareOut,
+  ThumbsUp, ChatCircle, Share, ArrowSquareOut, Brain, Prohibit,
 } from "@phosphor-icons/react";
 import { formatDateTime, truncate } from "@/lib/utils";
 
@@ -28,21 +28,71 @@ interface TopPost {
   likes: number;
   comments: number;
   shares: number;
+  learningStatus?: string;
+  detectedTopic?: string | null;
+  contentFormat?: string | null;
+  hookType?: string | null;
+  viralLevel?: string;
   publishedAt: string;
   score: number;
   competitor: { name: string };
 }
 
+interface CompetitorMemory {
+  id: string;
+  topTopics: string;
+  topServices: string;
+  topFormats: string;
+  topHooks: string;
+  competitorMomentum: string;
+  recommendations: string;
+  counterPositioning: string | null;
+  sampleCount: number;
+  confidence: number;
+  updatedAt: string;
+}
+
+interface MemoryItem {
+  label?: string;
+  competitor?: string;
+  count?: number;
+  posts?: number;
+  viralPosts?: number;
+  score?: number;
+}
+
 const BLANK = { fbPageId: "", name: "", notes: "", accessToken: "" };
+
+function parseMemoryItems(value?: string | null): MemoryItem[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseRecommendations(value?: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
 
 export function CompetitorView() {
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [topPosts, setTopPosts] = useState<TopPost[]>([]);
+  const [memory, setMemory] = useState<CompetitorMemory | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Competitor | null>(null);
   const [form, setForm] = useState(BLANK);
   const [saving, setSaving] = useState(false);
   const [fetching, setFetching] = useState<string | null>(null);
+  const [learning, setLearning] = useState(false);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -51,6 +101,7 @@ export function CompetitorView() {
     if (data.success) {
       setCompetitors(data.data.competitors);
       setTopPosts(data.data.topPosts);
+      setMemory(data.data.memory ?? null);
     }
   }, []);
 
@@ -114,6 +165,30 @@ export function CompetitorView() {
     } finally { setFetching(null); }
   };
 
+  const runLearning = async () => {
+    setLearning(true);
+    setError("");
+    try {
+      const res = await fetch("/api/competitors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "learn" }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Không chạy được competitor learning"); return; }
+      await load();
+    } finally { setLearning(false); }
+  };
+
+  const setPostLearningStatus = async (id: string, learningStatus: "approved" | "rejected") => {
+    await fetch("/api/competitors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set-post-learning-status", id, learningStatus }),
+    });
+    await load();
+  };
+
   const remove = async (id: string) => {
     if (!confirm("Xóa đối thủ này? Tất cả bài viết đã lưu cũng bị xóa.")) return;
     await fetch("/api/competitors", {
@@ -159,6 +234,69 @@ export function CompetitorView() {
           {error}
         </div>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>AI học được gì từ đối thủ</CardTitle>
+          <Button size="sm" variant="secondary" onClick={runLearning} loading={learning}>
+            <Brain size={12} weight="fill" /> Chạy học
+          </Button>
+        </CardHeader>
+        {!memory ? (
+          <div className="py-6 text-center">
+            <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Chưa có competitor memory</p>
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+              Sync bài đối thủ rồi bấm Chạy học để AI rút ra topic, format, hook và hướng phản ứng.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {[
+                ["Topic", parseMemoryItems(memory.topTopics)[0]?.label],
+                ["Dịch vụ", parseMemoryItems(memory.topServices)[0]?.label],
+                ["Format", parseMemoryItems(memory.topFormats)[0]?.label],
+                ["Hook", parseMemoryItems(memory.topHooks)[0]?.label],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg p-3" style={{ background: "var(--bg-subtle)" }}>
+                  <p className="text-[10px] uppercase font-semibold" style={{ color: "var(--text-muted)" }}>{label}</p>
+                  <p className="text-sm font-semibold mt-1 truncate" style={{ color: "var(--text)" }}>{value || "Chưa rõ"}</p>
+                </div>
+              ))}
+            </div>
+            {memory.counterPositioning && (
+              <div className="rounded-lg p-3" style={{ background: "var(--accent-light)" }}>
+                <p className="text-[10px] uppercase font-semibold mb-1" style={{ color: "var(--accent)" }}>Cách mình nên khác biệt</p>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text)" }}>{memory.counterPositioning}</p>
+              </div>
+            )}
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>Đối thủ có momentum</p>
+                <div className="space-y-1.5">
+                  {parseMemoryItems(memory.competitorMomentum).slice(0, 4).map((item, idx) => (
+                    <div key={`${item.competitor}-${idx}`} className="flex justify-between text-xs">
+                      <span style={{ color: "var(--text)" }}>{item.competitor}</span>
+                      <span style={{ color: "var(--text-muted)" }}>{item.posts ?? 0} bài · {item.viralPosts ?? 0} viral</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>Gợi ý phản ứng</p>
+                <div className="space-y-1.5">
+                  {parseRecommendations(memory.recommendations).slice(0, 3).map((rec, idx) => (
+                    <p key={idx} className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>• {rec}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              Học từ {memory.sampleCount} bài · confidence {Math.round(memory.confidence * 100)}% · cập nhật {formatDateTime(memory.updatedAt)}
+            </p>
+          </div>
+        )}
+      </Card>
 
       {/* Form */}
       {showForm && (
@@ -290,11 +428,27 @@ export function CompetitorView() {
                       {p.competitor.name}
                     </p>
                     <p className="text-sm leading-snug mb-2" style={{ color: "var(--text)" }}>{truncate(p.message, 200)}</p>
+                    {(p.detectedTopic || p.contentFormat || p.hookType) && (
+                      <div className="flex gap-1.5 flex-wrap mb-2">
+                        {[p.detectedTopic, p.contentFormat, p.hookType].filter(Boolean).map((tag) => (
+                          <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "var(--bg-subtle)", color: "var(--text-muted)" }}>
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 text-[11px]" style={{ color: "var(--text-muted)" }}>
                       <span className="inline-flex items-center gap-1"><ThumbsUp size={11} weight="fill" />{p.likes}</span>
                       <span className="inline-flex items-center gap-1"><ChatCircle size={11} weight="fill" />{p.comments}</span>
                       <span className="inline-flex items-center gap-1"><Share size={11} weight="fill" />{p.shares}</span>
                       <span style={{ color: "var(--accent)" }} className="font-semibold">Score {p.score}</span>
+                      <button
+                        onClick={() => setPostLearningStatus(p.id, p.learningStatus === "rejected" ? "approved" : "rejected")}
+                        className="inline-flex items-center gap-1"
+                        style={{ color: p.learningStatus === "rejected" ? "var(--rose)" : "var(--text-muted)" }}
+                      >
+                        <Prohibit size={10} /> {p.learningStatus === "rejected" ? "Đã bỏ học" : "Không học"}
+                      </button>
                       <a
                         href={`https://facebook.com/${p.fbPostId.replace(/_/, "/posts/")}`}
                         target="_blank"

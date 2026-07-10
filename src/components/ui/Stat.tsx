@@ -18,6 +18,19 @@ interface StatProps {
   className?: string;
 }
 
+function softTone(color: string) {
+  const tones: Record<string, string> = {
+    "var(--premium)": "var(--premium-light)",
+    "var(--accent)": "var(--accent-light)",
+    "var(--rose)": "var(--rose-light)",
+    "var(--blue)": "var(--blue-light)",
+    "var(--amber)": "var(--amber-light)",
+    "var(--success)": "var(--success-light)",
+    "var(--danger)": "var(--danger-light)",
+  };
+  return tones[color] ?? `color-mix(in srgb, ${color} 14%, transparent)`;
+}
+
 export function Stat({
   label,
   value,
@@ -38,25 +51,25 @@ export function Stat({
     : String(value);
 
   const iconColor = premium ? "var(--premium)" : (color ?? "var(--accent)");
-  const iconBg = premium ? "var(--premium-light)" : `${iconColor}1A`;
+  const iconBg = softTone(iconColor);
 
   const content = (
     <div
       className={cn(
-        "rounded-xl p-4 transition-all duration-200",
+        "rounded-lg p-4 transition-all duration-200",
         href && "card-hover",
         className
       )}
       style={{
         background: "var(--bg-card)",
-        border: premium ? "1px solid var(--premium)" : "1px solid var(--border)",
+        border: premium ? "1px solid color-mix(in srgb, var(--premium) 58%, var(--border))" : "1px solid var(--border)",
         boxShadow: premium ? "var(--shadow-premium)" : "var(--shadow-sm)",
       }}
     >
       <div className="flex items-start justify-between mb-2">
         {Icon && (
           <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+            className="w-8 h-8 rounded-md flex items-center justify-center shrink-0"
             style={{ background: iconBg }}
           >
             <Icon size={13} style={{ color: iconColor }} weight="fill" />
@@ -67,10 +80,10 @@ export function Stat({
         )}
       </div>
 
-      <p className="stat-num text-2xl font-bold tracking-tight" style={{ color: "var(--text)" }}>
+      <p className="stat-num text-[26px] font-extrabold leading-none" style={{ color: "var(--text)" }}>
         {shownValue}
       </p>
-      <p className="text-[11px] mt-1 leading-tight" style={{ color: "var(--text-muted)" }}>
+      <p className="text-xs mt-1.5 leading-tight font-medium" style={{ color: "var(--text-muted)" }}>
         {label}
       </p>
 
@@ -93,8 +106,8 @@ function TrendIndicator({ deltaPct }: { deltaPct: number }) {
   const Icon = neutral ? Minus : positive ? TrendUp : TrendDown;
   return (
     <span
-      className="inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full"
-      style={{ background: color + "1A", color }}
+      className="inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-md"
+      style={{ background: softTone(color), color }}
     >
       <Icon size={9} weight="bold" />
       {Math.abs(deltaPct).toFixed(0)}%

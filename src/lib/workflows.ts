@@ -5,6 +5,7 @@ import { generateAdsReport } from "./sub-agents/ads-report";
 import { generateIntelligenceReport } from "./sub-agents/intelligence-report";
 import { councilDebate } from "./ai-council";
 import { saveDecision } from "./ceo-memory";
+import { getCompetitorContext } from "./learning/competitor-learning";
 
 export type WorkflowName = "revenue_drop" | "competitor_surge" | "engagement_drop";
 
@@ -125,15 +126,16 @@ export async function runRevenueDropWorkflow(trigger: string): Promise<WorkflowR
 }
 
 export async function runCompetitorSurgeWorkflow(trigger: string): Promise<WorkflowResult> {
+  const competitorCtx = await getCompetitorContext();
   const run = await prisma.workflowRun.create({
-    data: { name: "competitor_surge", trigger, context: trigger, steps: JSON.stringify([]) },
+    data: { name: "competitor_surge", trigger, context: `${trigger}\n${competitorCtx.insight}`, steps: JSON.stringify([]) },
   });
 
   const steps: WorkflowStep[] = [];
 
   steps.push(await runStep("intelligence", "Deep dive bài viral đối thủ",
     () => generateIntelligenceReport(),
-    (r) => `${r.summary}\nAlerts: ${r.competitorAlerts.join("; ")}\nRec: ${r.recommendations.join("; ")}`
+    (r) => `${r.summary}\nMemory: ${competitorCtx.insight || "chưa có"}\nAlerts: ${r.competitorAlerts.join("; ")}\nRec: ${[...competitorCtx.recommendations, ...r.recommendations].slice(0, 5).join("; ")}`
   ));
 
   steps.push(await runStep("content", "Phân tích content mình tuần qua",

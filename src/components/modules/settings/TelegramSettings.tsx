@@ -10,23 +10,30 @@ interface TelegramConfig {
   hasBotToken: boolean;
   botTokenMasked: string | null;
   telegramChatId: string;
+  telegramAdminUserId: string;
   telegramAlerts: boolean;
   weeklyReportEnabled: boolean;
   weeklyReportDay: number;
   weeklyReportHour: number;
+  webhookConfigured: boolean;
+  webhookUrl: string | null;
+  lastDelivery: { status: string; type: string; error: string | null; createdAt: string } | null;
 }
 
 const DAYS = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
 
 export function TelegramSettings() {
   const [config, setConfig] = useState<TelegramConfig>({
-    hasBotToken: false, botTokenMasked: null, telegramChatId: "",
+    hasBotToken: false, botTokenMasked: null, telegramChatId: "", telegramAdminUserId: "",
     telegramAlerts: true, weeklyReportEnabled: true, weeklyReportDay: 1, weeklyReportHour: 8,
+    webhookConfigured: false, webhookUrl: null,
+    lastDelivery: null,
   });
   const [botToken, setBotToken] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
+  const [webhookBusy, setWebhookBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
@@ -81,6 +88,34 @@ export function TelegramSettings() {
     } finally { setSendingReport(false); }
   };
 
+  const updateWebhook = async (action: "register-webhook" | "webhook-status" | "delete-webhook") => {
+    setWebhookBusy(true);
+    try {
+      const res = await fetch("/api/telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (action === "webhook-status" && data.success) {
+        const pending = Number(data.data?.pending_update_count ?? 0);
+        showMsg(data.data?.last_error_message ? `Webhook lỗi: ${data.data.last_error_message}` : `Webhook hoạt động · ${pending} update đang chờ`, !data.data?.last_error_message);
+      } else {
+        showMsg(data.message ?? (data.success ? "Đã cập nhật webhook" : data.error), data.success);
+      }
+      if (data.success && action !== "webhook-status") {
+        const refreshed = await fetch("/api/telegram", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "get" }),
+        }).then(response => response.json());
+        if (refreshed.data) setConfig(refreshed.data);
+      }
+    } finally {
+      setWebhookBusy(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -92,7 +127,7 @@ export function TelegramSettings() {
         </div>
         {config.hasBotToken && (
           <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--success-light)", color: "var(--success)" }}>
-            <CheckCircle size={10} weight="fill" /> Đã kết nối
+            <CheckCircle size={10} weight="fill" /> Đã lưu token
           </span>
         )}
       </CardHeader>
@@ -119,11 +154,54 @@ export function TelegramSettings() {
           value={config.telegramChatId}
           onChange={e => setConfig(c => ({ ...c, telegramChatId: e.target.value }))}
         />
+        <Input
+          label="Admin User ID"
+          placeholder="Telegram User ID được phép điều khiển"
+          value={config.telegramAdminUserId}
+          onChange={e => setConfig(c => ({ ...c, telegramAdminUserId: e.target.value }))}
+          hint="Bắt buộc khi dùng group; tài khoản này mới được chạy lệnh và duyệt."
+        />
 
         <div className="flex gap-2">
           <Button size="sm" variant="secondary" onClick={test} loading={testing}>Test kết nối</Button>
           <Button size="sm" variant="secondary" onClick={save} loading={saving}>Lưu</Button>
         </div>
+
+        {config.hasBotToken && config.telegramChatId && (
+          <div className="rounded-md border p-3 space-y-2" style={{ borderColor: "var(--border)", background: "var(--bg-subtle)" }}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold" style={{ color: "var(--text)" }}>Telegram Control Center</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {config.webhookConfigured ? "Webhook đã đăng ký" : "Webhook chưa đăng ký"}
+                </p>
+              </div>
+              <span className="w-2 h-2 rounded-full" style={{ background: config.webhookConfigured ? "var(--success)" : "var(--warning)" }} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!config.webhookConfigured ? (
+                <Button size="sm" onClick={() => updateWebhook("register-webhook")} loading={webhookBusy}>
+                  Kết nối điều khiển
+                </Button>
+              ) : (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => updateWebhook("webhook-status")} loading={webhookBusy}>
+                    Kiểm tra webhook
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => updateWebhook("delete-webhook")} loading={webhookBusy}>
+                    Ngắt webhook
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {config.lastDelivery && (
+          <p className="text-xs" style={{ color: config.lastDelivery.status === "sent" ? "var(--success)" : "var(--danger)" }}>
+            Lần gửi cuối: {config.lastDelivery.status === "sent" ? "thành công" : `thất bại · ${config.lastDelivery.error ?? "không rõ lỗi"}`}
+          </p>
+        )}
 
         {/* Alerts toggle */}
         <div className="pt-3 border-t space-y-3" style={{ borderColor: "var(--border)" }}>

@@ -23,6 +23,7 @@ interface PaletteItem {
 const ITEMS: PaletteItem[] = [
   // Core
   { id: "dashboard", label: "Dashboard — Trang chủ", group: "Trang", href: "/", icon: Gauge },
+  { id: "brain", label: "AutoSpa Brain — Học skill", group: "AI Agents", href: "/brain", icon: Brain, premium: true, keywords: "bo nao brain skill hoc train" },
   { id: "orchestrator", label: "Orchestrator — AI Agent Hub", group: "AI Agents", href: "/orchestrator", icon: Robot, premium: true },
   { id: "council", label: "AI Council — Phiên tranh luận", group: "AI Agents", href: "/council", icon: ChatsTeardrop, premium: true },
   { id: "ceo-memory", label: "CEO Memory — Bộ nhớ quyết định", group: "AI Agents", href: "/ceo-memory", icon: Brain, premium: true },
@@ -30,7 +31,7 @@ const ITEMS: PaletteItem[] = [
   { id: "content", label: "Viết bài — Content AI", group: "Nội dung", href: "/content", icon: PencilSimple, keywords: "tao bai dang content" },
   { id: "publish", label: "Đăng & Lịch — Schedule", group: "Nội dung", href: "/publish", icon: PaperPlaneTilt, keywords: "dang bai lich" },
   { id: "library", label: "Thư viện — Bài đã tạo", group: "Nội dung", href: "/library", icon: Archive },
-  { id: "promotions", label: "Flash Deal — Khuyến mãi", group: "Nội dung", href: "/promotions", icon: Tag },
+  { id: "promotions", label: "Khuyến mãi — Promo", group: "Nội dung", href: "/promotions", icon: Tag },
   { id: "images", label: "Tạo hình ảnh — Image AI", group: "Nội dung", href: "/images", icon: Image, keywords: "hinh anh anh" },
   { id: "bulk", label: "Tạo hàng loạt — Bulk create", group: "Nội dung", href: "/bulk", icon: Stack },
   { id: "content-research", label: "Nghiên cứu AI — Research", group: "Nội dung", href: "/content-research", icon: Sparkle },
@@ -100,12 +101,12 @@ export function CommandPalette() {
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
-      style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+      style={{ background: "rgba(19,24,20,0.42)", backdropFilter: "blur(6px)" }}
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl"
-        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        className="w-full max-w-lg rounded-lg overflow-hidden"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "var(--shadow-lg)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search input */}
@@ -145,7 +146,7 @@ export function CommandPalette() {
               if (!groupItems.length) return null;
               return (
                 <div key={group} className="mb-1">
-                  <p className="px-4 py-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                  <p className="px-4 py-1 text-[11px] font-semibold" style={{ color: "var(--text-muted)" }}>
                     {group}
                   </p>
                   <div className="px-2">
@@ -181,10 +182,10 @@ function PaletteRow({ item, onSelect }: { item: PaletteItem; onSelect: () => voi
   return (
     <button
       onClick={onSelect}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors hover:bg-[var(--bg-subtle)] group"
+      className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors hover:bg-[var(--bg-subtle)] group"
     >
       <div
-        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+        className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
         style={{
           background: item.premium ? "var(--premium-light)" : "var(--bg-subtle)",
         }}
@@ -197,7 +198,7 @@ function PaletteRow({ item, onSelect }: { item: PaletteItem; onSelect: () => voi
       </div>
       <span className="text-sm flex-1 truncate" style={{ color: "var(--text)" }}>{item.label}</span>
       {item.premium && (
-        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: "var(--premium-light)", color: "var(--premium)" }}>
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md shrink-0" style={{ background: "var(--premium-light)", color: "var(--premium)" }}>
           AI
         </span>
       )}
@@ -211,7 +212,7 @@ export function CommandPaletteButton() {
       onClick={() => {
         window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
       }}
-      className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors hover:bg-[var(--bg-subtle)]"
+      className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors hover:bg-[var(--bg-subtle)]"
       style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
     >
       <MagnifyingGlass size={12} />

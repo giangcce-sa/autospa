@@ -41,6 +41,10 @@ interface FormState {
   adsOptimizeScaleCtr: string;
   adsOptimizeFreqLimit: string;
   adsOptimizeScalePct: string;
+  adsOptimizeMinSpend: string;
+  adsOptimizeMaxBudget: string;
+  adsOptimizeCooldownHrs: string;
+  adsOptimizeMinRoas: string;
 }
 
 interface SavedFlags {
@@ -121,6 +125,10 @@ export function SettingsForm() {
     adsOptimizeScaleCtr: "2.0",
     adsOptimizeFreqLimit: "3.0",
     adsOptimizeScalePct: "20",
+    adsOptimizeMinSpend: "100000",
+    adsOptimizeMaxBudget: "2000000",
+    adsOptimizeCooldownHrs: "24",
+    adsOptimizeMinRoas: "1.5",
   });
   const [saved, setSaved] = useState<SavedFlags>({
     claudeApiKey: false, openaiApiKey: false, zaloToken: false, spaApiKey: false,
@@ -183,6 +191,10 @@ export function SettingsForm() {
         adsOptimizeScaleCtr: String(d.adsOptimizeScaleCtr ?? 2.0),
         adsOptimizeFreqLimit: String(d.adsOptimizeFreqLimit ?? 3.0),
         adsOptimizeScalePct: String(d.adsOptimizeScalePct ?? 20),
+        adsOptimizeMinSpend: String(d.adsOptimizeMinSpend ?? 100000),
+        adsOptimizeMaxBudget: String(d.adsOptimizeMaxBudget ?? 2000000),
+        adsOptimizeCooldownHrs: String(d.adsOptimizeCooldownHrs ?? 24),
+        adsOptimizeMinRoas: String(d.adsOptimizeMinRoas ?? 1.5),
       }));
     });
     loadFbPages();
@@ -284,6 +296,10 @@ export function SettingsForm() {
         adsOptimizeScaleCtr: Number(form.adsOptimizeScaleCtr) || 2.0,
         adsOptimizeFreqLimit: Number(form.adsOptimizeFreqLimit) || 3.0,
         adsOptimizeScalePct: Number(form.adsOptimizeScalePct) || 20,
+        adsOptimizeMinSpend: Number(form.adsOptimizeMinSpend) || 100000,
+        adsOptimizeMaxBudget: Number(form.adsOptimizeMaxBudget) || 2000000,
+        adsOptimizeCooldownHrs: Number(form.adsOptimizeCooldownHrs) || 24,
+        adsOptimizeMinRoas: Number(form.adsOptimizeMinRoas) || 1.5,
       };
       if (form.claudeApiKey.trim()) body.claudeApiKey = form.claudeApiKey.trim();
       if (form.openaiApiKey.trim()) body.openaiApiKey = form.openaiApiKey.trim();
@@ -749,6 +765,10 @@ export function SettingsForm() {
                     { key: "adsOptimizeScaleCtr", label: "Scale nếu CTR >", step: "0.1", min: "0", max: "20" },
                     { key: "adsOptimizeFreqLimit", label: "Frequency giới hạn", step: "0.5", min: "1", max: "10" },
                     { key: "adsOptimizeScalePct", label: "Scale ngân sách thêm (%)", step: "5", min: "5", max: "100" },
+                    { key: "adsOptimizeMinSpend", label: "Chi tối thiểu để đánh giá", step: "50000", min: "50000", max: "100000000" },
+                    { key: "adsOptimizeMaxBudget", label: "Trần ngân sách/ngày", step: "100000", min: "100000", max: "1000000000" },
+                    { key: "adsOptimizeCooldownHrs", label: "Cooldown mỗi campaign (giờ)", step: "4", min: "4", max: "168" },
+                    { key: "adsOptimizeMinRoas", label: "ROAS tối thiểu để scale", step: "0.1", min: "0.5", max: "20" },
                   ] as const).map((field) => (
                     <div key={field.key}>
                       <label className="block text-[10px] mb-1" style={{ color: "var(--text-muted)" }}>{field.label}</label>

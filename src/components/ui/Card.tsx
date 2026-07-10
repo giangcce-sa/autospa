@@ -15,18 +15,18 @@ function variantStyle(variant: CardVariant): React.CSSProperties {
     case "highlight":
       return {
         background: "var(--bg-card)",
-        borderColor: "var(--accent)",
-        boxShadow: "0 0 0 1px var(--accent), var(--shadow-sm)",
+        borderColor: "color-mix(in srgb, var(--accent) 56%, var(--border))",
+        boxShadow: "var(--shadow-md)",
       };
     case "premium":
       return {
         background: "var(--bg-card)",
-        borderColor: "var(--premium)",
+        borderColor: "color-mix(in srgb, var(--premium) 58%, var(--border))",
         boxShadow: "var(--shadow-premium)",
       };
     case "subtle":
       return {
-        background: "var(--bg-subtle)",
+        background: "color-mix(in srgb, var(--bg-subtle) 82%, var(--bg-card))",
         borderColor: "transparent",
         boxShadow: "none",
       };
@@ -42,10 +42,10 @@ function variantStyle(variant: CardVariant): React.CSSProperties {
 export function Card({ className, padding = "md", variant = "default", children, style, ...props }: CardProps) {
   return (
     <div
-      className={cn("rounded-xl border", PADDING_MAP[padding], className)}
+      className={cn("rounded-lg border", PADDING_MAP[padding], className)}
       style={{
         ...variantStyle(variant),
-        transition: "box-shadow 0.18s ease, border-color 0.18s ease",
+        transition: "box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease",
         ...style,
       }}
       {...props}
@@ -57,7 +57,7 @@ export function Card({ className, padding = "md", variant = "default", children,
 
 export function CardHeader({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("flex items-center justify-between mb-4", className)} {...props}>
+    <div className={cn("flex items-center justify-between gap-3 mb-4", className)} {...props}>
       {children}
     </div>
   );
@@ -65,7 +65,7 @@ export function CardHeader({ className, children, ...props }: HTMLAttributes<HTM
 
 export function CardTitle({ className, children, ...props }: HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h3 className={cn("font-semibold text-sm", className)} style={{ color: "var(--text)" }} {...props}>
+    <h3 className={cn("font-semibold text-[15px]", className)} style={{ color: "var(--text)" }} {...props}>
       {children}
     </h3>
   );

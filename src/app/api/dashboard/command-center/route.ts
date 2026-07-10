@@ -300,9 +300,63 @@ export async function GET() {
     }).slice(0, 12);
 
     const criticalTasks = queue.filter((item) => item.priority === "critical").length;
+    const [settings, facebookPages, brandKnowledge, brandKits, styleSamples] = await Promise.all([
+      prisma.settings.findFirst({
+        select: { claudeApiKey: true, openaiApiKey: true },
+      }),
+      prisma.facebookPage.count({ where: { isActive: true } }),
+      prisma.brandKnowledge.count(),
+      prisma.brandKit.count(),
+      prisma.styleSample.count(),
+    ]);
+
+    const setupSteps = [
+      {
+        id: "ai",
+        label: "Kết nối AI",
+        description: "Cho phép AutoSpa tạo nội dung và phân tích dữ liệu.",
+        href: "/settings",
+        complete: Boolean(settings?.claudeApiKey || settings?.openaiApiKey),
+      },
+      {
+        id: "channel",
+        label: "Kết nối Facebook Page",
+        description: "Nhận tin nhắn, đăng bài và theo dõi tương tác.",
+        href: "/settings",
+        complete: facebookPages > 0,
+      },
+      {
+        id: "services",
+        label: "Thêm dịch vụ spa",
+        description: "Giúp AI tư vấn đúng dịch vụ và mức giá.",
+        href: "/services",
+        complete: services > 0,
+      },
+      {
+        id: "brand",
+        label: "Bổ sung thông tin thương hiệu",
+        description: "Tên spa, chính sách, màu sắc và văn phong.",
+        href: "/brand",
+        complete: brandKnowledge > 0 || brandKits > 0 || styleSamples > 0,
+      },
+      {
+        id: "first-content",
+        label: "Tạo nội dung đầu tiên",
+        description: "Tạo một bài mẫu để kiểm tra toàn bộ quy trình.",
+        href: "/content",
+        complete: totalPosts > 0,
+      },
+    ];
+    const completedSetupSteps = setupSteps.filter((step) => step.complete).length;
 
     return NextResponse.json({
       data: {
+        setup: {
+          completed: completedSetupSteps,
+          total: setupSteps.length,
+          complete: completedSetupSteps === setupSteps.length,
+          steps: setupSteps,
+        },
         stats: {
           totalPosts,
           publishedThisMonth,

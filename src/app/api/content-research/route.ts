@@ -22,10 +22,16 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "schedule" && postId && scheduledAt) {
-      await prisma.post.update({
-        where: { id: postId },
-        data: { status: "scheduled", scheduledAt: new Date(scheduledAt) },
-      });
+      await prisma.$transaction([
+        prisma.post.update({
+          where: { id: postId },
+          data: { status: "scheduled", scheduledAt: new Date(scheduledAt) },
+        }),
+        prisma.contentGeneration.updateMany({
+          where: { postId },
+          data: { userAccepted: true },
+        }),
+      ]);
       return NextResponse.json({ success: true });
     }
 

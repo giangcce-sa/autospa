@@ -1,0 +1,8 @@
+# Install environment values in /etc/autospa-cron.env with mode 600:
+# AUTOSPA_BASE_URL=https://autospa.somail.us
+# CRON_SECRET=<strong-random-secret>
+#
+# Then install this entry with: crontab deploy/autospa.cron.example
+SHELL=/bin/sh
+0 */4 * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/ads-optimize >> /var/log/autospa-cron.log 2>&1
+0 * * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/weekly-report >> /var/log/autospa-cron.log 2>&1

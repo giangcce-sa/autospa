@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { resolveApproval, checkApproval } from "@/lib/approval-gate";
+import { checkApproval } from "@/lib/approval-gate";
+import { executeApproval } from "@/lib/approval-executor";
 
 export async function GET() {
   try {
@@ -31,8 +32,8 @@ export async function POST(req: NextRequest) {
     if (status !== "pending") {
       return NextResponse.json({ error: `Approval đã ${status}`, success: false }, { status: 400 });
     }
-    await resolveApproval(id, decision);
-    return NextResponse.json({ success: true });
+    const result = await executeApproval(id, decision);
+    return NextResponse.json({ success: true, data: result });
   } catch (e) {
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }

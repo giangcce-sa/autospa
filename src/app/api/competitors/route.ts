@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { syncOneCompetitor, getTopCompetitorPosts } from "@/lib/competitor-research";
+import { getCompetitorMemory, learnFromCompetitors } from "@/lib/learning/competitor-learning";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -7,15 +8,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const days = Number(searchParams.get("days") ?? 7);
 
-    const [competitors, topPosts] = await Promise.all([
+    const [competitors, topPosts, memory] = await Promise.all([
       prisma.competitor.findMany({
         orderBy: { createdAt: "desc" },
         include: { _count: { select: { posts: true } } },
       }),
       getTopCompetitorPosts(days, 10),
+      getCompetitorMemory(),
     ]);
 
-    return NextResponse.json({ data: { competitors, topPosts }, success: true });
+    return NextResponse.json({ data: { competitors, topPosts, memory }, success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Lỗi";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
@@ -60,6 +62,22 @@ export async function POST(req: NextRequest) {
     if (action === "fetch-now") {
       const result = await syncOneCompetitor(body.id);
       return NextResponse.json({ data: result, success: true });
+    }
+
+    if (action === "learn") {
+      const result = await learnFromCompetitors();
+      return NextResponse.json({ data: result, success: true });
+    }
+
+    if (action === "set-post-learning-status") {
+      if (!body.id || !["approved", "rejected"].includes(body.learningStatus)) {
+        return NextResponse.json({ error: "Trạng thái học không hợp lệ", success: false }, { status: 400 });
+      }
+      const post = await prisma.competitorPost.update({
+        where: { id: body.id },
+        data: { learningStatus: body.learningStatus },
+      });
+      return NextResponse.json({ data: post, success: true });
     }
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });

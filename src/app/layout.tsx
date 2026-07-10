@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { ActivePageProvider } from "@/contexts/ActivePageContext";
 import { SessionProviderWrapper } from "@/components/layout/SessionProviderWrapper";
 import { AppShell } from "@/components/layout/AppShell";
+import { ExperienceModeProvider } from "@/contexts/ExperienceModeContext";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -17,12 +18,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="vi" className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable}`} suppressHydrationWarning>
+    <html lang="vi" className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable}`} data-scroll-behavior="smooth" suppressHydrationWarning>
       <body>
         <SessionProviderWrapper>
           <ThemeProvider>
             <ActivePageProvider>
-              <AppShell>{children}</AppShell>
+              <ExperienceModeProvider>
+                <AppShell>{children}</AppShell>
+              </ExperienceModeProvider>
             </ActivePageProvider>
           </ThemeProvider>
         </SessionProviderWrapper>

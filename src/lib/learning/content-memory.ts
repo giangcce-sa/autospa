@@ -19,20 +19,26 @@ export async function learnContentPatterns(): Promise<{ updated: number; insight
     where: {
       publishedAt: { not: null, gte: new Date(Date.now() - 90 * 86400000) },
       analytics: { isNot: null },
+      fbAdId: null,
+      OR: [
+        { generations: { none: {} } },
+        { generations: { some: { userAccepted: true } } },
+      ],
     },
     include: { analytics: true },
     orderBy: { publishedAt: "desc" },
     take: 200,
   });
 
-  if (posts.length === 0) return { updated: 0, insights: ["Chưa đủ dữ liệu post"] };
+  if (posts.length < 5) return { updated: 0, insights: [`Cần ít nhất 5 bài organic đã duyệt; hiện có ${posts.length}`] };
 
   // Compute engagement score per post
   const scored = posts
     .filter((p) => p.analytics)
     .map((p) => {
       const a = p.analytics!;
-      const engagement = a.likes + a.comments * 2 + a.shares * 3;
+      const weightedActions = a.likes + a.comments * 2 + a.shares * 3 + a.clicks;
+      const engagement = a.reach > 0 ? (weightedActions / a.reach) * 1_000 : weightedActions;
       const publishedAt = p.publishedAt!;
       return {
         tone: p.tone,

@@ -115,5 +115,5 @@ export async function generateWeeklyReport(): Promise<string> {
 
 export async function sendWeeklyReport() {
   const text = await generateWeeklyReport();
-  return sendMessage(text);
+  return sendMessage(text, "Markdown", { type: "weekly_report" });
 }

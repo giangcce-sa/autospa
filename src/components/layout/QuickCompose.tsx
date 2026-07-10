@@ -105,18 +105,18 @@ export function QuickCompose() {
               <button
                 key={action.label}
                 onClick={action.onClick}
-                className="flex items-center gap-2.5 self-end rounded-2xl px-3.5 py-2 shadow-lg transition-all hover:scale-105 active:scale-95"
+                className="flex items-center gap-2.5 self-end rounded-md px-3.5 py-2 transition-all hover:-translate-y-px active:translate-y-0"
                 style={{
                   background: "var(--bg-card)",
                   border: `1px solid ${action.color}44`,
                   animation: `slide-in-up 0.2s cubic-bezier(0.34,1.56,0.64,1) ${i * 40}ms both`,
-                  boxShadow: `0 4px 16px rgba(0,0,0,0.12), 0 0 0 1px ${action.color}22`,
+                  boxShadow: "var(--shadow-sm)",
                 }}
               >
                 <span className="text-xs font-medium" style={{ color: "var(--text)" }}>{action.label}</span>
                 <div
-                  className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: action.color + "20" }}
+                  className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+                  style={{ background: `color-mix(in srgb, ${action.color} 14%, transparent)` }}
                 >
                   <Icon size={14} weight="fill" style={{ color: action.color }} />
                 </div>
@@ -129,11 +129,11 @@ export function QuickCompose() {
       {/* Inline lead form */}
       {open && showLeadForm && (
         <div
-          className="rounded-2xl p-4 w-64 shadow-xl mb-1"
+          className="rounded-lg p-4 w-64 mb-1"
           style={{
             background: "var(--bg-card)",
             border: "1px solid var(--border)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+            boxShadow: "var(--shadow-lg)",
             animation: "slide-in-up 0.2s cubic-bezier(0.4,0,0.2,1) both",
           }}
         >
@@ -150,7 +150,7 @@ export function QuickCompose() {
               onChange={(e) => setLeadName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && saveLead()}
               placeholder="Tên khách *"
-              className="w-full rounded-lg px-3 py-2 text-xs outline-none"
+              className="w-full rounded-md px-3 py-2 text-xs outline-none"
               style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", color: "var(--text)" }}
             />
             <input
@@ -158,13 +158,13 @@ export function QuickCompose() {
               onChange={(e) => setLeadPhone(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && saveLead()}
               placeholder="Số điện thoại"
-              className="w-full rounded-lg px-3 py-2 text-xs outline-none"
+              className="w-full rounded-md px-3 py-2 text-xs outline-none"
               style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", color: "var(--text)" }}
             />
             <select
               value={leadSource}
               onChange={(e) => setLeadSource(e.target.value)}
-              className="w-full rounded-lg px-3 py-2 text-xs outline-none"
+              className="w-full rounded-md px-3 py-2 text-xs outline-none"
               style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", color: "var(--text)" }}
             >
               <option value="manual">Nhập tay</option>
@@ -176,7 +176,7 @@ export function QuickCompose() {
             <button
               onClick={saveLead}
               disabled={!leadName.trim() || saving}
-              className="w-full rounded-lg py-2 text-xs font-semibold transition-all disabled:opacity-40"
+              className="w-full rounded-md py-2 text-xs font-semibold transition-all disabled:opacity-40"
               style={{ background: saved ? "var(--success)" : "var(--accent)", color: "white" }}
             >
               {saved ? "Đã lưu ✓" : saving ? "Đang lưu..." : "Lưu lead"}
@@ -188,11 +188,11 @@ export function QuickCompose() {
       {/* FAB */}
       <button
         onClick={() => { setOpen((v) => !v); setShowLeadForm(false); }}
-        className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl transition-all hover:scale-105 active:scale-95"
+        className="w-12 h-12 rounded-lg flex items-center justify-center transition-all hover:-translate-y-px active:translate-y-0"
         style={{
           background: open
             ? "var(--bg-subtle)"
-            : "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover, var(--accent)) 100%)",
+            : "var(--accent)",
           border: open ? "1px solid var(--border)" : "none",
           boxShadow: open ? "none" : "0 4px 20px color-mix(in srgb, var(--accent) 50%, transparent), 0 2px 8px rgba(0,0,0,0.12)",
         }}

@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { calculateCompetitorEngagement, competitorViralLevel } from "./learning/competitor-learning";
 
 interface RawFbPost {
   id: string;
@@ -46,6 +47,11 @@ export async function syncOneCompetitor(competitorId: string): Promise<{ added: 
     if (!p.message || p.message.length < 20) continue;
     const exists = await prisma.competitorPost.findUnique({ where: { fbPostId: p.id } });
     if (exists) continue;
+    const engagementScore = calculateCompetitorEngagement(
+      p.likes?.summary?.total_count ?? 0,
+      p.comments?.summary?.total_count ?? 0,
+      p.shares?.count ?? 0,
+    );
     await prisma.competitorPost.create({
       data: {
         competitorId: competitor.id,
@@ -54,6 +60,8 @@ export async function syncOneCompetitor(competitorId: string): Promise<{ added: 
         likes: p.likes?.summary?.total_count ?? 0,
         comments: p.comments?.summary?.total_count ?? 0,
         shares: p.shares?.count ?? 0,
+        engagementScore,
+        viralLevel: competitorViralLevel(engagementScore),
         publishedAt: new Date(p.created_time),
       },
     });
@@ -106,7 +114,7 @@ export async function getTopCompetitorPosts(days = 7, limit = 5) {
   return posts
     .map((p) => ({
       ...p,
-      score: p.likes + p.comments * 2 + p.shares * 3,
+      score: p.engagementScore || calculateCompetitorEngagement(p.likes, p.comments, p.shares),
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);

@@ -64,6 +64,19 @@ function vnd(n: number): string {
   return String(Math.round(n));
 }
 
+function softTone(color: string) {
+  const tones: Record<string, string> = {
+    "var(--premium)": "var(--premium-light)",
+    "var(--rose)": "var(--rose-light)",
+    "var(--accent)": "var(--accent-light)",
+    "var(--blue)": "var(--blue-light)",
+    "var(--amber)": "var(--amber-light)",
+    "var(--success)": "var(--success-light)",
+    "var(--danger)": "var(--danger-light)",
+  };
+  return tones[color] ?? `color-mix(in srgb, ${color} 14%, transparent)`;
+}
+
 function SectionCard({
   title,
   icon,
@@ -84,15 +97,15 @@ function SectionCard({
   const Icon = icon;
   return (
     <section
-      className={`ceo-section-card rounded-xl p-4 ${className}`}
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      className={`ceo-section-card rounded-lg p-4 ${className}`}
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: iconColor + "18" }}>
+          <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0" style={{ background: softTone(iconColor) }}>
             <Icon size={14} weight="fill" style={{ color: iconColor }} />
           </div>
-          <h2 className="text-xs font-bold uppercase tracking-wider truncate" style={{ color: "var(--text)" }}>
+          <h2 className="text-[13px] font-bold truncate" style={{ color: "var(--text)" }}>
             {title}
           </h2>
         </div>
@@ -132,10 +145,11 @@ function KPICard({
   return (
     <Link
       href={href}
-      className="ceo-kpi-card rounded-xl p-3 relative overflow-hidden group"
+      className="ceo-kpi-card rounded-lg p-3 relative overflow-hidden group"
       style={{
-        background: urgent ? `${color}0d` : "var(--bg-card)",
+        background: urgent ? softTone(color) : "var(--bg-card)",
         border: `1px solid ${urgent ? color : "var(--border)"}`,
+        boxShadow: "var(--shadow-sm)",
       }}
     >
       <div className="flex items-center justify-between gap-2">
@@ -144,7 +158,7 @@ function KPICard({
           <p className="text-[10px] mt-1 leading-tight" style={{ color: "var(--text-muted)" }}>{label}</p>
           {sublabel && <p className="text-[9px] mt-1 truncate" style={{ color }}>{sublabel}</p>}
         </div>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + "18" }}>
+        <div className="w-8 h-8 rounded-md flex items-center justify-center shrink-0" style={{ background: softTone(color) }}>
           <Icon size={16} weight="fill" style={{ color }} />
         </div>
       </div>
@@ -201,42 +215,35 @@ export function CEODashboard() {
   return (
     <div className="space-y-4">
       <section
-        className="ceo-row-1 rounded-xl p-5 relative overflow-hidden"
+        className="ceo-row-1 rounded-lg p-5 relative overflow-hidden"
         style={{
-          background: "linear-gradient(135deg, #0f3f2c 0%, #145239 48%, #0f2f26 100%)",
-          boxShadow: "0 12px 28px rgba(15, 63, 44, 0.24)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          boxShadow: "var(--shadow-sm)",
         }}
       >
-        <div
-          className="absolute inset-0 opacity-[0.07]"
-          style={{
-            backgroundImage: "linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px)",
-            backgroundSize: "28px 28px",
-          }}
-        />
-
         <div className="relative grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5 items-stretch">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold" style={{ background: "rgba(255,255,255,0.14)", color: "rgba(255,255,255,0.86)" }}>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold" style={{ background: "var(--premium-light)", color: "var(--premium)" }}>
                 <Robot size={12} weight="fill" />
-                CEO command briefing
+                Brief điều hành
               </span>
-              <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.62)" }}>{todayStr}</span>
+              <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>{todayStr}</span>
             </div>
 
-            <h1 className="text-2xl md:text-3xl font-black leading-tight max-w-3xl" style={{ color: "white" }}>
+            <h1 className="text-2xl md:text-3xl font-extrabold leading-tight max-w-3xl" style={{ color: "var(--text)" }}>
               Điều hành marketing, sales và AI team trong một màn hình.
             </h1>
 
             {briefLoading ? (
               <div className="space-y-2 mt-4 max-w-3xl">
                 {[0.82, 1, 0.66].map((w, i) => (
-                  <div key={i} className="h-3 rounded-lg" style={{ width: `${w * 100}%`, background: "rgba(255,255,255,0.18)" }} />
+                  <div key={i} className="h-3 rounded-md" style={{ width: `${w * 100}%`, background: "var(--bg-subtle)" }} />
                 ))}
               </div>
             ) : (
-              <p className="text-sm leading-relaxed mt-3 max-w-3xl" style={{ color: "rgba(255,255,255,0.82)" }}>
+              <p className="text-sm leading-relaxed mt-3 max-w-3xl" style={{ color: "var(--text-secondary)" }}>
                 {briefText ? `${briefText.slice(0, 260)}${briefText.length > 260 ? "..." : ""}` : "Chưa có brief hôm nay. Tạo brief để AI tổng hợp tình hình kinh doanh và việc cần xử lý."}
               </p>
             )}
@@ -245,23 +252,23 @@ export function CEODashboard() {
               <button
                 onClick={regenerateBrief}
                 disabled={regenerating}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:translate-y-[-1px] active:scale-[0.98] disabled:opacity-50"
-                style={{ background: "white", color: "#145239" }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all hover:-translate-y-px active:translate-y-0 disabled:opacity-50"
+                style={{ background: "var(--accent)", color: "white" }}
               >
                 <ArrowsClockwise size={12} className={regenerating ? "animate-spin" : ""} />
                 {regenerating ? "Đang tạo..." : "Tạo brief mới"}
               </button>
               <Link
                 href="/orchestrator"
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:translate-y-[-1px]"
-                style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.9)", border: "1px solid rgba(255,255,255,0.16)" }}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all hover:-translate-y-px"
+                style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}
               >
                 Mở Orchestrator <ArrowRight size={10} />
               </Link>
               <Link
                 href="/council"
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:translate-y-[-1px]"
-                style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.82)" }}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all hover:-translate-y-px"
+                style={{ background: "var(--premium-light)", color: "var(--premium)" }}
               >
                 AI Council
               </Link>
@@ -277,13 +284,13 @@ export function CEODashboard() {
             ].map((item) => {
               const Icon = item.icon;
               return (
-                <div key={item.label} className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.11)", border: "1px solid rgba(255,255,255,0.14)" }}>
+                <div key={item.label} className="rounded-md p-3" style={{ background: softTone(item.color), border: "1px solid var(--border)" }}>
                   <div className="flex items-center justify-between mb-2">
                     <Icon size={15} weight="fill" style={{ color: item.color }} />
-                    <span className="text-[9px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.54)" }}>Today</span>
+                    <span className="text-[9px] font-semibold" style={{ color: item.color }}>Hôm nay</span>
                   </div>
-                  <p className="text-2xl font-black tabular-nums leading-none" style={{ color: "white" }}>{item.value}</p>
-                  <p className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.66)" }}>{item.label}</p>
+                  <p className="text-2xl font-extrabold tabular-nums leading-none" style={{ color: "var(--text)" }}>{item.value}</p>
+                  <p className="text-[10px] mt-1" style={{ color: "var(--text-secondary)" }}>{item.label}</p>
                 </div>
               );
             })}
@@ -292,20 +299,20 @@ export function CEODashboard() {
       </section>
 
       <div className="ceo-row-2 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
-        <KPICard label="Doanh thu hôm nay" value={kpis?.revenueToday ? `${vnd(kpis.revenueToday)}đ` : "—"} icon={CurrencyCircleDollar} color="var(--success)" href="/reports" sublabel={`${kpis?.bookingsToday ?? 0} booking paid`} />
+        <KPICard label="Doanh thu hôm nay" value={kpis?.revenueToday ? `${vnd(kpis.revenueToday)}đ` : "—"} icon={CurrencyCircleDollar} color="var(--success)" href="/reports" sublabel={`${kpis?.bookingsToday ?? 0} booking`} />
         <KPICard label="Lead nóng" value={stats?.hotLeads ?? 0} icon={Flame} color="var(--rose)" href="/sale" urgent={(stats?.hotLeads ?? 0) > 0} />
         <KPICard label="Tin chưa đọc" value={stats?.unreadMessages ?? 0} icon={ChatCircleDots} color="var(--blue)" href="/inbox" urgent={(stats?.unreadMessages ?? 0) > 0} />
         <KPICard label="Lịch đăng hôm nay" value={highlights?.scheduledToday ?? 0} icon={CalendarBlank} color="var(--accent)" href="/publish" />
-        <KPICard label="Content tháng này" value={stats?.publishedThisMonth ?? 0} icon={PaperPlaneTilt} color="var(--premium)" href="/library" />
-        <KPICard label="Alert mở" value={highlights?.alerts ?? stats?.unreadAlerts ?? 0} icon={Bell} color="var(--danger)" href="/listening" urgent={(highlights?.alerts ?? 0) > 0} />
+        <KPICard label="Nội dung tháng này" value={stats?.publishedThisMonth ?? 0} icon={PaperPlaneTilt} color="var(--premium)" href="/library" />
+        <KPICard label="Cảnh báo mở" value={highlights?.alerts ?? stats?.unreadAlerts ?? 0} icon={Bell} color="var(--danger)" href="/listening" urgent={(highlights?.alerts ?? 0) > 0} />
       </div>
 
       <div className="ceo-row-3 grid grid-cols-1 xl:grid-cols-[1.05fr_1fr_1.05fr] gap-4">
-        <SectionCard title="CEO task center" icon={Target} iconColor="var(--premium)" href="/automation" hrefLabel="Duyệt việc">
+        <SectionCard title="Việc cần duyệt" icon={Target} iconColor="var(--premium)" href="/automation" hrefLabel="Duyệt việc">
           <CEOTaskCenter />
         </SectionCard>
 
-        <SectionCard title="Lead pipeline" icon={ChartLineUp} iconColor="var(--rose)" href="/sale" hrefLabel="Pipeline">
+        <SectionCard title="Pipeline lead" icon={ChartLineUp} iconColor="var(--rose)" href="/sale" hrefLabel="Pipeline">
           <LeadPipeline />
         </SectionCard>
 
@@ -315,15 +322,15 @@ export function CEODashboard() {
       </div>
 
       <div className="ceo-row-4 grid grid-cols-1 xl:grid-cols-[1fr_1fr_1fr] gap-4">
-        <SectionCard title="Content factory" icon={PaperPlaneTilt} iconColor="var(--accent)" href="/publish" hrefLabel="Lịch đăng">
+        <SectionCard title="Xưởng nội dung" icon={PaperPlaneTilt} iconColor="var(--accent)" href="/publish" hrefLabel="Lịch đăng">
           <ContentFactory />
         </SectionCard>
 
-        <SectionCard title="Ads command center" icon={Megaphone} iconColor="var(--blue)" href="/facebook-ads" hrefLabel="Ads">
+        <SectionCard title="Điều hành quảng cáo" icon={Megaphone} iconColor="var(--blue)" href="/facebook-ads" hrefLabel="Ads">
           <AdsCommandCenter />
         </SectionCard>
 
-        <SectionCard title="AI team status" icon={Robot} iconColor="var(--premium)" href="/orchestrator" hrefLabel="Orchestrator">
+        <SectionCard title="Trạng thái AI team" icon={Robot} iconColor="var(--premium)" href="/orchestrator" hrefLabel="Orchestrator">
           <AITeamStatus />
         </SectionCard>
       </div>

@@ -12,19 +12,19 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="space-y-1.5">
         {label && (
-          <label className="block text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+          <label className="block text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
             {label}
           </label>
         )}
         <input
           ref={ref}
           className={cn(
-            "w-full px-3 py-2 text-sm rounded-lg border outline-none transition-all duration-150",
+            "w-full px-3 py-2.5 text-sm rounded-md border outline-none transition-all duration-200",
             "focus:ring-2 placeholder:opacity-40",
             className
           )}
           style={{
-            background: "var(--bg-card)",
+            background: "var(--bg-elevated)",
             borderColor: error ? "var(--rose)" : "var(--border)",
             color: "var(--text)",
           }}
@@ -49,19 +49,19 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div className="space-y-1.5">
         {label && (
-          <label className="block text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+          <label className="block text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
             {label}
           </label>
         )}
         <textarea
           ref={ref}
           className={cn(
-            "w-full px-3 py-2 text-sm rounded-lg border outline-none transition-all duration-150 resize-none",
+            "w-full px-3 py-2.5 text-sm rounded-md border outline-none transition-all duration-200 resize-none",
             "focus:ring-2 placeholder:opacity-40",
             className
           )}
           style={{
-            background: "var(--bg-card)",
+            background: "var(--bg-elevated)",
             borderColor: error ? "var(--rose)" : "var(--border)",
             color: "var(--text)",
           }}

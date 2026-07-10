@@ -101,7 +101,7 @@ export function PromotionManager() {
         {/* Form */}
         <Card>
           <CardHeader>
-            <CardTitle>Tạo Flash Deal</CardTitle>
+            <CardTitle>Tạo khuyến mãi</CardTitle>
             <Tag size={15} style={{ color: "var(--accent)" }} weight="fill" />
           </CardHeader>
           <div className="space-y-3">

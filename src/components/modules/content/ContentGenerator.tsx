@@ -6,10 +6,24 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
-import { Sparkle, Copy, CheckCircle, PaperPlaneTilt, Image as ImageIcon, ArrowsSplit, BookOpen } from "@phosphor-icons/react";
+import { Sparkle, Copy, CheckCircle, PaperPlaneTilt, Image as ImageIcon, ArrowsSplit, BookOpen, User, Warning } from "@phosphor-icons/react";
 
 interface Service { id: string; name: string; category: string | null; }
 interface Story { id: string; type: string; customerName: string | null; content: string; service: string | null; }
+interface HumanScore {
+  score: number;
+  dimensions: { naturalness: number; specificity: number; rhythm: number; restraint: number; brandVoice: number };
+  issues: Array<{ code: string; message: string; phrase?: string }>;
+}
+interface ContentResult {
+  caption: string;
+  hashtags: string;
+  postId?: string;
+  generationId: string;
+  draftCaption: string;
+  humanScore: HumanScore;
+  voiceProfile?: { id: string; approvedEdits: number; confidence: number; autoApply: boolean } | null;
+}
 
 interface Props {
   facebookPageId?: string;
@@ -37,8 +51,14 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
   const [styleSampleCount, setStyleSampleCount] = useState(0);
   const [includeStory, setIncludeStory] = useState(false);
   const [selectedStoryId, setSelectedStoryId] = useState("");
-  const [form, setForm] = useState({ serviceId: "", postType: "service", tone: "friendly", customNote: "", platform: "facebook" });
-  const [result, setResult] = useState<{ caption: string; hashtags: string; postId?: string } | null>(null);
+  const [form, setForm] = useState({
+    serviceId: "", postType: "service", tone: "friendly", customNote: "", platform: "facebook",
+    mode: "quick", narrator: "brand",
+    material: { situation: "", customerProblem: "", observation: "", customerQuote: "", avoid: "", goal: "" },
+  });
+  const [result, setResult] = useState<ContentResult | null>(null);
+  const [editedCaption, setEditedCaption] = useState("");
+  const [editedHashtags, setEditedHashtags] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -77,11 +97,13 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setResult(data.data);
+      setEditedCaption(data.data.caption);
+      setEditedHashtags(data.data.hashtags);
       if (saveToLibrary) {
         setSaved(true);
         if (data.data.postId && onSaved) onSaved(data.data.postId, data.data.caption, data.data.hashtags);
       }
-      return data.data as { caption: string; hashtags: string; postId?: string };
+      return data.data as ContentResult;
     } finally { setLoading(false); }
   };
 
@@ -99,10 +121,13 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
         const data = await res.json();
         if (!res.ok) { setError(data.error); return; }
         setResult(data.data);
+        setEditedCaption(data.data.caption);
+        setEditedHashtags(data.data.hashtags);
         setSaved(true);
         postId = data.data.postId;
         if (postId && onSaved) onSaved(postId, data.data.caption, data.data.hashtags);
       }
+      if (result?.generationId) await saveFeedback();
       if (target === "image" && onGoToImage) onGoToImage();
       if (target === "publish" && onGoToPublish) onGoToPublish(postId);
     } finally { setSaving(false); }
@@ -110,7 +135,7 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
 
   const handleCopy = () => {
     if (!result) return;
-    navigator.clipboard.writeText(`${result.caption}\n\n${result.hashtags}`);
+    navigator.clipboard.writeText(`${editedCaption}\n\n${editedHashtags}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -125,7 +150,7 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "create",
-          caption: result.caption,
+          caption: editedCaption,
           platform: form.platform,
           tone: form.tone,
           serviceId: form.serviceId || undefined,
@@ -147,11 +172,62 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
       const res = await fetch("/api/repurpose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption: result.caption, hashtags: result.hashtags, platform: form.platform, facebookPageId }),
+        body: JSON.stringify({ caption: editedCaption, hashtags: editedHashtags, platform: form.platform, facebookPageId }),
       });
       const data = await res.json();
       if (data.success) setRepurposed(data.data);
     } finally { setRepurposing(false); }
+  };
+
+  const saveFeedback = async (acceptedVoice?: boolean) => {
+    if (!result?.generationId) return null;
+    const res = await fetch("/api/content/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        generationId: result.generationId,
+        caption: editedCaption,
+        hashtags: editedHashtags,
+        acceptedVoice,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error);
+      return null;
+    }
+    setResult((current) => current ? {
+      ...current,
+      caption: editedCaption,
+      hashtags: editedHashtags,
+      humanScore: data.data.humanScore,
+      voiceProfile: data.data.voiceProfile ?? current.voiceProfile,
+    } : current);
+    if (typeof acceptedVoice === "boolean") {
+      setSaved(true);
+    }
+    return data.data;
+  };
+
+  const toggleVoiceProfile = async () => {
+    if (!result?.voiceProfile) return;
+    const response = await fetch("/api/content/voice-profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: result.voiceProfile.id,
+        autoApply: !result.voiceProfile.autoApply,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.error);
+      return;
+    }
+    setResult((current) => current?.voiceProfile ? {
+      ...current,
+      voiceProfile: { ...current.voiceProfile, autoApply: data.data.autoApply },
+    } : current);
   };
 
   return (
@@ -159,6 +235,27 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
       <Card>
         <CardHeader><CardTitle>Tùy chọn nội dung</CardTitle></CardHeader>
         <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-1 p-1 rounded-md" style={{ background: "var(--bg-subtle)" }}>
+            {[
+              { value: "quick", label: "Nhanh" },
+              { value: "material", label: "Có chất liệu" },
+              { value: "editor", label: "Biên tập" },
+            ].map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setForm({ ...form, mode: item.value })}
+                className="px-2 py-1.5 rounded text-xs font-medium"
+                style={{
+                  background: form.mode === item.value ? "var(--bg-card)" : "transparent",
+                  color: form.mode === item.value ? "var(--text)" : "var(--text-muted)",
+                  boxShadow: form.mode === item.value ? "var(--shadow-sm)" : "none",
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
           {styleSampleCount > 0 && (
             <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg" style={{ background: "var(--accent-light)", color: "var(--accent)" }}>
               <Sparkle size={12} weight="fill" />
@@ -180,6 +277,43 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
             <option value="zalo">Zalo OA</option>
             <option value="tiktok">TikTok</option>
           </Select>
+          {form.mode !== "quick" && (
+            <Select label="Người kể" value={form.narrator} onChange={(e) => setForm({ ...form, narrator: e.target.value })}>
+              <option value="brand">Thương hiệu</option>
+              <option value="owner">Chủ spa</option>
+              <option value="technician">Kỹ thuật viên</option>
+              <option value="customer">Khách hàng</option>
+            </Select>
+          )}
+          {form.mode !== "quick" && (
+            <div className="space-y-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
+              <p className="text-xs font-semibold" style={{ color: "var(--text)" }}>Chất liệu thật</p>
+              {[
+                ["situation", "Tình huống", "Ví dụ: sáng nay có một khách đến sớm 15 phút..."],
+                ["customerProblem", "Vấn đề của khách", "Khách đang lo điều gì?"],
+                ["observation", "Chi tiết quan sát", "Một chi tiết chỉ người tại spa mới biết"],
+                ["customerQuote", "Lời khách nói", "Ghi đúng câu khách đã nói"],
+              ].map(([key, label, placeholder]) => (
+                <Textarea
+                  key={key}
+                  label={label}
+                  placeholder={placeholder}
+                  rows={2}
+                  value={form.material[key as keyof typeof form.material]}
+                  onChange={(event) => setForm({
+                    ...form,
+                    material: { ...form.material, [key]: event.target.value },
+                  })}
+                />
+              ))}
+              {form.mode === "editor" && (
+                <>
+                  <Textarea label="Mục tiêu bài" rows={2} value={form.material.goal} onChange={(event) => setForm({ ...form, material: { ...form.material, goal: event.target.value } })} />
+                  <Textarea label="Điều không được viết" rows={2} value={form.material.avoid} onChange={(event) => setForm({ ...form, material: { ...form.material, avoid: event.target.value } })} />
+                </>
+              )}
+            </div>
+          )}
           <Textarea
             label="Ghi chú thêm (tùy chọn)"
             placeholder="VD: Nhấn mạnh ưu đãi giảm 30% tháng này..."
@@ -258,18 +392,66 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Caption</label>
-              <div className="p-3 rounded-lg text-sm leading-relaxed whitespace-pre-wrap" style={{ background: "var(--bg-subtle)", color: "var(--text)" }}>
-                {result.caption}
-              </div>
+              <Textarea rows={12} value={editedCaption} onChange={(event) => setEditedCaption(event.target.value)} />
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Hashtags</label>
               <div className="flex flex-wrap gap-1.5">
-                {result.hashtags.split("\n").filter(Boolean).map((h, i) => (
+                {editedHashtags.split("\n").filter(Boolean).map((h, i) => (
                   <Badge key={i} variant="info">{h.trim()}</Badge>
                 ))}
               </div>
             </div>
+
+            <div className="rounded-md border p-3 space-y-2" style={{ borderColor: "var(--border)" }}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold" style={{ color: "var(--text)" }}>Human Writing Score</span>
+                <strong style={{ color: result.humanScore.score >= 80 ? "var(--success)" : "var(--warning)" }}>{result.humanScore.score}/100</strong>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                <span>Tự nhiên: {result.humanScore.dimensions.naturalness}</span>
+                <span>Cụ thể: {result.humanScore.dimensions.specificity}</span>
+                <span>Nhịp câu: {result.humanScore.dimensions.rhythm}</span>
+                <span>Đúng giọng: {result.humanScore.dimensions.brandVoice}</span>
+              </div>
+              {result.humanScore.issues.slice(0, 3).map((issue) => (
+                <p key={`${issue.code}:${issue.phrase ?? issue.message}`} className="flex gap-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>
+                  <Warning size={12} className="shrink-0 mt-0.5" /> {issue.message}
+                </p>
+              ))}
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" onClick={() => saveFeedback(true)}><CheckCircle size={13} /> Đúng giọng tôi</Button>
+                <Button size="sm" variant="secondary" onClick={() => saveFeedback(false)}><User size={13} /> Chưa đúng giọng</Button>
+              </div>
+              {result.voiceProfile && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Voice Profile: {result.voiceProfile.approvedEdits} bản · {Math.round(result.voiceProfile.confidence * 100)}% tin cậy
+                  </p>
+                  <Button size="sm" variant="secondary" onClick={toggleVoiceProfile}>
+                    {result.voiceProfile.autoApply ? "Tắt áp dụng" : "Bật áp dụng"}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {result.draftCaption !== editedCaption && (
+              <details className="border-t pt-2" style={{ borderColor: "var(--border)" }}>
+                <summary className="text-xs font-medium cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+                  So sánh với bản AI ban đầu
+                </summary>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                  <div>
+                    <p className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>Bản Writer</p>
+                    <p className="text-xs whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>{result.draftCaption}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>Bản Human Editor</p>
+                    <p className="text-xs whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>{editedCaption}</p>
+                  </div>
+                </div>
+              </details>
+            )}
 
             <div className="pt-2 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
               {onGoToImage && (

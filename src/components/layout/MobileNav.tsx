@@ -10,6 +10,7 @@ import {
   Gear, Briefcase, Buildings, Palette, Brain, BookOpen, Scan,
   Robot, ChatsTeardrop, ArrowsSplit, Megaphone, Sparkle, X,
 } from "@phosphor-icons/react";
+import { useExperienceMode } from "@/contexts/ExperienceModeContext";
 
 const CORE = [
   { label: "Home", href: "/", icon: Gauge },
@@ -22,6 +23,7 @@ const MORE_GROUPS = [
   {
     label: "AI Agents",
     items: [
+      { label: "Brain", href: "/brain", icon: Brain, premium: true },
       { label: "Orchestrator", href: "/orchestrator", icon: Robot, premium: true },
       { label: "AI Council", href: "/council", icon: ChatsTeardrop, premium: true },
       { label: "CEO Memory", href: "/ceo-memory", icon: Brain, premium: true },
@@ -32,7 +34,7 @@ const MORE_GROUPS = [
     items: [
       { label: "Viết bài", href: "/content", icon: PencilSimple },
       { label: "Đăng bài", href: "/publish", icon: PaperPlaneTilt },
-      { label: "Flash Deal", href: "/promotions", icon: Tag },
+      { label: "Khuyến mãi", href: "/promotions", icon: Tag },
       { label: "Hình ảnh AI", href: "/images", icon: Image },
       { label: "Hàng loạt", href: "/bulk", icon: Stack },
       { label: "Nghiên cứu", href: "/content-research", icon: Sparkle },
@@ -72,13 +74,22 @@ const MORE_GROUPS = [
 export function MobileNav() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const { mode, setMode } = useExperienceMode();
+  const visibleGroups = mode === "advanced"
+    ? MORE_GROUPS
+    : MORE_GROUPS.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => [
+          "/content", "/publish", "/promotions", "/reports", "/crm", "/settings", "/services", "/brand",
+        ].includes(item.href)),
+      })).filter((group) => group.items.length > 0);
 
   return (
     <>
       {/* Bottom bar */}
       <nav
         className="fixed bottom-0 left-0 right-0 z-30 md:hidden border-t"
-        style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
+        style={{ background: "color-mix(in srgb, var(--bg-card) 94%, transparent)", borderColor: "var(--border)", backdropFilter: "blur(14px)" }}
       >
         <div className="flex items-center justify-around px-2 py-2">
           {CORE.map((item) => {
@@ -88,7 +99,7 @@ export function MobileNav() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex flex-col items-center gap-1 px-3 py-1 rounded-lg"
+                className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-md"
               >
                 <Icon size={20} weight={active ? "fill" : "regular"} color={active ? "var(--accent)" : "var(--text-muted)"} />
                 <span className="text-[10px] font-medium" style={{ color: active ? "var(--accent)" : "var(--text-muted)" }}>
@@ -101,7 +112,7 @@ export function MobileNav() {
           {/* More button */}
           <button
             onClick={() => setMoreOpen(true)}
-            className="flex flex-col items-center gap-1 px-3 py-1 rounded-lg"
+            className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-md"
           >
             <DotsThree size={20} weight="bold" color={moreOpen ? "var(--accent)" : "var(--text-muted)"} />
             <span className="text-[10px] font-medium" style={{ color: moreOpen ? "var(--accent)" : "var(--text-muted)" }}>Thêm</span>
@@ -118,20 +129,34 @@ export function MobileNav() {
             onClick={() => setMoreOpen(false)}
           />
           <div
-            className="fixed bottom-0 left-0 right-0 z-50 md:hidden rounded-t-2xl overflow-y-auto"
+            className="fixed bottom-0 left-0 right-0 z-50 md:hidden rounded-t-lg overflow-y-auto"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)", maxHeight: "80vh" }}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
               <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>Tất cả tính năng</p>
-              <button onClick={() => setMoreOpen(false)} className="p-1.5 rounded-lg transition-opacity hover:opacity-70" style={{ color: "var(--text-muted)" }}>
+              <button onClick={() => setMoreOpen(false)} className="p-1.5 rounded-md transition-colors hover:bg-[var(--bg-subtle)]" style={{ color: "var(--text-muted)" }}>
                 <X size={16} />
               </button>
             </div>
 
             <div className="px-4 py-3 space-y-5 pb-8">
-              {MORE_GROUPS.map((group) => (
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-md" style={{ background: "var(--bg-subtle)" }}>
+                {(["simple", "advanced"] as const).map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => setMode(item)}
+                    className="py-2.5 rounded-md text-xs font-semibold"
+                    style={mode === item
+                      ? { background: "var(--bg-card)", color: item === "advanced" ? "var(--premium)" : "var(--accent)", boxShadow: "var(--shadow-sm)" }
+                      : { color: "var(--text-muted)" }}
+                  >
+                    {item === "simple" ? "Đơn giản" : "Nâng cao"}
+                  </button>
+                ))}
+              </div>
+              {visibleGroups.map((group) => (
                 <div key={group.label}>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--text-muted)" }}>{group.label}</p>
+                  <p className="text-[11px] font-semibold mb-2" style={{ color: "var(--text-muted)" }}>{group.label}</p>
                   <div className="grid grid-cols-4 gap-2">
                     {group.items.map((item) => {
                       const Icon = item.icon;
@@ -142,7 +167,7 @@ export function MobileNav() {
                           key={item.href}
                           href={item.href}
                           onClick={() => setMoreOpen(false)}
-                          className="flex flex-col items-center gap-1.5 p-3 rounded-xl transition-colors"
+                          className="flex flex-col items-center gap-1.5 p-3 rounded-md transition-colors"
                           style={{
                             background: active
                               ? isPremium ? "var(--premium-light)" : "var(--accent-light)"

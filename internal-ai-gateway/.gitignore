@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+audit-logs/
+kiro-workspaces/
+data/
