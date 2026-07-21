@@ -18,7 +18,12 @@ export function CampaignList({ facebookPageId }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [acting, setActing] = useState<string | null>(null);
-  const [editBudget, setEditBudget] = useState<{ id: string; value: string } | null>(null);
+  const [editBudget, setEditBudget] = useState<{
+    campaignId: string;
+    targetId: string;
+    targetType: "campaign" | "adset";
+    value: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,7 +42,7 @@ export function CampaignList({ facebookPageId }: Props) {
   const toggleStatus = async (c: Campaign) => {
     setActing(c.id);
     try {
-      await fetch("/api/facebook-ads", {
+      const response = await fetch("/api/facebook-ads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -46,24 +51,36 @@ export function CampaignList({ facebookPageId }: Props) {
           facebookPageId,
         }),
       });
+      const result = await response.json();
+      if (!result.success) {
+        setError(result.error ?? "Không thể cập nhật Campaign");
+        return;
+      }
       await load();
     } finally { setActing(null); }
   };
 
   const saveBudget = async () => {
     if (!editBudget) return;
-    setActing(editBudget.id);
+    setActing(editBudget.campaignId);
     try {
-      await fetch("/api/facebook-ads", {
+      const response = await fetch("/api/facebook-ads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "update-budget",
-          campaignId: editBudget.id,
+          campaignId: editBudget.campaignId,
+          targetId: editBudget.targetId,
+          targetType: editBudget.targetType,
           dailyBudgetVnd: Number(editBudget.value.replace(/\D/g, "")),
           facebookPageId,
         }),
       });
+      const result = await response.json();
+      if (!result.success) {
+        setError(result.error ?? "Không thể cập nhật ngân sách");
+        return;
+      }
       setEditBudget(null);
       await load();
     } finally { setActing(null); }
@@ -129,18 +146,18 @@ export function CampaignList({ facebookPageId }: Props) {
                       <StatusBadge status={c.status === "ACTIVE" ? "published" : "draft"} />
                     </td>
                     <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>
-                      {editBudget?.id === c.id ? (
+                      {editBudget?.campaignId === c.id ? (
                         <div className="flex items-center gap-1">
                           <input
                             className="w-24 px-2 py-1 rounded border text-xs"
                             style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
                             value={editBudget.value}
-                            onChange={(e) => setEditBudget({ id: c.id, value: e.target.value })}
+                            onChange={(e) => setEditBudget((current) => current ? { ...current, value: e.target.value } : null)}
                           />
                           <button onClick={saveBudget} disabled={acting === c.id}><CheckCircle size={14} style={{ color: "var(--accent)" }} /></button>
                         </div>
                       ) : (
-                        <span>{fmtVnd(c.dailyBudget)}</span>
+                        <span>{fmtVnd(c.budgetTarget?.dailyBudget)}</span>
                       )}
                     </td>
                     <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{fmtVnd(c.spend)}</td>
@@ -158,9 +175,15 @@ export function CampaignList({ facebookPageId }: Props) {
                           {c.status === "ACTIVE" ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
                         </button>
                         <button
-                          onClick={() => setEditBudget({ id: c.id, value: c.dailyBudget ?? "" })}
-                          title="Sửa ngân sách"
-                          style={{ color: "var(--text-muted)" }}
+                          onClick={() => c.budgetTarget && setEditBudget({
+                            campaignId: c.id,
+                            targetId: c.budgetTarget.id,
+                            targetType: c.budgetTarget.type,
+                            value: c.budgetTarget.dailyBudget,
+                          })}
+                          disabled={!c.budgetTarget}
+                          title={c.budgetIssue ?? "Sửa ngân sách"}
+                          style={{ color: c.budgetTarget ? "var(--text-muted)" : "var(--border)" }}
                         >
                           <PencilSimple size={14} />
                         </button>

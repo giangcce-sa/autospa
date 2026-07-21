@@ -4,6 +4,7 @@ import { generateContent } from "@/lib/claude";
 import { replyToFbComment, replyToFbConversation } from "@/lib/facebook";
 import { getOrCreateConversation, processIncomingMessage, executeHandoff } from "@/lib/lead-agent";
 import { matchMessageRule } from "@/lib/message-rules";
+import { verifyWebhookSignature } from "@/lib/webhook-security";
 
 // Facebook webhook verification (GET)
 export async function GET(req: NextRequest) {
@@ -21,11 +22,21 @@ export async function GET(req: NextRequest) {
 
 // Facebook webhook events (POST)
 export async function POST(req: NextRequest) {
+  const rawBody = Buffer.from(await req.arrayBuffer());
+  const signature = verifyWebhookSignature({
+    rawBody,
+    signature: req.headers.get("x-hub-signature-256"),
+    secret: process.env.FACEBOOK_APP_SECRET,
+  });
+  if (!signature.allowed) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    body = JSON.parse(rawBody.toString("utf8"));
   } catch {
-    return NextResponse.json({ status: "ok" });
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   if (body.object !== "page") return NextResponse.json({ status: "ok" });
@@ -34,25 +45,23 @@ export async function POST(req: NextRequest) {
   if (settings?.webhookMode !== "auto") return NextResponse.json({ status: "ok" });
 
   for (const entry of (body.entry as Record<string, unknown>[]) ?? []) {
-    // Look up which FacebookPage this entry belongs to
     const entryPageId = entry.id as string | undefined;
     const fbPage = entryPageId
-      ? await prisma.facebookPage.findFirst({ where: { fbPageId: entryPageId } })
+      ? await prisma.facebookPage.findFirst({ where: { fbPageId: entryPageId, isActive: true } })
       : null;
+    if (!fbPage) continue;
 
-    // Comments via feed webhook
     for (const change of (entry.changes as Record<string, unknown>[]) ?? []) {
       const val = change.value as Record<string, unknown>;
       if (change.field === "feed" && val?.item === "comment" && val?.verb === "add") {
-        await handleComment(val, settings, fbPage?.id).catch(console.error);
+        await handleComment(val, settings, fbPage.id).catch(console.error);
       }
     }
 
-    // Messages via messaging webhook
     for (const msg of (entry.messaging as Record<string, unknown>[]) ?? []) {
       const message = msg.message as Record<string, unknown> | undefined;
       if (message?.text && !message?.is_echo) {
-        await handleMessage(msg, settings, fbPage?.id).catch(console.error);
+        await handleMessage(msg, settings, fbPage.id).catch(console.error);
       }
     }
   }
@@ -63,7 +72,7 @@ export async function POST(req: NextRequest) {
 async function handleComment(
   val: Record<string, unknown>,
   settings: { autoReplyComments: boolean } | null,
-  facebookPageId?: string
+  facebookPageId: string
 ) {
   const fbCommentId = val.comment_id as string | undefined;
   const fbPostId = (val.post_id as string | undefined) ?? "";
@@ -76,7 +85,7 @@ async function handleComment(
   const exists = await prisma.postComment.findFirst({ where: { fbCommentId } });
   if (exists) return;
 
-  let post = await prisma.post.findFirst({ where: { fbPostId } });
+  let post = await prisma.post.findFirst({ where: { fbPostId, facebookPageId } });
   if (!post) {
     post = await prisma.post.create({
       data: {
@@ -86,7 +95,7 @@ async function handleComment(
         tone: "friendly",
         status: "published",
         fbPostId,
-        facebookPageId: facebookPageId ?? null,
+        facebookPageId,
         publishedAt: createdTime,
       },
     });
@@ -102,47 +111,45 @@ async function handleComment(
   const rules = await prisma.commentRule.findMany({ where: { isActive: true } });
   const matchedRule = rules.find((r: { trigger: string; reply: string }) => lower.includes(r.trigger.toLowerCase()));
   const autoReply = matchedRule?.reply ?? null;
-  let isReplied = false;
-
-  if (settings?.autoReplyComments && autoReply) {
-    try {
-      await replyToFbComment(fbCommentId, autoReply, facebookPageId);
-      isReplied = true;
-    } catch {
-      // send failed, still save comment
-    }
-  }
-
-  await prisma.postComment.create({
+  const comment = await prisma.postComment.create({
     data: {
       postId: post.id,
       fbCommentId,
-      facebookPageId: facebookPageId ?? null,
+      facebookPageId,
       authorName: from?.name ?? "Khách hàng",
       content,
       sentiment,
       autoReply,
-      isReplied,
       isAlert: sentiment === "negative",
       createdAt: createdTime,
     },
   });
+
+  if (settings?.autoReplyComments && autoReply) {
+    try {
+      await replyToFbComment(fbCommentId, autoReply, facebookPageId);
+      await prisma.postComment.update({ where: { id: comment.id }, data: { isReplied: true } });
+    } catch {
+      // send failed, comment remains unreplied
+    }
+  }
 }
 
 async function handleMessage(
   msg: Record<string, unknown>,
   settings: { autoReplyMessages: boolean; automationLevel?: string; leadHandoffMode?: string; zaloApprovalRecipient?: string | null } | null,
-  facebookPageId?: string
+  facebookPageId: string
 ) {
   const sender = msg.sender as { id?: string } | undefined;
   const message = msg.message as { text?: string; mid?: string } | undefined;
   const timestamp = msg.timestamp as number | undefined;
   const senderId = sender?.id ?? "";
   const text = message?.text ?? "";
+  const fbMessageId = message?.mid ?? "";
 
-  if (!senderId || !text) return;
+  if (!senderId || !text || !fbMessageId) return;
 
-  const exists = await prisma.inboxMessage.findFirst({ where: { senderId, message: text } });
+  const exists = await prisma.inboxMessage.findUnique({ where: { fbMessageId } });
   if (exists) return;
 
   const inboxMsg = await prisma.inboxMessage.create({
@@ -150,7 +157,8 @@ async function handleMessage(
       senderId,
       senderName: "Khách hàng Facebook",
       message: text,
-      facebookPageId: facebookPageId ?? null,
+      fbMessageId,
+      facebookPageId,
       createdAt: timestamp ? new Date(timestamp) : new Date(),
     },
   });

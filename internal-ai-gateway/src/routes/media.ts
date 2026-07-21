@@ -54,6 +54,12 @@ const visionSchema = z
     prompt: z.string().min(1),
     image_url: z.string().url().optional(),
     image_base64: z.string().min(1).optional(),
+    reference_images: z.array(z.object({
+      image_url: z.string().url().optional(),
+      image_base64: z.string().min(1).optional()
+    }).refine((item) => Boolean(item.image_url || item.image_base64), {
+      message: "Reference image requires image_url or image_base64"
+    })).max(4).optional(),
     max_tokens: z.number().int().positive().optional(),
     metadata: z.record(z.string(), z.unknown()).optional()
   })
@@ -297,6 +303,9 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
     try {
       const body = visionSchema.parse(request.body);
       assertBase64Allowed(body.image_base64, "image_base64");
+      for (const [index, reference] of (body.reference_images ?? []).entries()) {
+        assertBase64Allowed(reference.image_base64, `reference_images[${index}].image_base64`);
+      }
       if (body.model !== "auto") assertModelAllowed(context.policy, body.model);
       assertTaskAllowed(context.policy, "vision");
       assertInputSizeAllowed(context.policy, [{ role: "user", content: body.prompt }]);
@@ -316,6 +325,7 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
         prompt: body.prompt,
         imageUrl: body.image_url,
         imageBase64: body.image_base64,
+        referenceImages: body.reference_images,
         maxTokens: body.max_tokens,
         metadata: body.metadata
       });

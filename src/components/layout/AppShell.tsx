@@ -6,9 +6,8 @@ import { Header } from "./Header";
 import { MobileNav } from "./MobileNav";
 import { PageWrapper } from "./PageWrapper";
 import { CommandPalette } from "./CommandPalette";
-import { QuickCompose } from "./QuickCompose";
 
-const AUTH_ROUTES = ["/login", "/setup"];
+const AUTH_ROUTES = ["/login", "/setup", "/ui-demo"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -29,7 +28,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <MobileNav />
       <CommandPalette />
-      <QuickCompose />
     </>
   );
 }

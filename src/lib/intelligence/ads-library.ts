@@ -24,9 +24,10 @@ async function fetchAdsForKeyword(keyword: string, token: string, limit = 25): P
   url.searchParams.set("search_terms", keyword);
   url.searchParams.set("fields", "id,ad_creative_bodies,page_name,ad_delivery_start_time");
   url.searchParams.set("limit", String(limit));
-  url.searchParams.set("access_token", token);
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
   return (data.data ?? []) as AdsLibraryEntry[];

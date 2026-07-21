@@ -1,3 +1,7 @@
+# AutoSpa
+
+Marketing automation và AI operations cho spa. Xem tài liệu [AI Video Studio](docs/AI_VIDEO_STUDIO.md) cho module tạo video, voice, lip-sync và học từ video thật.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

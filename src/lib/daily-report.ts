@@ -27,8 +27,16 @@ export async function buildDailyReport(): Promise<string> {
   // Ads insights (best effort)
   let adsLine = "Chưa cấu hình";
   try {
-    const insights = await getInsights(undefined, "today");
-    adsLine = `Chi: ${fmtVnd(Number(insights.spend))} | CTR: ${(Number(insights.ctr) * 100).toFixed(1)}% | ROAS: ${insights.spend !== "0" ? (Number(insights.spend) > 0 ? "—" : "N/A") : "N/A"}`;
+    const pages = await prisma.facebookPage.findMany({
+      where: { isActive: true, adAccountId: { not: null } },
+      select: { id: true },
+    });
+    const insights = await Promise.all(pages.map((page) => getInsights(page.id, "today")));
+    const spend = insights.reduce((sum, item) => sum + Number(item.spend), 0);
+    const impressions = insights.reduce((sum, item) => sum + Number(item.impressions), 0);
+    const clicks = insights.reduce((sum, item) => sum + Number(item.clicks), 0);
+    const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+    if (insights.length) adsLine = `Chi: ${fmtVnd(spend)} | CTR: ${ctr.toFixed(1)}% | ROAS: ${spend > 0 ? "—" : "N/A"}`;
   } catch { /* no ad account configured */ }
 
   // Spa revenue (best effort)

@@ -61,6 +61,17 @@ interface FbPage {
   isActive: boolean;
   adAccountId: string | null;
   accessTokenHint: string;
+  adsReadiness: {
+    status: string;
+    error: string | null;
+    checkedAt: string | null;
+    tokenExpiresAt: string | null;
+    dataAccessExpiresAt: string | null;
+    missingPermissions: string[];
+    accountStatus: number | null;
+    currency: string | null;
+    timezone: string | null;
+  };
 }
 
 type TestStatus = { status: "idle" | "loading" | "ok" | "fail"; message: string };
@@ -147,6 +158,7 @@ export function SettingsForm() {
   const [editingPage, setEditingPage] = useState<string | null>(null);
   const [editPageForm, setEditPageForm] = useState({ pageName: "", accessToken: "", adAccountId: "" });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [checkingReadiness, setCheckingReadiness] = useState<string | null>(null);
 
   const loadFbPages = () =>
     fetch("/api/facebook-pages").then((r) => r.json()).then((res) => {
@@ -250,6 +262,20 @@ export function SettingsForm() {
   const deleteFbPage = async (id: string) => {
     await fetch(`/api/facebook-pages?id=${id}`, { method: "DELETE" });
     loadFbPages();
+  };
+
+  const checkAdsReadiness = async (id: string) => {
+    setCheckingReadiness(id);
+    try {
+      await fetch("/api/facebook-pages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "check-ads-readiness", id }),
+      });
+      await loadFbPages();
+    } finally {
+      setCheckingReadiness(null);
+    }
   };
 
   const openEditPage = (p: FbPage) => {
@@ -522,13 +548,29 @@ export function SettingsForm() {
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-medium truncate" style={{ color: "var(--text)" }}>{p.pageName}</p>
                             <Badge variant={p.isActive ? "success" : "neutral"}>{p.isActive ? "Bật" : "Tắt"}</Badge>
-                            {p.adAccountId && <Badge variant="info">Ads</Badge>}
+                            {p.adAccountId && (
+                              <Badge variant={p.adsReadiness.status === "ready" ? "success" : p.adsReadiness.status === "blocked" ? "danger" : "info"}>
+                                {p.adsReadiness.status === "ready" ? "Ads sẵn sàng" : p.adsReadiness.status === "blocked" ? "Ads bị khóa" : "Ads chưa kiểm tra"}
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>
                             ID: {p.fbPageId} · Token: {p.accessTokenHint}
                           </p>
+                          {p.adAccountId && (
+                            <p className="text-[10px] mt-1" style={{ color: p.adsReadiness.status === "ready" ? "var(--accent)" : "var(--amber)" }}>
+                              {p.adsReadiness.status === "ready"
+                                ? `Ad Account ${p.adAccountId} · ${p.adsReadiness.currency ?? "—"} · ${p.adsReadiness.timezone ?? "—"}`
+                                : p.adsReadiness.error ?? "Cần chạy kiểm tra readiness trước khi Ads write."}
+                            </p>
+                          )}
                         </div>
                         <div className="flex gap-1 shrink-0">
+                          {p.adAccountId && (
+                            <Button size="sm" variant="secondary" loading={checkingReadiness === p.id} onClick={() => checkAdsReadiness(p.id)}>
+                              Kiểm tra Ads
+                            </Button>
+                          )}
                           <Button size="sm" variant="secondary" onClick={() => isEditing ? setEditingPage(null) : openEditPage(p)}>
                             {isEditing ? <X size={11} /> : <PencilSimple size={11} />}
                             {isEditing ? "Hủy" : "Sửa"}

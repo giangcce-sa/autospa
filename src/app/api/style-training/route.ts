@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 async function fetchFbPosts(pageId: string, token: string, limit = 20) {
   const fields = "message,created_time,likes.summary(true),comments.summary(true),shares";
-  const url = `https://graph.facebook.com/v21.0/${pageId}/posts?fields=${fields}&limit=${limit}&access_token=${token}`;
-  const res = await fetch(url);
+  const url = `https://graph.facebook.com/v21.0/${pageId}/posts?fields=${fields}&limit=${limit}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
   return (data.data ?? []) as Array<{

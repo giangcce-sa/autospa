@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { findApprovalByCode } from "@/lib/approval-gate";
 import { executeApproval } from "@/lib/approval-executor";
 import { getOrCreateConversation, processIncomingMessage, executeHandoff } from "@/lib/lead-agent";
 import { postToZalo } from "@/lib/zalo";
 import { matchMessageRule } from "@/lib/message-rules";
+import { verifyWebhookSignature } from "@/lib/webhook-security";
 
 // Zalo OA webhook verification
 export async function GET(req: NextRequest) {
@@ -20,17 +20,17 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
-  const webhookSecret = process.env.ZALO_WEBHOOK_SECRET;
-  if (webhookSecret) {
-    const received = (req.headers.get("x-zalo-signature") ?? "").replace(/^sha256=/, "");
-    const expected = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
-    const valid = received.length === expected.length
-      && timingSafeEqual(Buffer.from(received), Buffer.from(expected));
-    if (!valid) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  const signature = verifyWebhookSignature({
+    rawBody,
+    signature: req.headers.get("x-zalo-signature"),
+    secret: process.env.ZALO_WEBHOOK_SECRET,
+  });
+  if (!signature.allowed) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   let body: Record<string, unknown>;
-  try { body = JSON.parse(rawBody); } catch { return NextResponse.json({ status: "ok" }); }
+  try { body = JSON.parse(rawBody); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
   const eventName = body.event_name as string | undefined;
   if (eventName !== "user_send_text") return NextResponse.json({ status: "ok" });

@@ -49,3 +49,4 @@ next-env.d.ts
 # user-uploaded media
 /public/uploads/*
 !/public/uploads/.gitkeep
+/.data/

@@ -10,6 +10,7 @@ export interface OverlayOptions {
   showLogo?: boolean;        // overlay spa logo top-right
   position?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
   logoSizePct?: number;      // logo as % of image width, default 12
+  brand?: { logoUrl?: string | null; accentColor?: string | null } | null;
 }
 
 async function fetchAsBuffer(url: string): Promise<Buffer> {
@@ -113,7 +114,7 @@ function buildCaptionSvg(opts: OverlayOptions, imgWidth: number, imgHeight: numb
  */
 export async function applyOverlay(imageUrl: string, opts: OverlayOptions = {}): Promise<string> {
   try {
-    const brand = await prisma.brandKit.findFirst();
+    const brand = opts.brand === undefined ? await prisma.brandKit.findFirst() : opts.brand;
     const accent = brand?.accentColor ?? "#40c074";
     const showLogo = opts.showLogo !== false;       // default true if logo exists
     const position = opts.position ?? "top-right";

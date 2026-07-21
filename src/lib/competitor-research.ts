@@ -16,8 +16,8 @@ interface RawFbPost {
  */
 async function fetchPublicPagePosts(fbPageId: string, accessToken: string, limit = 15): Promise<RawFbPost[]> {
   const fields = "id,message,created_time,likes.summary(true),comments.summary(true),shares";
-  const url = `https://graph.facebook.com/v21.0/${fbPageId}/posts?fields=${fields}&limit=${limit}&access_token=${accessToken}`;
-  const res = await fetch(url);
+  const url = `https://graph.facebook.com/v21.0/${fbPageId}/posts?fields=${fields}&limit=${limit}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
   return (data.data ?? []) as RawFbPost[];

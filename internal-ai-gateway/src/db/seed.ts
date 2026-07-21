@@ -168,7 +168,7 @@ export function seedDatabase(db: DatabaseSync): void {
     scopeType: "client",
     scopeId: "cli_ai_spa",
     allowedModels: ["auto", "gpt-4.1-mini", "claude-sonnet", "cheap-chat", "spa-assistant", "cx/gpt-5.5", "cx/gpt-5.4", "cx/gpt-5.4-mini"],
-    allowedTaskTypes: ["chat", "spa-chat", "image-generation", "vision"],
+    allowedTaskTypes: ["chat", "spa-chat", "image-generation", "image-edit", "vision"],
     rateLimitPerMinute: 120,
     maxInputCharacters: 30_000,
     allowTools: false,
@@ -181,6 +181,6 @@ export function seedDatabase(db: DatabaseSync): void {
   });
   appendPolicyValues(db, "pol_ai_spa_client", {
     allowedModels: ["auto", "cx/gpt-5.5", "cx/gpt-5.4", "cx/gpt-5.4-mini"],
-    allowedTaskTypes: ["chat", "spa-chat", "image-generation", "vision"]
+    allowedTaskTypes: ["chat", "spa-chat", "image-generation", "image-edit", "vision"]
   });
 }

@@ -222,7 +222,7 @@ export function buildImagePrompt(input: ImagePromptInput): ImagePromptResult {
     `Palette: ${paletteText(input.brand, profile)}`,
     input.brand?.spaName ? `Brand feel: ${input.brand.spaName}${input.brand.tagline ? `, ${input.brand.tagline}` : ""}` : "",
     input.referenceDesc ? `Reference direction: ${compactText(input.referenceDesc, 220)}` : "",
-    staff?.referenceImageUrl ? `Approved staff reference image URL for identity/style context: ${staff.referenceImageUrl}` : "",
+    staff?.referenceImageUrl ? `Approved staff reference images are attached separately (${staff.sampleCount ?? 1} sample${(staff.sampleCount ?? 1) > 1 ? "s" : ""}); preserve identity according to the selected reference mode` : "",
     staff?.usageNotes ? `Staff usage rule: ${compactText(staff.usageNotes, 260)}` : "",
     profile?.promptRules ? `Learned visual preference: ${compactText(profile.promptRules, 360)}` : "",
   ].filter(Boolean).join(". ");

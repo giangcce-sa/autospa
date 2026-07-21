@@ -348,7 +348,7 @@ function SkillsList({
 
       <div className="space-y-3">
         {skills.length === 0 ? (
-          <Card><p className="text-sm" style={{ color: "var(--text-muted)" }}>Chưa có skill phù hợp filter.</p></Card>
+          <Card><p className="text-sm" style={{ color: "var(--text-muted)" }}>Không có kỹ năng nào phù hợp với bộ lọc.</p></Card>
         ) : skills.map((skill) => (
           <Card key={skill.id}>
             <div className="flex flex-col lg:flex-row lg:items-start gap-4">

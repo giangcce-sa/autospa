@@ -1,5 +1,6 @@
 .git
 .next
+.data
 .vercel
 node_modules
 dev.db

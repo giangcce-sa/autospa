@@ -1,11 +1,12 @@
 import { prisma } from "./db";
+import { assertSafeAiProviderUrl } from "./provider-url-security";
 
 async function getSettings() {
   const settings = await prisma.settings.findFirst();
   if (!settings?.openaiApiKey) throw new Error("Chưa cấu hình OpenAI API Key");
   return {
     apiKey: settings.openaiApiKey,
-    baseURL: (settings.openaiBaseUrl || "https://api.openai.com/v1").replace(/\/$/, ""),
+    baseURL: await assertSafeAiProviderUrl((settings.openaiBaseUrl || "https://api.openai.com/v1").replace(/\/$/, ""), "openai"),
     model: settings.imageModel || "dall-e-3",
     chatModel: settings.openaiChatModel || "gpt-5",
   };
@@ -39,6 +40,7 @@ export async function generateChatCompletion(prompt: string, systemPrompt: strin
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(180_000),
   });
 
   if (!res.ok) {
@@ -77,7 +79,29 @@ const FORMAT_PROMPT_SUFFIX: Record<ImageFormat, string> = {
   zalo: "centered subject with safe margins, suitable for caption overlay above and below",
 };
 
+export interface ImageReferenceInput {
+  imageBase64?: string;
+  imageUrl?: string;
+  weight?: number;
+}
+
+export interface GenerateImageOptions {
+  count?: number;
+  references?: ImageReferenceInput[];
+  referenceMode?: "identity" | "appearance" | "style";
+  referenceStrength?: number;
+}
+
 export async function generateImage(prompt: string, format: ImageFormat = "feed"): Promise<string> {
+  const images = await generateImages(prompt, format);
+  return images[0];
+}
+
+export async function generateImages(
+  prompt: string,
+  format: ImageFormat = "feed",
+  options: GenerateImageOptions = {},
+): Promise<string[]> {
   const { apiKey, baseURL, model } = await getSettings();
 
   const isStandard = STANDARD_MODELS.includes(model);
@@ -85,7 +109,23 @@ export async function generateImage(prompt: string, format: ImageFormat = "feed"
   const suffix = FORMAT_PROMPT_SUFFIX[format];
   const finalPrompt = suffix ? `${prompt}. ${suffix}` : prompt;
 
-  const body: Record<string, unknown> = { model, prompt: finalPrompt, n: 1 };
+  const references = (options.references ?? []).slice(0, 4);
+  if (isStandard && references.length) {
+    throw new Error(`${model} không hỗ trợ ảnh nhân viên tham chiếu; hãy chọn model image-edit qua AI Gateway`);
+  }
+  const body: Record<string, unknown> = {
+    model,
+    prompt: finalPrompt,
+    n: Math.min(Math.max(options.count ?? 1, 1), 4),
+    task_type: references.length ? "image-edit" : undefined,
+    reference_mode: references.length ? options.referenceMode ?? "identity" : undefined,
+    reference_strength: references.length ? Math.min(Math.max(options.referenceStrength ?? 0.82, 0), 1) : undefined,
+    reference_images: references.length ? references.map((item) => ({
+      image_base64: item.imageBase64,
+      image_url: item.imageUrl,
+      weight: item.weight,
+    })) : undefined,
+  };
   if (isStandard) {
     body.size = size;
     body.quality = "standard";
@@ -107,6 +147,7 @@ export async function generateImage(prompt: string, format: ImageFormat = "feed"
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(180_000),
   });
 
   if (!res.ok) {
@@ -115,13 +156,11 @@ export async function generateImage(prompt: string, format: ImageFormat = "feed"
   }
 
   const data = await res.json();
-  const item = data.data?.[0];
-  const url = item?.url;
-  if (url) return url;
-
-  // Some providers return b64_json instead of url
-  const b64 = item?.b64_json;
-  if (b64) return `data:image/png;base64,${b64}`;
-
+  const images = (data.data ?? []).flatMap((item: { url?: string; b64_json?: string }) => {
+    if (item.url) return [item.url];
+    if (item.b64_json) return [`data:image/png;base64,${item.b64_json}`];
+    return [];
+  });
+  if (images.length) return images;
   throw new Error("Không tạo được hình ảnh — API không trả về url hoặc b64_json");
 }

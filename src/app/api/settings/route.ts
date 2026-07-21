@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/db";
+import { logActivity } from "@/lib/activity-log";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { assertSafeAiProviderUrl, ProviderUrlError, sameProviderOrigin } from "@/lib/provider-url-security";
 import { NextRequest, NextResponse } from "next/server";
 
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
@@ -10,7 +13,7 @@ function normalizeBaseUrl(url: string) {
 }
 
 function isAnthropicBaseUrl(url: string) {
-  return normalizeBaseUrl(url).includes("anthropic.com");
+  return new URL(url).hostname.toLowerCase() === "api.anthropic.com";
 }
 
 function boundedNumber(value: unknown, min: number, max: number, field: string) {
@@ -31,6 +34,9 @@ function safeSettings(settings: NonNullable<Awaited<ReturnType<typeof prisma.set
     spaWebhookSecret: settings.spaWebhookSecret ? "••••••••" + settings.spaWebhookSecret.slice(-4) : null,
     telegramBotToken: settings.telegramBotToken ? "••••••••" + settings.telegramBotToken.slice(-4) : null,
     telegramWebhookSecret: settings.telegramWebhookSecret ? "••••••••" : null,
+    runwayApiKey: settings.runwayApiKey ? "••••••••" : null,
+    elevenLabsApiKey: settings.elevenLabsApiKey ? "••••••••" : null,
+    syncLabsApiKey: settings.syncLabsApiKey ? "••••••••" : null,
     hasSpaApiKey: !!settings.spaApiKey,
     hasSpaWebhookSecret: !!settings.spaWebhookSecret,
     hasTelegramBotToken: !!settings.telegramBotToken,
@@ -39,17 +45,21 @@ function safeSettings(settings: NonNullable<Awaited<ReturnType<typeof prisma.set
 
 export async function GET() {
   try {
+    await requireUser({ owner: true });
     const settings = await prisma.settings.findFirst();
     if (!settings) return NextResponse.json({ data: null, success: true });
 
     return NextResponse.json({ data: safeSettings(settings), success: true });
-  } catch {
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
     return NextResponse.json({ error: "Lỗi khi tải cài đặt", success: false }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireUser({ owner: true });
     const body = await req.json();
     const { action } = body;
 
@@ -64,7 +74,12 @@ export async function POST(req: NextRequest) {
 
       if (service === "claude") {
         const key = resolveKey(apiKey, settings?.claudeApiKey);
-        const url = normalizeBaseUrl((baseUrl && !baseUrl.includes("••")) ? baseUrl : (settings?.claudeBaseUrl || ANTHROPIC_BASE_URL));
+        const savedUrl = normalizeBaseUrl(settings?.claudeBaseUrl || ANTHROPIC_BASE_URL);
+        const requestedUrl = normalizeBaseUrl((baseUrl && !baseUrl.includes("••")) ? baseUrl : savedUrl);
+        const url = await assertSafeAiProviderUrl(requestedUrl, "claude");
+        if ((!apiKey || apiKey.includes("••")) && !sameProviderOrigin(url, savedUrl)) {
+          return NextResponse.json({ success: false, message: "Khi đổi gateway, bạn phải nhập lại khóa truy cập" }, { status: 400 });
+        }
         if (!key) return NextResponse.json({ success: false, message: "Chưa có API key — nhập key rồi test" });
         try {
           const res = isAnthropicBaseUrl(url)
@@ -92,9 +107,14 @@ export async function POST(req: NextRequest) {
 
       if (service === "openai") {
         const key = resolveKey(apiKey, settings?.openaiApiKey);
-        const oBaseUrl = (body.openaiBaseUrl && !body.openaiBaseUrl.includes("••"))
+        const savedOpenAiUrl = settings?.openaiBaseUrl || "https://api.openai.com/v1";
+        const requestedOpenAiUrl = (body.openaiBaseUrl && !body.openaiBaseUrl.includes("••"))
           ? body.openaiBaseUrl
-          : (settings?.openaiBaseUrl || "https://api.openai.com/v1");
+          : savedOpenAiUrl;
+        const oBaseUrl = await assertSafeAiProviderUrl(requestedOpenAiUrl, "openai");
+        if ((!apiKey || apiKey.includes("••")) && !sameProviderOrigin(oBaseUrl, savedOpenAiUrl)) {
+          return NextResponse.json({ success: false, message: "Khi đổi gateway, bạn phải nhập lại khóa truy cập" }, { status: 400 });
+        }
         const model = settings?.openaiChatModel || "auto";
         if (!key) return NextResponse.json({ success: false, message: "Chưa có API key — nhập key rồi test" });
         try {
@@ -147,8 +167,21 @@ export async function POST(req: NextRequest) {
     if (zaloToken?.trim()) updateData.zaloToken = zaloToken.trim();
     if (body.spaApiKey?.trim()) updateData.spaApiKey = body.spaApiKey.trim();
     // Non-secret fields: always update
-    if (claudeBaseUrl) updateData.claudeBaseUrl = claudeBaseUrl;
-    if (openaiBaseUrl) updateData.openaiBaseUrl = openaiBaseUrl;
+    const currentSettings = await prisma.settings.findFirst();
+    if (claudeBaseUrl) {
+      const safeUrl = await assertSafeAiProviderUrl(claudeBaseUrl, "claude");
+      if (currentSettings?.claudeApiKey && !claudeApiKey?.trim() && !sameProviderOrigin(safeUrl, currentSettings.claudeBaseUrl)) {
+        return NextResponse.json({ error: "Khi đổi gateway Claude, bạn phải nhập lại khóa truy cập", success: false }, { status: 400 });
+      }
+      updateData.claudeBaseUrl = safeUrl;
+    }
+    if (openaiBaseUrl) {
+      const safeUrl = await assertSafeAiProviderUrl(openaiBaseUrl, "openai");
+      if (currentSettings?.openaiApiKey && !openaiApiKey?.trim() && !sameProviderOrigin(safeUrl, currentSettings.openaiBaseUrl)) {
+        return NextResponse.json({ error: "Khi đổi gateway OpenAI, bạn phải nhập lại khóa truy cập", success: false }, { status: 400 });
+      }
+      updateData.openaiBaseUrl = safeUrl;
+    }
     if (imageModel) updateData.imageModel = imageModel;
     if (body.openaiChatModel) updateData.openaiChatModel = body.openaiChatModel;
     if (zaloOaId !== undefined) updateData.zaloOaId = zaloOaId;
@@ -191,12 +224,24 @@ export async function POST(req: NextRequest) {
       create: { id: "1", ...updateData },
     });
 
+    await logActivity({
+      type: "settings_change",
+      title: "Đã cập nhật cấu hình hệ thống",
+      detail: `Thay đổi ${Object.keys(updateData).length} trường cấu hình`,
+      href: "/settings",
+      severity: "info",
+      source: "settings_api",
+      metadata: { userId: user.id, fields: Object.keys(updateData).filter((key) => !key.toLowerCase().includes("key") && !key.toLowerCase().includes("secret") && !key.toLowerCase().includes("token")) },
+    }).catch(() => null);
+
     return NextResponse.json({
       data: safeSettings(settings),
       success: true,
     });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: msg, success: false }, { status: e instanceof RangeError ? 400 : 500 });
+    return NextResponse.json({ error: msg, success: false }, { status: e instanceof RangeError || e instanceof ProviderUrlError ? 400 : 500 });
   }
 }

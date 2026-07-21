@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/db";
+import { assertAdsReadiness } from "@/lib/ads-readiness";
+import { enforceAdsMutation } from "@/lib/ads-safety";
 import { setCampaignStatus, updateAdsBudget } from "@/lib/facebook-ads";
 
 type Decision = "approved" | "rejected";
@@ -28,22 +30,36 @@ export async function executeApproval(id: string, decision: Decision) {
     return { status: "approved" as const };
   }
 
+  const payload = JSON.parse(approval.payload) as Record<string, unknown>;
+  if (approval.type === "pause_campaign" || approval.type === "budget_increase") {
+    const facebookPageId = payload.facebookPageId ? String(payload.facebookPageId) : undefined;
+    const adAccountId = payload.adAccountId ? String(payload.adAccountId) : undefined;
+    await enforceAdsMutation({
+      operation: approval.type,
+      facebookPageId,
+      adAccountId,
+      minimumMode: "semi",
+    });
+    await assertAdsReadiness(facebookPageId, adAccountId);
+  }
+
   const claimed = await prisma.pendingApproval.updateMany({
     where: { id, status: "pending" },
     data: { status: "executing", decidedAt: new Date(), executionError: null },
   });
   if (claimed.count !== 1) throw new Error("Approval đang được xử lý");
 
-  const payload = JSON.parse(approval.payload) as Record<string, unknown>;
   try {
     if (approval.type === "pause_campaign") {
       await setCampaignStatus(String(payload.campaignId), "PAUSED", payload.facebookPageId ? String(payload.facebookPageId) : undefined);
     } else if (approval.type === "budget_increase") {
-      await updateAdsBudget(
-        String(payload.budgetTargetId ?? payload.campaignId),
-        Number(payload.newBudget),
-        payload.facebookPageId ? String(payload.facebookPageId) : undefined,
-      );
+      await updateAdsBudget({
+        campaignId: String(payload.campaignId),
+        targetId: String(payload.budgetTargetId),
+        targetType: String(payload.budgetTargetType) as "campaign" | "adset",
+        dailyBudgetVnd: Number(payload.newBudget),
+        facebookPageId: payload.facebookPageId ? String(payload.facebookPageId) : undefined,
+      });
     } else if (approval.type === "flash_deal") {
       const { postFlashDeal } = await import("@/lib/flash-deal-engine");
       const posted = await postFlashDeal(String(payload.caption ?? ""));

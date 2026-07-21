@@ -6,6 +6,8 @@ const NEGATIVE_HINTS: Record<string, string[]> = {
   off_brand: ["follow brand colors more subtly", "avoid unrelated color palettes"],
   bad_layout: ["reserve clean safe areas for overlay", "avoid cluttered composition"],
   unsafe: ["avoid medical claims", "avoid literal before-after comparison"],
+  identity_mismatch: ["preserve staff face, age, hair and recognizable identity from attached references"],
+  bad_anatomy: ["prioritize correct hands, fingers, face symmetry and natural body anatomy"],
 };
 
 function safeParseArray(value?: string | null): string[] {
@@ -67,8 +69,18 @@ export async function rebuildVisualProfile(facebookPageId?: string | null) {
     take: 80,
   });
 
-  const approved = feedback.filter((item) => item.rating === "approved" || item.rating === "right_style");
-  const rejected = feedback.filter((item) => item.rating !== "approved" && item.rating !== "right_style");
+  const latestByGeneration = new Map<string, (typeof feedback)[number]>();
+  for (const item of feedback) {
+    if (!latestByGeneration.has(item.generationId)) latestByGeneration.set(item.generationId, item);
+  }
+  const trainingFeedback = [...latestByGeneration.values()].filter((item) => {
+    const ageDays = (Date.now() - item.createdAt.getTime()) / 86_400_000;
+    return ageDays <= 120;
+  });
+
+  const approvedRatings = new Set(["approved", "right_style", "identity_match"]);
+  const approved = trainingFeedback.filter((item) => approvedRatings.has(item.rating));
+  const rejected = trainingFeedback.filter((item) => !approvedRatings.has(item.rating));
   if (approved.length + rejected.length === 0) return null;
 
   const preferredPresets = topValues(approved.map((item) => item.generation.preset));
@@ -94,6 +106,8 @@ export async function rebuildVisualProfile(facebookPageId?: string | null) {
     approvedImages: approved.length,
     rejectedImages: rejected.length,
     confidence: Math.min((approved.length + rejected.length) / 12, 1),
+    trainingSamples: trainingFeedback.length,
+    lastTrainedAt: new Date(),
     autoApply: existing?.autoApply ?? true,
   };
 

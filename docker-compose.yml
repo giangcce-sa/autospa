@@ -17,12 +17,15 @@ services:
       - "3000"
     volumes:
       - autospa_uploads:/app/public/uploads
+      - autospa_media:/app/.data/media
     networks:
       - caddy
 
 volumes:
   autospa_uploads:
     name: autospa_uploads
+  autospa_media:
+    name: autospa_media
 
 networks:
   caddy:

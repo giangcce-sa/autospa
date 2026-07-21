@@ -196,6 +196,9 @@ describe("internal ai gateway", () => {
   });
 
   it("rate limits public landing tracking writes by IP", async () => {
+    const { getDb } = await import("../db/client.js");
+    const before = getDb().prepare("SELECT COUNT(*) AS total FROM landing_events").get() as { total: number };
+
     for (let i = 0; i < 35; i += 1) {
       const response = await app!.inject({
         method: "POST",
@@ -209,9 +212,8 @@ describe("internal ai gateway", () => {
       expect(response.statusCode).toBe(204);
     }
 
-    const { getDb } = await import("../db/client.js");
     const row = getDb().prepare("SELECT COUNT(*) AS total FROM landing_events").get() as { total: number };
-    expect(row.total).toBe(30);
+    expect(row.total - before.total).toBe(30);
   });
 
   it("lists configured gateway models", async () => {
@@ -975,6 +977,55 @@ describe("internal ai gateway", () => {
         })
       ])
     );
+  });
+
+  it("forwards staff reference images to the image provider", async () => {
+    const { upsertScannedModels } = await import("../db/repositories/model-registry.js");
+    upsertScannedModels("9router", [{ id: "test/reference-image-model", kind: "image" }]);
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body ?? "{}"));
+      expect(payload.task_type).toBe("image-edit");
+      expect(payload.reference_mode).toBe("identity");
+      expect(payload.reference_images).toEqual([
+        expect.objectContaining({ image_base64: "aGVsbG8=", weight: 1 })
+      ]);
+      return new Response(JSON.stringify({ data: [{ url: "https://images.test/staff.png" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await app!.inject({
+      method: "POST",
+      url: "/v1/images/generations",
+      headers: { "x-api-key": "gw_test_n8n_seed_secret" },
+      payload: {
+        model: "auto",
+        task_type: "image-generation",
+        prompt: "Vietnamese spa therapist",
+        reference_mode: "identity",
+        reference_strength: 0.85,
+        reference_images: [{ image_base64: "aGVsbG8=", weight: 1 }]
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data[0].url).toBe("https://images.test/staff.png");
+  });
+
+  it("reports image reference capabilities for authenticated clients", async () => {
+    const response = await app!.inject({
+      method: "GET",
+      url: "/v1/images/capabilities",
+      headers: { "x-api-key": "gw_test_n8n_seed_secret" }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual(expect.objectContaining({
+      reference_images: true,
+      max_reference_images: 4,
+      vision_quality_check: true
+    }));
   });
 
   it("routes embeddings through the scanned embedding model registry", async () => {

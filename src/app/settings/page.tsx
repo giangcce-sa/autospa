@@ -6,7 +6,7 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Cài đặt"
-        description="Cấu hình API keys và kết nối Facebook Page"
+        description="Quản lý khóa truy cập và kết nối Trang Facebook"
       />
       <SettingsForm />
     </>

@@ -52,9 +52,17 @@ export function FacebookAdsManager({ initialPostId }: Props) {
         )}
       </div>
 
-      {!selectedPage?.adAccountId && (
+      {!selectedPage?.adAccountId ? (
         <div className="text-xs p-3 rounded-lg" style={{ background: "var(--amber-light)", color: "var(--amber)" }}>
           <strong>Chưa cấu hình Ad Account ID.</strong> Vào <strong>Cài đặt → Facebook Pages</strong> để thêm Ad Account ID cho page này.
+        </div>
+      ) : selectedPage.adsReadiness?.status !== "ready" ? (
+        <div className="text-xs p-3 rounded-lg" style={{ background: "var(--amber-light)", color: "var(--amber)" }}>
+          <strong>Ads write đang bị khóa.</strong> {selectedPage.adsReadiness?.error ?? "Chưa chạy kiểm tra readiness trong Cài đặt → Facebook Pages."}
+        </div>
+      ) : (
+        <div className="text-xs p-3 rounded-lg" style={{ background: "var(--accent-light)", color: "var(--accent)" }}>
+          <strong>Ad Account đã sẵn sàng.</strong> Currency: {selectedPage.adsReadiness.currency ?? "VND"} · kiểm tra lúc {selectedPage.adsReadiness.checkedAt ? new Date(selectedPage.adsReadiness.checkedAt).toLocaleString("vi-VN") : "—"}.
         </div>
       )}
 

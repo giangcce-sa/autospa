@@ -7,13 +7,27 @@ datasource db {
 }
 
 model User {
-  id          String    @id @default(cuid())
-  email       String    @unique
+  id          String           @id @default(cuid())
+  email       String           @unique
   name        String?
   hashedPwd   String // bcrypt
-  role        String    @default("owner") // owner | viewer
+  role        String           @default("owner") // owner | viewer
   lastLoginAt DateTime?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime         @default(now())
+  pageAccess  UserPageAccess[]
+}
+
+model UserPageAccess {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facebookPageId String
+  facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id], onDelete: Cascade)
+  permission     String       @default("editor")
+  createdAt      DateTime     @default(now())
+
+  @@unique([userId, facebookPageId])
+  @@index([facebookPageId, permission])
 }
 
 model RateLimit {
@@ -26,68 +40,92 @@ model RateLimit {
 }
 
 model Settings {
-  id                     String   @id @default("1")
+  id                     String    @id @default("1")
   claudeApiKey           String?
-  claudeBaseUrl          String   @default("https://api.anthropic.com")
+  claudeBaseUrl          String    @default("https://api.anthropic.com")
   openaiApiKey           String?
-  openaiBaseUrl          String   @default("https://api.openai.com/v1")
-  imageModel             String   @default("dall-e-3")
-  openaiChatModel        String   @default("gpt-5") // chat completion model for AI Council
+  openaiBaseUrl          String    @default("https://api.openai.com/v1")
+  imageModel             String    @default("dall-e-3")
+  openaiChatModel        String    @default("gpt-5") // chat completion model for AI Council
   zaloToken              String?
   zaloOaId               String?
-  draftRetentionDays     Int      @default(30)
-  publishedRetentionDays Int      @default(90)
-  webhookVerifyToken     String   @default("")
-  webhookMode            String   @default("manual")
-  autoReplyComments      Boolean  @default(false)
-  autoReplyMessages      Boolean  @default(false)
+  draftRetentionDays     Int       @default(30)
+  publishedRetentionDays Int       @default(90)
+  webhookVerifyToken     String    @default("")
+  webhookMode            String    @default("manual")
+  autoReplyComments      Boolean   @default(false)
+  autoReplyMessages      Boolean   @default(false)
   // Spa Software Integration
   spaApiUrl              String?
   spaApiKey              String?
   spaWebhookSecret       String?
   // Lead Handoff
-  leadHandoffMode        String   @default("staff") // "link" | "api" | "staff"
+  leadHandoffMode        String    @default("staff") // "link" | "api" | "staff"
   leadHandoffLink        String?
   // Automation
-  automationLevel        String   @default("supervised") // "supervised" | "semi" | "full"
+  automationLevel        String    @default("supervised") // "supervised" | "semi" | "full"
   zaloApprovalRecipient  String?
   // Ads Optimization Thresholds
-  adsOptimizePauseCtr    Float    @default(0.5)
-  adsOptimizeScaleCtr    Float    @default(2.0)
-  adsOptimizeFreqLimit   Float    @default(3.0)
-  adsOptimizeScalePct    Int      @default(20)
-  adsOptimizeMinSpend    Int      @default(100000)
-  adsOptimizeMaxBudget   Int      @default(2000000)
-  adsOptimizeCooldownHrs Int      @default(24)
-  adsOptimizeMinRoas     Float    @default(1.5)
+  adsOptimizePauseCtr    Float     @default(0.5)
+  adsOptimizeScaleCtr    Float     @default(2.0)
+  adsOptimizeFreqLimit   Float     @default(3.0)
+  adsOptimizeScalePct    Int       @default(20)
+  adsOptimizeMinSpend    Int       @default(100000)
+  adsOptimizeMaxBudget   Int       @default(2000000)
+  adsOptimizeCooldownHrs Int       @default(24)
+  adsOptimizeMinRoas     Float     @default(1.5)
   // Telegram
   telegramBotToken       String?
   telegramChatId         String?
   telegramAdminUserId    String?
-  telegramAlerts         Boolean  @default(true)
+  telegramAlerts         Boolean   @default(true)
   telegramWebhookSecret  String?
   telegramWebhookUrl     String?
   telegramWebhookAt      DateTime?
-  weeklyReportEnabled    Boolean  @default(true)
-  weeklyReportDay        Int      @default(1)
-  weeklyReportHour       Int      @default(8)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  // AI Video Studio providers. Secrets are server-only and masked by the settings API.
+  runwayApiKey           String?
+  runwayBaseUrl          String    @default("https://api.dev.runwayml.com")
+  runwayVideoModel       String    @default("gen4.5")
+  elevenLabsApiKey       String?
+  elevenLabsBaseUrl      String    @default("https://api.elevenlabs.io")
+  elevenLabsVoiceModel   String    @default("eleven_multilingual_v2")
+  syncLabsApiKey         String?
+  syncLabsBaseUrl        String    @default("https://api.sync.so")
+  syncLabsModel          String    @default("sync-3")
+  videoMockMode          Boolean   @default(true)
+  videoBudgetUsd         Float     @default(25)
+  weeklyReportEnabled    Boolean   @default(true)
+  weeklyReportDay        Int       @default(1)
+  weeklyReportHour       Int       @default(8)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 }
 
 model FacebookPage {
-  id          String   @id @default(cuid())
-  fbPageId    String   @unique
-  pageName    String
-  accessToken String
-  isActive    Boolean  @default(true)
-  adAccountId String?
+  id                      String    @id @default(cuid())
+  fbPageId                String    @unique
+  pageName                String
+  accessToken             String
+  isActive                Boolean   @default(true)
+  adAccountId             String?
+  adsReadinessStatus      String    @default("unchecked")
+  adsReadinessError       String?
+  adsReadinessCheckedAt   DateTime?
+  adsTokenExpiresAt       DateTime?
+  adsDataAccessExpiresAt  DateTime?
+  adsPermissions          String    @default("[]")
+  adsMissingPermissions   String    @default("[]")
+  adAccountStatus         Int?
+  adAccountDisableReason  Int?
+  adAccountCurrency       String?
+  adAccountTimezone       String?
   // Linked Instagram Business account
   igAccountId String? // Instagram Business Account ID (from Graph API)
   igUsername  String?
   createdAt   DateTime @default(now())
 
   posts         Post[]
+  adsOperations AdsCreateOperation[]
   comments      PostComment[]
   inboxMessages InboxMessage[]
   brandKit      BrandKit?
@@ -96,6 +134,7 @@ model FacebookPage {
   styleSamples  StyleSample[]
   services      Service[]
   staffVisuals  StaffVisualProfile[]
+  pageAccess    UserPageAccess[]
 }
 
 model TikTokAccount {
@@ -197,80 +236,121 @@ model VisualProfile {
   rejectedImages    Int           @default(0)
   confidence        Float         @default(0)
   autoApply         Boolean       @default(true)
+  trainingSamples   Int           @default(0)
+  lastTrainedAt     DateTime?
   updatedAt         DateTime      @updatedAt
   createdAt         DateTime      @default(now())
 }
 
 model StaffVisualProfile {
-  id               String              @id @default(cuid())
-  facebookPageId   String?
-  facebookPage     FacebookPage?       @relation(fields: [facebookPageId], references: [id])
-  name             String
-  role             String?
-  gender           String              @default("female")
-  referenceImageUrl String?
-  promptDescriptor String
-  appearanceNotes  String?
-  uniformNotes     String?
-  usageNotes       String?
-  consentStatus    String              @default("consented")
-  isActive         Boolean             @default(true)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  samples          StaffVisualSample[]
+  id                  String              @id @default(cuid())
+  facebookPageId      String?
+  facebookPage        FacebookPage?       @relation(fields: [facebookPageId], references: [id])
+  name                String
+  role                String?
+  gender              String              @default("female")
+  referenceImageUrl   String?
+  referenceStorageKey String?
+  promptDescriptor    String
+  appearanceNotes     String?
+  uniformNotes        String?
+  usageNotes          String?
+  consentStatus       String              @default("consented")
+  isActive            Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  samples             StaffVisualSample[]
+  generations         ImageGeneration[]
 
   @@index([facebookPageId, isActive])
   @@index([consentStatus, isActive])
 }
 
 model StaffVisualSample {
-  id          String             @id @default(cuid())
-  staffId     String
-  staff       StaffVisualProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  imageUrl    String
-  angle       String?
-  expression  String?
-  outfit      String?
-  notes       String?
-  isPrimary   Boolean            @default(false)
-  createdAt   DateTime           @default(now())
+  id         String             @id @default(cuid())
+  staffId    String
+  staff      StaffVisualProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  imageUrl   String
+  storageKey String?
+  angle      String?
+  expression String?
+  outfit     String?
+  notes      String?
+  isPrimary  Boolean            @default(false)
+  createdAt  DateTime           @default(now())
 
   @@index([staffId, isPrimary])
 }
 
 model Post {
-  id             String         @id @default(cuid())
-  caption        String
-  hashtags       String?
-  imageUrl       String?
-  imagePrompt    String?
-  platform       String         @default("facebook")
-  postType       String         @default("service")
-  tone           String         @default("friendly")
-  status         String         @default("draft")
-  scheduledAt    DateTime?
-  publishedAt    DateTime?
-  fbPostId       String?
-  fbAdId         String?
-  fbCampaignId   String?
-  igPostId       String? // Instagram media id
-  tiktokVideoId  String? // TikTok video id
-  qualityScore   Int?
-  qualityNotes   String?
-  abGroupId      String?
-  serviceId      String?
-  bulkPlanId     String?
-  facebookPageId String?
-  service        Service?       @relation(fields: [serviceId], references: [id])
-  bulkPlan       BulkPlan?      @relation(fields: [bulkPlanId], references: [id])
-  facebookPage   FacebookPage?  @relation(fields: [facebookPageId], references: [id])
-  analytics      PostAnalytics?
-  review         ContentReview?
-  comments       PostComment[]
-  generations    ContentGeneration[]
+  id               String              @id @default(cuid())
+  caption          String
+  hashtags         String?
+  imageUrl         String?
+  imagePrompt      String?
+  platform         String              @default("facebook")
+  postType         String              @default("service")
+  tone             String              @default("friendly")
+  status           String              @default("draft")
+  scheduledAt      DateTime?
+  publishedAt      DateTime?
+  fbPostId         String?
+  fbAdId           String?
+  fbCampaignId     String?
+  igPostId         String? // Instagram media id
+  tiktokVideoId    String? // TikTok video id
+  qualityScore     Int?
+  qualityNotes     String?
+  abGroupId        String?
+  serviceId        String?
+  bulkPlanId       String?
+  facebookPageId   String?
+  service          Service?            @relation(fields: [serviceId], references: [id])
+  bulkPlan         BulkPlan?           @relation(fields: [bulkPlanId], references: [id])
+  facebookPage     FacebookPage?       @relation(fields: [facebookPageId], references: [id])
+  analytics        PostAnalytics?
+  review           ContentReview?
+  comments         PostComment[]
+  generations      ContentGeneration[]
   imageGenerations ImageGeneration[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  adsOperations    AdsCreateOperation[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+}
+
+model AdsCreateOperation {
+  id                 String       @id @default(cuid())
+  idempotencyKey     String       @unique
+  requestHash        String
+  postId             String
+  post               Post         @relation(fields: [postId], references: [id], onDelete: Restrict)
+  facebookPageId     String
+  facebookPage       FacebookPage @relation(fields: [facebookPageId], references: [id], onDelete: Restrict)
+  fbPageId           String
+  adAccountId        String
+  currency           String
+  actorId            String
+  input              String
+  status             String       @default("pending")
+  currentStep        String       @default("campaign")
+  campaignId         String?
+  adSetId            String?
+  imageHash          String?
+  creativeId         String?
+  adId               String?
+  attempt            Int          @default(0)
+  leaseOwner         String?
+  leaseUntil         DateTime?
+  error              String?
+  completedAt        DateTime?
+  reconciledAt       DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([facebookPageId, createdAt])
+  @@index([adAccountId, createdAt])
+  @@index([postId, createdAt])
 }
 
 model ContentGeneration {
@@ -309,36 +389,55 @@ model ContentEdit {
   changeSummary   String?
   acceptedVoice   Boolean           @default(false)
   createdAt       DateTime          @default(now())
-
 }
 
 model ImageGeneration {
-  id              String          @id @default(cuid())
-  postId          String?
-  post            Post?           @relation(fields: [postId], references: [id], onDelete: SetNull)
-  facebookPageId  String?
-  serviceId       String?
-  promptVersion   String          @default("visual-v1")
-  model           String?
-  preset          String          @default("organic")
-  format          String          @default("feed")
-  sourceCaption   String?
-  visualBrief     String?
-  staffProfileId  String?
-  prompt          String
-  negativePrompt  String?
-  finalPrompt     String
-  imageUrl        String
-  overlayTemplate String          @default("none")
-  qualityScore    Int             @default(0)
-  scoreDetails    String
-  userAccepted    Boolean?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  feedback        ImageFeedback[]
+  id                 String              @id @default(cuid())
+  postId             String?
+  post               Post?               @relation(fields: [postId], references: [id], onDelete: SetNull)
+  facebookPageId     String?
+  serviceId          String?
+  promptVersion      String              @default("visual-v1")
+  model              String?
+  preset             String              @default("organic")
+  format             String              @default("feed")
+  sourceCaption      String?
+  visualBrief        String?
+  staffProfileId     String?
+  staffProfile       StaffVisualProfile? @relation(fields: [staffProfileId], references: [id], onDelete: SetNull)
+  parentGenerationId String?
+  parentGeneration   ImageGeneration?    @relation("ImageVariants", fields: [parentGenerationId], references: [id], onDelete: SetNull)
+  variants           ImageGeneration[]   @relation("ImageVariants")
+  batchId            String?
+  variantIndex       Int                 @default(0)
+  referenceMode      String              @default("none")
+  referenceSampleIds String              @default("[]")
+  prompt             String
+  negativePrompt     String?
+  finalPrompt        String
+  imageUrl           String
+  originalImageUrl   String?
+  storageKey         String?
+  overlayTemplate    String              @default("none")
+  qualityScore       Int                 @default(0)
+  promptScore        Int                 @default(0)
+  visionScore        Int?
+  visionDetails      String?
+  generationStatus   String              @default("completed")
+  retryCount         Int                 @default(0)
+  latencyMs          Int?
+  estimatedCostUsd   Float?
+  scoreDetails       String
+  userAccepted       Boolean?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  feedback           ImageFeedback[]
 
   @@index([facebookPageId, createdAt])
   @@index([postId])
+  @@index([batchId, variantIndex])
+  @@index([parentGenerationId])
+  @@index([staffProfileId, createdAt])
   @@index([preset, format])
 }
 
@@ -406,7 +505,7 @@ model PostComment {
   post           Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
   facebookPageId String?
   facebookPage   FacebookPage? @relation(fields: [facebookPageId], references: [id])
-  fbCommentId    String?
+  fbCommentId    String?       @unique
   authorName     String
   content        String
   sentiment      String?
@@ -440,6 +539,7 @@ model InboxMessage {
   senderId       String
   senderName     String
   message        String
+  fbMessageId    String?       @unique
   reply          String?
   isRead         Boolean       @default(false)
   isAutoReply    Boolean       @default(false)
@@ -531,16 +631,16 @@ model Competitor {
 }
 
 model CompetitorPost {
-  id           String     @id @default(cuid())
-  competitorId String
-  competitor   Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
-  fbPostId     String     @unique
-  message      String
-  likes        Int        @default(0)
-  comments     Int        @default(0)
-  shares       Int        @default(0)
-  engagementScore Int       @default(0)
-  viralLevel      String    @default("low")
+  id              String     @id @default(cuid())
+  competitorId    String
+  competitor      Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  fbPostId        String     @unique
+  message         String
+  likes           Int        @default(0)
+  comments        Int        @default(0)
+  shares          Int        @default(0)
+  engagementScore Int        @default(0)
+  viralLevel      String     @default("low")
   detectedTopic   String?
   contentFormat   String?
   detectedService String?
@@ -548,10 +648,10 @@ model CompetitorPost {
   offerType       String?
   ctaType         String?
   aiSummary       String?
-  learningStatus  String    @default("approved")
+  learningStatus  String     @default("approved")
   analyzedAt      DateTime?
-  publishedAt  DateTime
-  fetchedAt    DateTime   @default(now())
+  publishedAt     DateTime
+  fetchedAt       DateTime   @default(now())
 
   @@index([learningStatus, publishedAt])
   @@index([viralLevel, publishedAt])
@@ -559,21 +659,21 @@ model CompetitorPost {
 }
 
 model CompetitorMemory {
-  id                    String   @id @default(cuid())
-  windowDays            Int      @default(30)
-  topTopics             String   @default("[]")
-  topServices           String   @default("[]")
-  topFormats            String   @default("[]")
-  topHooks              String   @default("[]")
-  commonOffers          String   @default("[]")
-  competitorMomentum    String   @default("[]")
-  counterPositioning    String?
-  recommendations       String   @default("[]")
-  sampleCount           Int      @default(0)
-  confidence            Float    @default(0)
-  lastAnalyzedPostAt    DateTime?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  windowDays         Int       @default(30)
+  topTopics          String    @default("[]")
+  topServices        String    @default("[]")
+  topFormats         String    @default("[]")
+  topHooks           String    @default("[]")
+  commonOffers       String    @default("[]")
+  competitorMomentum String    @default("[]")
+  counterPositioning String?
+  recommendations    String    @default("[]")
+  sampleCount        Int       @default(0)
+  confidence         Float     @default(0)
+  lastAnalyzedPostAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([updatedAt])
 }
@@ -1056,4 +1156,282 @@ model SpaSync {
   lastPublishRun    DateTime?
   lastAdsOptRun     DateTime?
   updatedAt         DateTime  @updatedAt
+}
+
+// ─── AI Video Studio ────────────────────────────────────────────────────────
+
+model VideoProject {
+  id               String    @id @default(cuid())
+  facebookPageId   String?
+  name             String
+  brief            String
+  objective        String    @default("awareness")
+  platform         String    @default("tiktok")
+  aspectRatio      String    @default("9:16")
+  language         String    @default("vi")
+  durationSec      Int       @default(30)
+  serviceId        String?
+  staffProfileId   String?
+  voiceProfileId   String?
+  templateId       String?
+  styleSkillIds    String    @default("[]")
+  styleStrength    Float     @default(0.7)
+  status           String    @default("draft")
+  approvalStatus   String    @default("draft")
+  storyboard       String    @default("{}")
+  caption          String?
+  hashtags         String?
+  thumbnailUrl     String?
+  outputUrl        String?
+  outputStorageKey String?
+  qualityScore     Int?
+  qualityReport    String?
+  estimatedCostUsd Float     @default(0)
+  actualCostUsd    Float     @default(0)
+  reservedCostUsd  Float     @default(0)
+  inputRevision    Int       @default(1)
+  renderedRevision Int?
+  approvedRevision Int?
+  approvedBy       String?
+  approvedAt       DateTime?
+  publishedPostId  String?
+  createdById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  scenes       VideoScene[]
+  assets       VideoAsset[]
+  jobs         VideoJob[]
+  versions     VideoVersion[]
+  performances VideoPerformance[]
+
+  @@index([facebookPageId, createdAt])
+  @@index([status, updatedAt])
+  @@index([approvalStatus, updatedAt])
+}
+
+model VideoScene {
+  id                String       @id @default(cuid())
+  projectId         String
+  project           VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  position          Int
+  title             String
+  kind              String       @default("broll")
+  purpose           String?
+  durationSec       Int          @default(5)
+  script            String       @default("")
+  visualPrompt      String       @default("")
+  negativePrompt    String?
+  cameraDirection   String?
+  staffProfileId    String?
+  voiceProfileId    String?
+  sourceImageUrl    String?
+  sourceVideoUrl    String?
+  generatedVideoUrl String?
+  audioUrl          String?
+  lipSyncVideoUrl   String?
+  subtitleData      String       @default("[]")
+  status            String       @default("draft")
+  locked            Boolean      @default(false)
+  provider          String?
+  providerTaskId    String?
+  qaScore           Int?
+  qaReport          String?
+  inputRevision     Int          @default(1)
+  videoRevision     Int?
+  audioRevision     Int?
+  lipSyncRevision   Int?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  assets VideoAsset[]
+  jobs   VideoJob[]
+
+  @@unique([projectId, position])
+  @@index([projectId, status])
+}
+
+model VideoAsset {
+  id          String       @id @default(cuid())
+  projectId   String
+  project     VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sceneId     String?
+  scene       VideoScene?  @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  type        String
+  source      String       @default("upload")
+  name        String
+  url         String
+  storageKey  String?
+  mimeType    String?
+  sizeBytes   Int?
+  metadata    String       @default("{}")
+  checksum    String?
+  status      String       @default("ready")
+  validatedAt DateTime?
+  createdAt   DateTime     @default(now())
+
+  @@index([projectId, type])
+  @@index([sceneId, type])
+}
+
+model VideoJob {
+  id               String       @id @default(cuid())
+  projectId        String
+  project          VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sceneId          String?
+  scene            VideoScene?  @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  type             String
+  provider         String
+  externalId       String?
+  status           String       @default("queued")
+  progress         Int          @default(0)
+  attempt          Int          @default(0)
+  maxAttempts      Int          @default(3)
+  idempotencyKey   String?      @unique
+  leaseOwner       String?
+  leaseUntil       DateTime?
+  lastHeartbeatAt  DateTime?
+  cancelRequested  Boolean      @default(false)
+  input            String       @default("{}")
+  output           String?
+  error            String?
+  estimatedCostUsd Float        @default(0)
+  actualCostUsd    Float?
+  nextPollAt       DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([status, nextPollAt])
+  @@index([projectId, createdAt])
+  @@index([externalId, provider])
+}
+
+model VideoVoiceProfile {
+  id               String   @id @default(cuid())
+  facebookPageId   String?
+  staffProfileId   String?
+  name             String
+  provider         String   @default("elevenlabs")
+  providerVoiceId  String?
+  description      String?
+  language         String   @default("vi")
+  sampleUrl        String?
+  sampleStorageKey String?
+  settings         String   @default("{}")
+  pronunciation    String   @default("{}")
+  consentId        String?
+  status           String   @default("draft")
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([facebookPageId, isActive])
+  @@index([staffProfileId, status])
+}
+
+model VideoConsent {
+  id             String    @id @default(cuid())
+  subjectType    String
+  subjectId      String
+  subjectName    String
+  facebookPageId String?
+  scopes         String    @default("[]")
+  status         String    @default("pending")
+  evidenceUrl    String?
+  storageKey     String?
+  grantedBy      String?
+  grantedAt      DateTime?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  notes          String?
+  evidenceType   String?
+  evidenceHash   String?
+  termsVersion   String    @default("video-consent-v1")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([subjectType, subjectId, status])
+  @@index([facebookPageId, status])
+}
+
+model VideoSkill {
+  id              String    @id @default(cuid())
+  facebookPageId  String?
+  brainSkillId    String?
+  sourceProjectId String?
+  sourceAssetId   String?
+  name            String
+  group           String
+  description     String
+  rules           String    @default("[]")
+  evidence        String    @default("[]")
+  evidenceHash    String?
+  sampleCount     Int       @default(1)
+  confidence      Float     @default(0.5)
+  status          String    @default("pending")
+  approvedBy      String?
+  approvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([facebookPageId, group, status])
+  @@index([sourceProjectId, status])
+  @@index([evidenceHash, status])
+}
+
+model VideoTemplate {
+  id             String   @id @default(cuid())
+  facebookPageId String?
+  name           String
+  description    String?
+  platform       String   @default("tiktok")
+  aspectRatio    String   @default("9:16")
+  durationSec    Int      @default(30)
+  structure      String   @default("{}")
+  thumbnailUrl   String?
+  isActive       Boolean  @default(true)
+  usageCount     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([facebookPageId, isActive])
+}
+
+model VideoVersion {
+  id            String       @id @default(cuid())
+  projectId     String
+  project       VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version       Int
+  label         String?
+  snapshot      String
+  outputUrl     String?
+  storageKey    String?
+  createdBy     String?
+  inputRevision Int          @default(1)
+  createdAt     DateTime     @default(now())
+
+  @@unique([projectId, version])
+}
+
+model VideoPerformance {
+  id             String       @id @default(cuid())
+  projectId      String
+  project        VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  platform       String
+  externalPostId String?
+  views          Int          @default(0)
+  impressions    Int          @default(0)
+  watchTimeSec   Float        @default(0)
+  completionRate Float        @default(0)
+  clicks         Int          @default(0)
+  leads          Int          @default(0)
+  bookings       Int          @default(0)
+  spend          Float        @default(0)
+  revenue        Float        @default(0)
+  capturedAt     DateTime     @default(now())
+
+  @@index([projectId, capturedAt])
+  @@index([platform, capturedAt])
 }

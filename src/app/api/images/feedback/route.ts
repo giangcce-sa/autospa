@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/db";
 import { rebuildVisualProfile } from "@/lib/visual-profile";
 import { NextRequest, NextResponse } from "next/server";
+import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
 
-const RATINGS = new Set(["approved", "right_style", "too_ai", "wrong_service", "off_brand", "bad_layout", "unsafe"]);
+const RATINGS = new Set(["approved", "right_style", "identity_match", "identity_mismatch", "bad_anatomy", "too_ai", "wrong_service", "off_brand", "bad_layout", "unsafe"]);
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,8 +16,9 @@ export async function POST(req: NextRequest) {
     if (!generation) {
       return NextResponse.json({ success: false, error: "Không tìm thấy ảnh đã tạo" }, { status: 404 });
     }
+    await requirePageAccess(generation.facebookPageId, { owner: true });
 
-    const accepted = rating === "approved" || rating === "right_style";
+    const accepted = rating === "approved" || rating === "right_style" || rating === "identity_match";
     await prisma.$transaction([
       prisma.imageFeedback.create({
         data: {
@@ -52,6 +54,8 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    const accessResponse = accessErrorResponse(error);
+    if (accessResponse) return accessResponse;
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : String(error),

@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { withRateLimit } from "./rate-limiter";
+import { imageSourceToBuffer } from "./media-storage";
 
 type PageCreds = { token: string; pageId: string };
 
@@ -48,15 +49,21 @@ export async function postToFacebook(message: string, imageUrl?: string, faceboo
       const mimeType = header.match(/data:([^;]+)/)?.[1] ?? "image/png";
       const buffer = Buffer.from(b64, "base64");
       formData.append("source", new Blob([buffer], { type: mimeType }), "image.png");
+    } else if (imageUrl.startsWith("/api/media/")) {
+      const buffer = await imageSourceToBuffer(imageUrl);
+      formData.append("source", new Blob([buffer], { type: "image/png" }), "image.png");
     } else {
       const imgRes = await fetch(imageUrl);
       if (!imgRes.ok) throw new Error(`Không tải được ảnh (${imgRes.status})`);
       formData.append("source", await imgRes.blob(), "image.png");
     }
     formData.append("published", "false"); // stage the photo, don't publish yet
-    formData.append("access_token", token);
 
-    const uploadRes = await fetch(`https://graph.facebook.com/v21.0/${pageId}/photos`, { method: "POST", body: formData });
+    const uploadRes = await fetch(`https://graph.facebook.com/v21.0/${pageId}/photos`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
     const uploadData = await uploadRes.json();
     detectFbError(uploadData);
     const photoId: string = uploadData.id;
@@ -64,11 +71,13 @@ export async function postToFacebook(message: string, imageUrl?: string, faceboo
     // Step 2: create a feed post with the staged photo attached
     const feedRes = await fetch(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         message,
         attached_media: [{ media_fbid: photoId }],
-        access_token: token,
       }),
     });
     const feedData = await feedRes.json();
@@ -79,13 +88,33 @@ export async function postToFacebook(message: string, imageUrl?: string, faceboo
   // Text-only post
   const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, access_token: token }),
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message }),
   });
   const data = await res.json();
   detectFbError(data);
   return data.id ?? data.post_id;
   });
+}
+
+export async function postVideoToFacebook(message: string, videoUrl: string, facebookPageId?: string): Promise<string> {
+  const { token, pageId } = await getPageCreds(facebookPageId);
+  const buffer = await imageSourceToBuffer(videoUrl);
+  const form = new FormData();
+  form.append("source", new Blob([buffer], { type: "video/mp4" }), "autospa-video.mp4");
+  form.append("description", message);
+  const response = await fetch(`https://graph-video.facebook.com/v21.0/${pageId}/videos`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const data = await response.json();
+  detectFbError(data);
+  if (!data.id) throw new Error("Facebook không trả về video ID");
+  return data.id;
 }
 
 export interface FbComment {
@@ -100,8 +129,8 @@ export interface FbComment {
 export async function fetchFbComments(postLimit = 10, facebookPageId?: string): Promise<FbComment[]> {
   const { token, pageId } = await getPageCreds(facebookPageId);
   const fields = "id,message,comments.limit(50){id,message,from,created_time}";
-  const url = `https://graph.facebook.com/v21.0/${pageId}/posts?fields=${fields}&limit=${postLimit}&access_token=${token}`;
-  const res = await fetch(url);
+  const url = `https://graph.facebook.com/v21.0/${pageId}/posts?fields=${fields}&limit=${postLimit}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   const data = await res.json();
   detectFbError(data);
   const result: FbComment[] = [];
@@ -127,8 +156,11 @@ export async function replyToFbComment(commentId: string, message: string, faceb
   await withRateLimit(rateKey, FB_LIMIT, FB_WINDOW, async () => {
     const res = await fetch(`https://graph.facebook.com/v21.0/${commentId}/comments`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, access_token: token }),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message }),
     });
     const data = await res.json();
     detectFbError(data);
@@ -146,8 +178,8 @@ export interface FbMessage {
 export async function fetchFbConversations(limit = 20, facebookPageId?: string): Promise<FbMessage[]> {
   const { token, pageId } = await getPageCreds(facebookPageId);
   const fields = "id,participants,messages.limit(1){message,from,created_time,id}";
-  const url = `https://graph.facebook.com/v21.0/${pageId}/conversations?fields=${fields}&limit=${limit}&access_token=${token}`;
-  const res = await fetch(url);
+  const url = `https://graph.facebook.com/v21.0/${pageId}/conversations?fields=${fields}&limit=${limit}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   const data = await res.json();
   detectFbError(data);
   const result: FbMessage[] = [];
@@ -173,8 +205,11 @@ export async function replyToFbConversation(senderId: string, message: string, f
   await withRateLimit(rateKey, FB_LIMIT, FB_WINDOW, async () => {
     const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/messages`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipient: { id: senderId }, message: { text: message }, access_token: token }),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ recipient: { id: senderId }, message: { text: message } }),
     });
     const data = await res.json();
     detectFbError(data);

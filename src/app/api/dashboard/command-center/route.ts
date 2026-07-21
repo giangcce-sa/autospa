@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { NextResponse } from "next/server";
+import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +33,52 @@ function rankPriority(priority: Priority) {
   return score[priority];
 }
 
-export async function GET() {
+function platformLabel(value: string) {
+  const labels: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", tiktok: "TikTok", zalo: "Zalo", multi: "Nhiều kênh" };
+  return labels[value.toLowerCase()] || value;
+}
+
+function sourceLabel(value: string) {
+  const labels: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", tiktok: "TikTok", zalo: "Zalo", manual: "Nhập thủ công", website: "Website", referral: "Khách giới thiệu" };
+  return labels[value.toLowerCase()] || value;
+}
+
+function approvalLabel(value: string) {
+  const labels: Record<string, string> = {
+    ad_budget_increase: "Tăng ngân sách quảng cáo", ad_pause: "Tạm dừng quảng cáo",
+    post_publish: "Đăng nội dung", content_publish: "Đăng nội dung", workflow_action: "Thực hiện quy trình tự động",
+  };
+  return labels[value.toLowerCase()] || value.replace(/_/g, " ");
+}
+
+function alertLabel(value: string) {
+  const labels: Record<string, string> = {
+    negative_sentiment: "Phản hồi tiêu cực", competitor_spike: "Đối thủ tăng hoạt động",
+    ad_anomaly: "Quảng cáo có dấu hiệu bất thường", spend_spike: "Chi phí quảng cáo tăng đột biến",
+    engagement_drop: "Tương tác đang giảm", system_error: "Hệ thống gặp lỗi",
+  };
+  return labels[value.toLowerCase()] || value.replace(/_/g, " ");
+}
+
+function careLabel(value: string) {
+  const labels: Record<string, string> = { follow_up: "Hỏi thăm sau dịch vụ", reminder: "Nhắc lịch", birthday: "Chúc mừng sinh nhật", reactivation: "Mời khách quay lại", aftercare: "Hướng dẫn chăm sóc" };
+  return labels[value.toLowerCase()] || value.replace(/_/g, " ");
+}
+
+export async function GET(req: NextRequest) {
   try {
+    const facebookPageId = req.nextUrl.searchParams.get("facebookPageId");
+    const { user } = await requirePageAccess(facebookPageId);
+    const postScope = facebookPageId ? { facebookPageId } : {};
+    const messageScope = facebookPageId ? { facebookPageId } : {};
+    const serviceScope = facebookPageId ? { facebookPageId } : {};
+    const leadScope = facebookPageId ? { conversations: { some: { facebookPageId } } } : {};
+    const customerScope = facebookPageId ? { messages: { some: { facebookPageId } } } : {};
+    const appointmentScope = facebookPageId ? { customer: { is: customerScope } } : {};
+    const careScope = facebookPageId ? { customer: { is: customerScope } } : {};
+    const revenueScope = facebookPageId ? { lead: { is: leadScope } } : {};
+    // Các bảng vận hành cũ chưa có facebookPageId chỉ được hiển thị ở tổng quan của chủ hệ thống.
+    const globalScope = facebookPageId ? { id: "__hidden_in_page_scope__" } : {};
     const now = new Date();
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
@@ -74,34 +119,36 @@ export async function GET() {
       recentJobs,
       recentWorkflowRuns,
     ] = await Promise.all([
-      prisma.post.count(),
-      prisma.post.count({ where: { status: "published", publishedAt: { gte: startOfMonth } } }),
-      prisma.post.count({ where: { status: "scheduled" } }),
-      prisma.appointmentRequest.count({ where: { status: "pending" } }),
-      prisma.inboxMessage.count({ where: { isRead: false } }),
-      prisma.service.count({ where: { active: true } }),
-      prisma.customer.count(),
-      prisma.lead.count({ where: { createdAt: { gte: startOfDay, lte: endOfDay } } }),
-      prisma.lead.count({ where: { stage: "hot" } }),
-      prisma.careMessage.count({ where: { status: "pending" } }),
-      prisma.socialAlert.count({ where: { isRead: false } }),
-      prisma.bookingRevenue.aggregate({ where: { paidAt: { gte: startOfDay, lte: endOfDay } }, _sum: { amount: true } }),
-      prisma.bookingRevenue.count({ where: { paidAt: { gte: startOfDay, lte: endOfDay } } }),
-      prisma.pendingApproval.count({ where: { status: "pending", timeoutAt: { gte: now } } }),
+      prisma.post.count({ where: postScope }),
+      prisma.post.count({ where: { ...postScope, status: "published", publishedAt: { gte: startOfMonth } } }),
+      prisma.post.count({ where: { ...postScope, status: "scheduled" } }),
+      prisma.appointmentRequest.count({ where: { ...appointmentScope, status: "pending" } }),
+      prisma.inboxMessage.count({ where: { ...messageScope, isRead: false } }),
+      prisma.service.count({ where: { ...serviceScope, active: true } }),
+      prisma.customer.count({ where: customerScope }),
+      prisma.lead.count({ where: { ...leadScope, createdAt: { gte: startOfDay, lte: endOfDay } } }),
+      prisma.lead.count({ where: { ...leadScope, stage: "hot" } }),
+      prisma.careMessage.count({ where: { ...careScope, status: "pending" } }),
+      prisma.socialAlert.count({ where: { ...globalScope, isRead: false } }),
+      prisma.bookingRevenue.aggregate({ where: { ...revenueScope, paidAt: { gte: startOfDay, lte: endOfDay } }, _sum: { amount: true } }),
+      prisma.bookingRevenue.count({ where: { ...revenueScope, paidAt: { gte: startOfDay, lte: endOfDay } } }),
+      prisma.pendingApproval.count({ where: { ...globalScope, status: "pending", timeoutAt: { gte: now } } }),
       prisma.pendingApproval.count({
         where: {
+          ...globalScope,
           status: "pending",
           timeoutAt: { gte: now },
           type: { contains: "ad", mode: "insensitive" },
         },
       }),
       prisma.pendingApproval.findMany({
-        where: { status: "pending", timeoutAt: { gte: now } },
+        where: { ...globalScope, status: "pending", timeoutAt: { gte: now } },
         orderBy: { createdAt: "asc" },
         take: 5,
       }),
       prisma.post.findMany({
         where: {
+          ...postScope,
           OR: [
             { review: { is: { status: "fail" } } },
             { qualityNotes: { contains: "BLOCKED", mode: "insensitive" } },
@@ -113,6 +160,7 @@ export async function GET() {
       }),
       prisma.post.count({
         where: {
+          ...postScope,
           OR: [
             { review: { is: { status: "fail" } } },
             { qualityNotes: { contains: "BLOCKED", mode: "insensitive" } },
@@ -120,57 +168,61 @@ export async function GET() {
         },
       }),
       prisma.post.findMany({
-        where: { status: "scheduled", scheduledAt: { gte: now, lte: endOfDay } },
+        where: { ...postScope, status: "scheduled", scheduledAt: { gte: now, lte: endOfDay } },
         orderBy: { scheduledAt: "asc" },
         take: 5,
         select: { id: true, caption: true, platform: true, scheduledAt: true },
       }),
       prisma.lead.findMany({
-        where: { stage: "hot" },
+        where: { ...leadScope, stage: "hot" },
         orderBy: [{ nextFollowUp: "asc" }, { updatedAt: "desc" }],
         take: 5,
         select: { id: true, name: true, service: true, source: true, score: true, stage: true, nextFollowUp: true, updatedAt: true },
       }),
       prisma.inboxMessage.findMany({
-        where: { isRead: false },
+        where: { ...messageScope, isRead: false },
         orderBy: { createdAt: "desc" },
         take: 5,
         select: { id: true, senderName: true, message: true, createdAt: true },
       }),
       prisma.appointmentRequest.findMany({
-        where: { status: "pending" },
+        where: { ...appointmentScope, status: "pending" },
         orderBy: { createdAt: "asc" },
         take: 5,
         select: { id: true, name: true, service: true, preferredAt: true, createdAt: true },
       }),
       prisma.careMessage.findMany({
-        where: { status: "pending", OR: [{ scheduledAt: null }, { scheduledAt: { lte: endOfDay } }] },
+        where: { ...careScope, status: "pending", OR: [{ scheduledAt: null }, { scheduledAt: { lte: endOfDay } }] },
         orderBy: [{ scheduledAt: "asc" }, { createdAt: "asc" }],
         take: 5,
         select: { id: true, type: true, platform: true, scheduledAt: true, createdAt: true },
       }),
       prisma.realtimeAlert.findMany({
-        where: { acknowledged: false },
+        where: { ...globalScope, acknowledged: false },
         orderBy: { detectedAt: "desc" },
         take: 5,
       }),
-      prisma.lead.groupBy({ by: ["stage"], _count: { _all: true } }),
-      prisma.post.groupBy({ by: ["status"], _count: { _all: true } }),
-      prisma.adOptimizationLog.count({ where: { createdAt: { gte: startOfDay, lte: endOfDay } } }),
+      prisma.lead.groupBy({ by: ["stage"], where: leadScope, _count: { _all: true } }),
+      prisma.post.groupBy({ by: ["status"], where: postScope, _count: { _all: true } }),
+      prisma.adOptimizationLog.count({ where: { ...globalScope, createdAt: { gte: startOfDay, lte: endOfDay } } }),
       prisma.adOptimizationLog.findMany({
+        where: globalScope,
         orderBy: { createdAt: "desc" },
         take: 5,
         select: { id: true, campaignId: true, campaignName: true, action: true, reason: true, oldValue: true, newValue: true, createdAt: true },
       }),
       prisma.activityLog.findMany({
+        where: globalScope,
         orderBy: { createdAt: "desc" },
         take: 8,
       }),
       prisma.jobRun.findMany({
+        where: globalScope,
         orderBy: { startedAt: "desc" },
         take: 6,
       }),
       prisma.workflowRun.findMany({
+        where: globalScope,
         orderBy: { startedAt: "desc" },
         take: 6,
         select: { id: true, name: true, trigger: true, status: true, startedAt: true, completedAt: true },
@@ -178,11 +230,11 @@ export async function GET() {
     ]);
 
     const leadStageLabels: Record<string, string> = {
-      cold: "Cold",
-      warm: "Warm",
-      hot: "Hot",
-      booked: "Booked",
-      closed: "Closed",
+      cold: "Mới tiếp cận",
+      warm: "Đang quan tâm",
+      hot: "Có khả năng đặt lịch",
+      booked: "Đã đặt lịch",
+      closed: "Đã hoàn tất",
     };
     const leadStageOrder = ["cold", "warm", "hot", "booked", "closed"];
     const leadStageMap = new Map(leadStageCounts.map((row) => [row.stage, row._count._all]));
@@ -205,19 +257,19 @@ export async function GET() {
         id: `approval:${item.id}`,
         type: "approval",
         priority: "critical",
-        title: `Cần duyệt: ${item.type.replace(/_/g, " ")}`,
-        detail: `Mã ${item.shortCode} hết hạn lúc ${formatTime(item.timeoutAt)}`,
+        title: `Chờ bạn duyệt: ${approvalLabel(item.type)}`,
+        detail: `Yêu cầu ${item.shortCode} cần xử lý trước ${formatTime(item.timeoutAt)}`,
         href: "/automation",
         primaryAction: "Duyệt",
-        secondaryAction: "Xem payload",
-        dueLabel: `Hết hạn ${formatTime(item.timeoutAt)}`,
+        secondaryAction: "Xem chi tiết",
+        dueLabel: `Xử lý trước ${formatTime(item.timeoutAt)}`,
         timestamp: item.createdAt.toISOString(),
       })),
       ...reviewBlockedPosts.map((post): QueueItem => ({
         id: `review:${post.id}`,
         type: "review",
         priority: "critical",
-        title: "Bài bị Reviewer chặn",
+        title: "Nội dung chưa đạt yêu cầu",
         detail: truncate(post.qualityNotes || post.caption),
         href: `/publish?postId=${post.id}`,
         primaryAction: "Sửa bài",
@@ -228,7 +280,7 @@ export async function GET() {
         id: `alert:${alert.id}`,
         type: "alert",
         priority: alert.severity === "critical" ? "critical" : "high",
-        title: alert.type.replace(/_/g, " "),
+        title: alertLabel(alert.type),
         detail: truncate(alert.signal),
         href: "/listening",
         primaryAction: "Xử lý",
@@ -239,12 +291,12 @@ export async function GET() {
         id: `lead:${lead.id}`,
         type: "lead",
         priority: "high",
-        title: `Lead nóng: ${lead.name}`,
-        detail: `${lead.service ?? "Chưa rõ dịch vụ"} · ${lead.source}`,
+        title: `Khách cần ưu tiên: ${lead.name}`,
+        detail: `${lead.service ?? "Chưa chọn dịch vụ"} · Nguồn ${sourceLabel(lead.source)}`,
         href: `/sale?leadId=${lead.id}`,
         primaryAction: "Chăm sóc",
         secondaryAction: "Mở hồ sơ",
-        dueLabel: lead.nextFollowUp ? `Follow-up ${formatTime(lead.nextFollowUp)}` : undefined,
+        dueLabel: lead.nextFollowUp ? `Liên hệ lại lúc ${formatTime(lead.nextFollowUp)}` : undefined,
         timestamp: lead.updatedAt.toISOString(),
       })),
       ...messages.map((msg): QueueItem => ({
@@ -255,7 +307,7 @@ export async function GET() {
         detail: truncate(msg.message),
         href: "/inbox",
         primaryAction: "Trả lời",
-        secondaryAction: "Xem inbox",
+        secondaryAction: "Mở hộp thư",
         timestamp: msg.createdAt.toISOString(),
       })),
       ...appointments.map((appt): QueueItem => ({
@@ -263,7 +315,7 @@ export async function GET() {
         type: "appointment",
         priority: "medium",
         title: `Lịch hẹn chờ xác nhận: ${appt.name}`,
-        detail: `${appt.service ?? "Chưa rõ dịch vụ"}${appt.preferredAt ? ` · ${appt.preferredAt}` : ""}`,
+        detail: `${appt.service ?? "Chưa chọn dịch vụ"}${appt.preferredAt ? ` · Khách muốn đến ${appt.preferredAt}` : ""}`,
         href: "/appointments",
         primaryAction: "Xác nhận",
         secondaryAction: "Xem lịch",
@@ -274,7 +326,7 @@ export async function GET() {
         type: "publish",
         priority: "medium",
         title: `Bài lên lịch ${post.scheduledAt ? formatTime(post.scheduledAt) : "hôm nay"}`,
-        detail: `${post.platform} · ${truncate(post.caption)}`,
+        detail: `${platformLabel(post.platform)} · ${truncate(post.caption)}`,
         href: `/publish?postId=${post.id}`,
         primaryAction: "Kiểm tra",
         secondaryAction: "Mở lịch",
@@ -285,11 +337,11 @@ export async function GET() {
         id: `care:${care.id}`,
         type: "care",
         priority: "low",
-        title: `Chăm sóc khách: ${care.type}`,
-        detail: `${care.platform}${care.scheduledAt ? ` · ${formatTime(care.scheduledAt)}` : ""}`,
+        title: careLabel(care.type),
+        detail: `${platformLabel(care.platform)}${care.scheduledAt ? ` · Gửi lúc ${formatTime(care.scheduledAt)}` : ""}`,
         href: "/care",
         primaryAction: "Gửi",
-        secondaryAction: "Xem care",
+        secondaryAction: "Xem danh sách",
         dueLabel: care.scheduledAt ? formatTime(care.scheduledAt) : "Hôm nay",
         timestamp: (care.scheduledAt ?? care.createdAt).toISOString(),
       })),
@@ -301,26 +353,26 @@ export async function GET() {
 
     const criticalTasks = queue.filter((item) => item.priority === "critical").length;
     const [settings, facebookPages, brandKnowledge, brandKits, styleSamples] = await Promise.all([
-      prisma.settings.findFirst({
+      user.role === "owner" ? prisma.settings.findFirst({
         select: { claudeApiKey: true, openaiApiKey: true },
-      }),
-      prisma.facebookPage.count({ where: { isActive: true } }),
-      prisma.brandKnowledge.count(),
-      prisma.brandKit.count(),
-      prisma.styleSample.count(),
+      }) : Promise.resolve(null),
+      prisma.facebookPage.count({ where: facebookPageId ? { id: facebookPageId, isActive: true } : { isActive: true } }),
+      facebookPageId ? Promise.resolve(0) : prisma.brandKnowledge.count(),
+      prisma.brandKit.count({ where: facebookPageId ? { facebookPageId } : {} }),
+      prisma.styleSample.count({ where: facebookPageId ? { facebookPageId } : {} }),
     ]);
 
     const setupSteps = [
       {
         id: "ai",
-        label: "Kết nối AI",
-        description: "Cho phép AutoSpa tạo nội dung và phân tích dữ liệu.",
+        label: "Kết nối dịch vụ trí tuệ nhân tạo",
+        description: "Cho phép AutoSpa hỗ trợ tạo nội dung và phân tích dữ liệu.",
         href: "/settings",
         complete: Boolean(settings?.claudeApiKey || settings?.openaiApiKey),
       },
       {
         id: "channel",
-        label: "Kết nối Facebook Page",
+        label: "Kết nối Trang Facebook",
         description: "Nhận tin nhắn, đăng bài và theo dõi tương tác.",
         href: "/settings",
         complete: facebookPages > 0,
@@ -466,6 +518,8 @@ export async function GET() {
       success: true,
     });
   } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return access;
     const msg = err instanceof Error ? err.message : "Lỗi khi tải command center";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }

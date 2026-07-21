@@ -4,8 +4,8 @@ WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN apk add --no-cache libc6-compat openssl
-RUN chown node:node /app
+RUN apk add --no-cache libc6-compat openssl ffmpeg
+RUN mkdir -p /app/.data/media && chown -R node:node /app
 
 USER node
 

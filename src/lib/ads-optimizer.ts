@@ -4,6 +4,7 @@ import { requestApproval } from "@/lib/approval-gate";
 import { acquireAutomationLock, releaseAutomationLock } from "@/lib/automation-lock";
 import { finishJobRun, startJobRun, type JobTrigger } from "@/lib/activity-log";
 import { evaluateAdsPolicy } from "@/lib/ads-optimization-policy";
+import { getEffectiveAdsAutomationLevel, shouldForceAdsDryRun } from "@/lib/ads-safety";
 
 type OptimizationAction = { campaign: string; action: string; reason: string };
 
@@ -25,12 +26,19 @@ export async function runAdsOptimization(input: {
   const owner = await acquireAutomationLock("ads-optimize");
   if (!owner) return { skipped: "already_running", checked: 0, actions: [] as OptimizationAction[] };
 
-  const job = await startJobRun("ads_optimize", input.trigger, input.dryRun ? "Ads optimization dry-run" : "Ads optimization");
+  const forcedDryRun = shouldForceAdsDryRun();
+  const effectiveDryRun = forcedDryRun || Boolean(input.dryRun);
+  const job = await startJobRun("ads_optimize", input.trigger, effectiveDryRun ? "Ads optimization dry-run" : "Ads optimization");
   try {
     const settings = await prisma.settings.findFirst();
     if (!settings) throw new Error("Chưa có cấu hình hệ thống");
 
-    const campaigns = await getCampaigns();
+    const automationLevel = getEffectiveAdsAutomationLevel(settings.automationLevel);
+    const pages = await prisma.facebookPage.findMany({
+      where: { isActive: true, adAccountId: { not: null } },
+      select: { id: true },
+    });
+    const campaigns = (await Promise.all(pages.map((page) => getCampaigns(page.id)))).flat();
     const actions: OptimizationAction[] = [];
     const cooldownSince = new Date(Date.now() - settings.adsOptimizeCooldownHrs * 3_600_000);
     const attribution = await prisma.bookingRevenue.groupBy({
@@ -63,7 +71,7 @@ export async function runAdsOptimization(input: {
         continue;
       }
 
-      const recentAction = input.ignoreCooldown
+      const recentAction = input.trigger === "manual" && input.ignoreCooldown && !forcedDryRun
         ? null
         : await prisma.adOptimizationLog.findFirst({
             where: {
@@ -100,7 +108,16 @@ export async function runAdsOptimization(input: {
         oldValue = campaign.status;
         newValue = "PAUSED";
         reason = `CTR dưới ngưỡng ${settings.adsOptimizePauseCtr}% (${metricReason(campaign)}, ROAS ${roas.toFixed(2)})`;
-        payload = { campaignId: campaign.id, campaignName: campaign.name, ctr: `${ctrPercent.toFixed(2)}%`, spend, roas, bookings: attributed.bookings };
+        payload = {
+          campaignId: campaign.id,
+          campaignName: campaign.name,
+          facebookPageId: campaign.facebookPageId,
+          adAccountId: campaign.adAccountId,
+          ctr: `${ctrPercent.toFixed(2)}%`,
+          spend,
+          roas,
+          bookings: attributed.bookings,
+        };
       } else if (policy.type === "skip") {
         reason = policy.reason;
         await logDecision(campaign, "skipped", reason);
@@ -116,6 +133,8 @@ export async function runAdsOptimization(input: {
         payload = {
           campaignId: campaign.id,
           campaignName: campaign.name,
+          facebookPageId: campaign.facebookPageId,
+          adAccountId: campaign.adAccountId,
           budgetTargetId: campaign.budgetTarget.id,
           budgetTargetType: campaign.budgetTarget.type,
           ctr: `${ctrPercent.toFixed(2)}%`,
@@ -127,18 +146,28 @@ export async function runAdsOptimization(input: {
       }
 
       if (type) {
-        if (input.dryRun || settings.automationLevel === "supervised") {
-          const action = input.dryRun ? "dry_run" : "recommended";
-          await logDecision(campaign, action, reason, oldValue, newValue);
-          actions.push({ campaign: campaign.name, action, reason });
-        } else if (settings.automationLevel === "semi") {
+        if (effectiveDryRun || automationLevel === "supervised") {
+          const action = effectiveDryRun ? "dry_run" : "recommended";
+          const effectiveReason = forcedDryRun ? `${reason} (server buộc dry-run)` : reason;
+          await logDecision(campaign, action, effectiveReason, oldValue, newValue);
+          actions.push({ campaign: campaign.name, action, reason: effectiveReason });
+        } else if (automationLevel === "semi") {
           await requestApproval(type, payload, settings.zaloApprovalRecipient);
           await logDecision(campaign, "pending_approval", reason, oldValue, newValue);
           actions.push({ campaign: campaign.name, action: "pending_approval", reason });
-        } else if (settings.automationLevel === "full") {
+        } else if (automationLevel === "full") {
           try {
-            if (type === "pause_campaign") await setCampaignStatus(campaign.id, "PAUSED");
-            else await updateAdsBudget(String(payload.budgetTargetId), Number(payload.newBudget));
+            if (type === "pause_campaign") {
+              await setCampaignStatus(campaign.id, "PAUSED", campaign.facebookPageId);
+            } else {
+              await updateAdsBudget({
+                campaignId: campaign.id,
+                targetId: String(payload.budgetTargetId),
+                targetType: String(payload.budgetTargetType) as "campaign" | "adset",
+                dailyBudgetVnd: Number(payload.newBudget),
+                facebookPageId: campaign.facebookPageId,
+              });
+            }
             await logDecision(campaign, type === "pause_campaign" ? "paused" : "scaled_budget", reason, oldValue, newValue);
             actions.push({ campaign: campaign.name, action: type, reason });
           } catch (error) {
@@ -162,7 +191,13 @@ export async function runAdsOptimization(input: {
       update: { lastAdsOptRun: new Date() },
       create: { id: "1", lastAdsOptRun: new Date() },
     });
-    const result = { checked: campaigns.length, actions, dryRun: Boolean(input.dryRun) };
+    const result = {
+      checked: campaigns.length,
+      actions,
+      dryRun: effectiveDryRun,
+      forcedDryRun,
+      automationLevel,
+    };
     await finishJobRun(job.id, {
       status: "completed",
       summary: `${campaigns.length} campaign, ${actions.length} quyết định`,

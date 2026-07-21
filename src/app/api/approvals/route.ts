@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { checkApproval } from "@/lib/approval-gate";
 import { executeApproval } from "@/lib/approval-executor";
+import { adsMutationErrorResponse } from "@/lib/ads-safety";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 
 export async function GET() {
   try {
+    await requireUser({ owner: true });
     const approvals = await prisma.pendingApproval.findMany({
       where: { status: "pending" },
       orderBy: { createdAt: "desc" },
@@ -18,12 +21,17 @@ export async function GET() {
     const active = approvals.filter((a) => a.timeoutAt >= now);
     return NextResponse.json({ data: active, success: true });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
+    const blocked = adsMutationErrorResponse(e);
+    if (blocked) return blocked;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const { id, decision } = await req.json();
     if (!id || !["approved", "rejected"].includes(decision)) {
       return NextResponse.json({ error: "Thiếu id hoặc decision không hợp lệ", success: false }, { status: 400 });
@@ -35,6 +43,10 @@ export async function POST(req: NextRequest) {
     const result = await executeApproval(id, decision);
     return NextResponse.json({ success: true, data: result });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
+    const blocked = adsMutationErrorResponse(e);
+    if (blocked) return blocked;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }

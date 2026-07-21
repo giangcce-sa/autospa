@@ -3,7 +3,20 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useSession } from "next-auth/react";
 
-interface FbPage { id: string; pageName: string; fbPageId: string; adAccountId?: string | null; }
+interface AdsReadiness {
+  status: string;
+  error: string | null;
+  checkedAt: string | null;
+  currency: string | null;
+}
+
+interface FbPage {
+  id: string;
+  pageName: string;
+  fbPageId: string;
+  adAccountId?: string | null;
+  adsReadiness?: AdsReadiness;
+}
 
 interface ActivePageContextValue {
   pages: FbPage[];

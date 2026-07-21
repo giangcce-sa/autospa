@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  autospa:
+    name: AutoSpa
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: autospa_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d autospa_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autospa_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/autospa_test
+      AUTH_SECRET: ci-only-auth-secret
+      MEDIA_STORAGE_PROVIDER: local
+      VIDEO_MOCK_MODE: "true"
+      ADS_EXECUTION_MODE: read_only
+      ADS_EMERGENCY_STOP: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm run lint
+      - run: npm run typecheck -- --incremental false
+      - run: npm test
+      - run: npm run build
+      - name: Build immutable app image
+        run: docker build --tag autospa:${{ github.sha }} .
+
+  internal-ai-gateway:
+    name: Internal AI Gateway
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: internal-ai-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: internal-ai-gateway/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Build immutable gateway image
+        run: docker build --tag internal-ai-gateway:${{ github.sha }} .

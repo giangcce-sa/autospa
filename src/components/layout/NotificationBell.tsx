@@ -192,7 +192,7 @@ export function NotificationBell() {
           {/* Footer */}
           <div className="px-4 py-2.5 border-t text-center" style={{ borderColor: "var(--border)" }}>
             <a href="/listening" className="text-[10px] transition-opacity hover:opacity-70" style={{ color: "var(--text-muted)" }}>
-              Xem tất cả trong Listening →
+              Xem tất cả cảnh báo →
             </a>
           </div>
         </div>

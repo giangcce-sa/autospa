@@ -11,6 +11,7 @@ import { CheckCircle, Plus, Star, Trash, UploadSimple, UserCircle } from "@phosp
 interface StaffSample {
   id: string;
   imageUrl: string;
+  storageKey: string | null;
   angle: string | null;
   expression: string | null;
   outfit: string | null;
@@ -24,6 +25,7 @@ interface StaffVisual {
   role: string | null;
   gender: string;
   referenceImageUrl: string | null;
+  referenceStorageKey: string | null;
   promptDescriptor: string;
   appearanceNotes: string | null;
   uniformNotes: string | null;
@@ -38,6 +40,7 @@ const blankForm = {
   role: "Kỹ thuật viên spa",
   gender: "female",
   referenceImageUrl: "",
+  referenceStorageKey: "",
   promptDescriptor: "",
   appearanceNotes: "",
   uniformNotes: "",
@@ -53,6 +56,7 @@ function formFromStaff(staff: StaffVisual): StaffForm {
     role: staff.role ?? "",
     gender: staff.gender,
     referenceImageUrl: staff.referenceImageUrl ?? "",
+    referenceStorageKey: staff.referenceStorageKey ?? "",
     promptDescriptor: staff.promptDescriptor,
     appearanceNotes: staff.appearanceNotes ?? "",
     uniformNotes: staff.uniformNotes ?? "",
@@ -67,7 +71,16 @@ async function uploadStaffFile(file: File) {
   const res = await fetch("/api/staff-visuals/upload", { method: "POST", body: data });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error ?? "Upload ảnh thất bại");
-  return json.data as { url: string };
+  return json.data as { url: string; storageKey: string };
+}
+
+async function cleanupUpload(storageKey?: string | null) {
+  if (!storageKey) return;
+  await fetch("/api/staff-visuals/upload", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ storageKey }),
+  }).catch(() => null);
 }
 
 export function StaffVisualLibrary() {
@@ -88,15 +101,24 @@ export function StaffVisualLibrary() {
     const res = await fetch(url);
     const json = await res.json();
     if (json.success) {
-      setStaff(json.data ?? []);
-      if (!selectedId && json.data?.[0]) {
-        setSelectedId(json.data[0].id);
-        setForm(formFromStaff(json.data[0]));
-      }
+      const nextStaff = json.data ?? [];
+      setStaff(nextStaff);
+      const current = nextStaff.find((item: StaffVisual) => item.id === selectedId);
+      const nextSelected = current ?? nextStaff[0] ?? null;
+      setSelectedId(nextSelected?.id ?? null);
+      setForm(nextSelected ? formFromStaff(nextSelected) : blankForm);
     }
   }, [selectedId, selectedPageId]);
 
   useEffect(() => { load().catch(() => null); }, [load]);
+
+  useEffect(() => {
+    setSelectedId(null);
+    setStaff([]);
+    setForm(blankForm);
+    setError("");
+    setMessage("");
+  }, [selectedPageId]);
 
   const selectStaff = (item: StaffVisual) => {
     setSelectedId(item.id);
@@ -132,6 +154,7 @@ export function StaffVisualLibrary() {
       });
       const json = await res.json();
       if (!res.ok) {
+        if (!selectedId) await cleanupUpload(form.referenceStorageKey);
         setError(json.error ?? "Không lưu được nhân viên");
         return;
       }
@@ -150,7 +173,7 @@ export function StaffVisualLibrary() {
     setError("");
     try {
       const uploaded = await uploadStaffFile(file);
-      setForm((prev) => ({ ...prev, referenceImageUrl: uploaded.url }));
+      setForm((prev) => ({ ...prev, referenceImageUrl: uploaded.url, referenceStorageKey: uploaded.storageKey }));
       setMessage("Đã upload ảnh. Bấm Lưu để gắn vào hồ sơ.");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -171,13 +194,16 @@ export function StaffVisualLibrary() {
         body: JSON.stringify({
           action: "add-sample",
           staffId: selectedId,
+          facebookPageId: selectedPageId || null,
           imageUrl: uploaded.url,
+          storageKey: uploaded.storageKey,
           isPrimary: selected?.samples.length === 0,
           ...sampleMeta,
         }),
       });
       const json = await res.json();
       if (!res.ok) {
+        await cleanupUpload(uploaded.storageKey);
         setError(json.error ?? "Không thêm được ảnh mẫu");
         return;
       }
@@ -194,7 +220,7 @@ export function StaffVisualLibrary() {
     const res = await fetch("/api/staff-visuals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, facebookPageId: selectedPageId || null }),
     });
     const json = await res.json();
     if (!res.ok) {
@@ -238,7 +264,7 @@ export function StaffVisualLibrary() {
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold truncate" style={{ color: "var(--text)" }}>{item.name}</span>
                   <span className="block text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
-                    {item.role ?? "Nhân viên"} · {item.samples.length} ảnh · {item.consentStatus}
+                    {item.role ?? "Nhân viên"} · {item.samples.length} ảnh · {item.consentStatus === "consented" ? "Được phép sử dụng" : item.consentStatus === "limited" ? "Sử dụng có giới hạn" : "Không được sử dụng"}
                   </span>
                 </span>
               </button>
@@ -273,8 +299,8 @@ export function StaffVisualLibrary() {
                 <option value="neutral">Không chỉ định</option>
               </Select>
               <Select label="Quyền sử dụng" value={form.consentStatus} onChange={(e) => setForm({ ...form, consentStatus: e.target.value })}>
-                <option value="consented">Đã đồng ý dùng marketing</option>
-                <option value="limited">Chỉ dùng giới hạn</option>
+                <option value="consented">Đã đồng ý dùng cho truyền thông</option>
+                <option value="limited">Chỉ sử dụng trong phạm vi giới hạn</option>
                 <option value="blocked">Không dùng để sinh ảnh</option>
               </Select>
             </div>

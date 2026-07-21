@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { useActivePage } from "@/contexts/ActivePageContext";
 import { Textarea, Input } from "@/components/ui/Input";
 import {
   Sparkle, ArrowCounterClockwise, DownloadSimple, Image as ImageIcon, PaperPlaneTilt,
@@ -62,6 +63,30 @@ interface QualityScore {
   dimensions: Record<string, number>;
 }
 
+interface VisionScore {
+  score: number;
+  passed: boolean;
+  summary: string;
+  issues: { type: string; severity: "low" | "medium" | "high"; message: string }[];
+  dimensions: Record<string, number>;
+}
+
+interface GeneratedVariant {
+  imageUrl: string;
+  generationId: string;
+  vision: VisionScore | null;
+  retryCount: number;
+  status: string;
+}
+
+interface HistoryImage {
+  id: string;
+  imageUrl: string;
+  visionScore: number | null;
+  format: string;
+  createdAt: string;
+}
+
 interface VisualProfile {
   id: string;
   approvedImages: number;
@@ -88,6 +113,7 @@ const blankStaffForm = {
   role: "Kỹ thuật viên spa",
   gender: "female",
   referenceImageUrl: "",
+  referenceStorageKey: "",
   promptDescriptor: "",
   appearanceNotes: "",
   uniformNotes: "",
@@ -95,7 +121,9 @@ const blankStaffForm = {
   consentStatus: "consented",
 };
 
-export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPublish }: Props) {
+export function ImageGenerator({ postId, facebookPageId: providedPageId, onImageSet, onGoToPublish }: Props) {
+  const { selectedPageId } = useActivePage();
+  const facebookPageId = providedPageId ?? selectedPageId ?? undefined;
   const [services, setServices] = useState<Service[]>([]);
   const [visualProfile, setVisualProfile] = useState<VisualProfile | null>(null);
   const [staffVisuals, setStaffVisuals] = useState<StaffVisual[]>([]);
@@ -114,6 +142,11 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
     referenceDesc: "",
     format: "feed",
     staffProfileId: "",
+    referenceMode: "identity",
+    referenceStrength: 0.8,
+    variantCount: 2,
+    autoQualityCheck: true,
+    maxAutoRetries: 1,
   });
   const [overlay, setOverlay] = useState({
     enabled: false,
@@ -131,11 +164,17 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
     generationId?: string;
     quality?: QualityScore;
     suggestedOverlay?: { headline: string; subheadline: string; cta: string; badge: string };
+    vision?: VisionScore | null;
+    variants?: GeneratedVariant[];
+    referenceApplied?: boolean;
   } | null>(null);
+  const [activeVariant, setActiveVariant] = useState(0);
   const [loading, setLoading] = useState(false);
   const [feedbackLoading, setFeedbackLoading] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [history, setHistory] = useState<HistoryImage[]>([]);
 
   useEffect(() => {
     const url = facebookPageId ? `/api/services?facebookPageId=${facebookPageId}` : "/api/services";
@@ -152,8 +191,19 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
   useEffect(() => { loadStaffVisuals().catch(() => null); }, [loadStaffVisuals]);
 
   useEffect(() => {
+    setForm((previous) => ({ ...previous, serviceId: "", staffProfileId: "" }));
+    setResult(null);
+    setActiveVariant(0);
+  }, [facebookPageId]);
+
+  useEffect(() => {
     const url = facebookPageId ? `/api/images/visual-profile?facebookPageId=${facebookPageId}` : "/api/images/visual-profile";
     fetch(url).then((r) => r.json()).then((res) => setVisualProfile(res.data ?? null)).catch(() => null);
+  }, [facebookPageId, result?.generationId]);
+
+  useEffect(() => {
+    const url = facebookPageId ? `/api/images/history?facebookPageId=${facebookPageId}&take=12` : "/api/images/history?take=12";
+    fetch(url).then((res) => res.json()).then((data) => data.success && setHistory(data.data ?? [])).catch(() => null);
   }, [facebookPageId, result?.generationId]);
 
   useEffect(() => {
@@ -186,20 +236,23 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setResult(data.data);
+      setActiveVariant(0);
       setFeedbackMessage("");
       if (onImageSet) onImageSet(data.data.imageUrl);
     } finally { setLoading(false); }
   };
 
   const sendFeedback = async (rating: string) => {
-    if (!result?.generationId) return;
+    const selectedVariant = result?.variants?.[activeVariant];
+    const generationId = selectedVariant?.generationId ?? result?.generationId;
+    if (!generationId) return;
     setFeedbackLoading(rating);
     setFeedbackMessage("");
     try {
       const res = await fetch("/api/images/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ generationId: result.generationId, rating }),
+        body: JSON.stringify({ generationId, rating }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -232,6 +285,13 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
       });
       const data = await res.json();
       if (!res.ok) {
+        if (staffForm.referenceStorageKey) {
+          await fetch("/api/staff-visuals/upload", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ storageKey: staffForm.referenceStorageKey }),
+          }).catch(() => null);
+        }
         setError(data.error ?? "Không lưu được nhân viên mẫu");
         return;
       }
@@ -260,7 +320,7 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
         setError(data.error ?? "Không upload được ảnh nhân viên");
         return;
       }
-      setStaffForm((prev) => ({ ...prev, referenceImageUrl: data.data.url }));
+      setStaffForm((prev) => ({ ...prev, referenceImageUrl: data.data.url, referenceStorageKey: data.data.storageKey }));
     } finally {
       setUploadingStaffImage(false);
     }
@@ -269,7 +329,7 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
   const handleDownload = async () => {
     if (!result) return;
     const a = document.createElement("a");
-    a.href = result.imageUrl;
+    a.href = result.variants?.[activeVariant]?.imageUrl ?? result.imageUrl;
     a.download = `spa-image-${Date.now()}.png`;
     a.target = "_blank";
     a.click();
@@ -277,10 +337,64 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
 
   const handleSendToPublish = () => {
     if (!result) return;
+    const selected = result.variants?.[activeVariant];
+    if (selected && onImageSet) onImageSet(selected.imageUrl);
     if (onGoToPublish) {
       onGoToPublish();
     }
   };
+
+  const applyImageEdit = async () => {
+    const generationId = selectedVariant?.generationId ?? result?.generationId;
+    if (!generationId || !result) return;
+    setEditing(true);
+    setError("");
+    try {
+      const res = await fetch("/api/images/edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          generationId,
+          facebookPageId,
+          format: form.format,
+          overlay: { ...overlay, enabled: overlay.enabled },
+          applyToPost: Boolean(postId),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Không áp dụng được chỉnh sửa");
+        return;
+      }
+      setResult((previous) => {
+        if (!previous) return previous;
+        const nextVariant: GeneratedVariant = {
+          imageUrl: data.data.imageUrl,
+          generationId: data.data.generationId,
+          vision: selectedVariant?.vision ?? null,
+          retryCount: selectedVariant?.retryCount ?? 0,
+          status: "completed",
+        };
+        if (!previous.variants?.length) {
+          return { ...previous, imageUrl: nextVariant.imageUrl, generationId: nextVariant.generationId, variants: [nextVariant] };
+        }
+        return {
+          ...previous,
+          imageUrl: activeVariant === 0 ? nextVariant.imageUrl : previous.imageUrl,
+          generationId: activeVariant === 0 ? nextVariant.generationId : previous.generationId,
+          variants: previous.variants.map((item, index) => index === activeVariant ? nextVariant : item),
+        };
+      });
+      if (onImageSet) onImageSet(data.data.imageUrl);
+      setFeedbackMessage("Đã lưu một phiên bản chỉnh sửa mới.");
+    } finally {
+      setEditing(false);
+    }
+  };
+
+  const selectedVariant = result?.variants?.[activeVariant] ?? null;
+  const displayImageUrl = selectedVariant?.imageUrl ?? result?.imageUrl ?? "";
+  const displayVision = selectedVariant?.vision ?? result?.vision ?? null;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-5xl">
@@ -314,7 +428,7 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
                   <UserCircle size={14} weight="fill" /> Thư viện nhân viên mẫu
                 </p>
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  Dùng ảnh mẫu đã có consent để AI giữ nhân vật nhất quán hơn.
+                  Dùng ảnh mẫu đã được nhân viên đồng ý để giữ hình ảnh nhân vật nhất quán hơn.
                 </p>
               </div>
               <Button size="sm" variant="secondary" onClick={() => setShowStaffForm((v) => !v)}>
@@ -325,14 +439,11 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
               label="Chọn nhân viên"
               value={form.staffProfileId}
               onChange={(e) => {
-                const selected = staffVisuals.find((s) => s.id === e.target.value);
                 setForm({
                   ...form,
                   staffProfileId: e.target.value,
                   character: e.target.value ? "staff-female" : form.character,
-                  referenceDesc: selected?.referenceImageUrl
-                    ? `Ảnh mẫu nhân viên đã duyệt: ${selected.referenceImageUrl}`
-                    : form.referenceDesc,
+                  referenceDesc: form.referenceDesc,
                 });
               }}
             >
@@ -346,7 +457,8 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
                 ))}
             </Select>
             {form.staffProfileId && (
-              <div className="flex gap-2 items-start">
+              <div className="space-y-3">
+                <div className="flex gap-2 items-start">
                 {staffVisuals.find((s) => s.id === form.staffProfileId)?.referenceImageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -358,6 +470,30 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
                 <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
                   {staffVisuals.find((s) => s.id === form.staffProfileId)?.promptDescriptor}
                 </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <Select
+                    label="Giữ ảnh tham chiếu"
+                    value={form.referenceMode}
+                    onChange={(e) => setForm({ ...form, referenceMode: e.target.value })}
+                  >
+                    <option value="identity">Giữ khuôn mặt và nhận diện</option>
+                    <option value="appearance">Giữ ngoại hình, đổi bối cảnh</option>
+                    <option value="style">Chỉ học đồng phục/phong cách</option>
+                  </Select>
+                  <label className="space-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                    <span className="flex justify-between"><span>Mức độ giữ mẫu</span><strong>{Math.round(form.referenceStrength * 100)}%</strong></span>
+                    <input
+                      type="range"
+                      min="0.4"
+                      max="1"
+                      step="0.05"
+                      value={form.referenceStrength}
+                      onChange={(e) => setForm({ ...form, referenceStrength: Number(e.target.value) })}
+                      className="w-full accent-[var(--accent)]"
+                    />
+                  </label>
+                </div>
               </div>
             )}
             {showStaffForm && (
@@ -435,8 +571,8 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
                     value={staffForm.consentStatus}
                     onChange={(e) => setStaffForm({ ...staffForm, consentStatus: e.target.value })}
                   >
-                    <option value="consented">Đã đồng ý dùng marketing</option>
-                    <option value="limited">Chỉ dùng nội bộ / giới hạn</option>
+                    <option value="consented">Đã đồng ý dùng cho truyền thông</option>
+                    <option value="limited">Chỉ sử dụng nội bộ hoặc có giới hạn</option>
                     <option value="blocked">Không dùng để sinh ảnh</option>
                   </Select>
                   <Button onClick={saveStaffVisual} loading={savingStaff}>
@@ -453,6 +589,23 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
             <option value="thumbnail">Video Thumbnail - ngang 16:9</option>
             <option value="zalo">Zalo OA - vuông + safe area</option>
           </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <Select label="Số phương án" value={String(form.variantCount)} onChange={(e) => setForm({ ...form, variantCount: Number(e.target.value) })}>
+              <option value="1">1 ảnh</option>
+              <option value="2">2 ảnh</option>
+              <option value="3">3 ảnh</option>
+              <option value="4">4 ảnh</option>
+            </Select>
+            <label className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+              <input
+                type="checkbox"
+                checked={form.autoQualityCheck}
+                onChange={(e) => setForm({ ...form, autoQualityCheck: e.target.checked })}
+                className="accent-[var(--accent)]"
+              />
+              AI Vision kiểm tra và tự sửa ảnh lỗi
+            </label>
+          </div>
           <Textarea
             label="Caption / ngữ cảnh bài viết"
             placeholder={postId ? "Để trống = lấy caption từ bài nháp" : "Dán caption để AI tạo ảnh đúng nội dung bài..."}
@@ -571,8 +724,48 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
           {result ? (
           <div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={result.imageUrl} alt="Generated spa image" className="w-full rounded-t-xl object-cover aspect-square" />
+            <img src={displayImageUrl} alt="Generated spa image" className="w-full rounded-t-xl object-cover aspect-square" />
             <div className="p-4 space-y-3">
+              {result.variants && result.variants.length > 1 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {result.variants.map((variant, index) => (
+                    <button
+                      key={variant.generationId}
+                      type="button"
+                      onClick={() => {
+                        setActiveVariant(index);
+                        if (onImageSet) onImageSet(variant.imageUrl);
+                      }}
+                      className="relative aspect-square overflow-hidden rounded-md"
+                      style={{ border: activeVariant === index ? "2px solid var(--accent)" : "1px solid var(--border)" }}
+                      title={`Phương án ${index + 1}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={variant.imageUrl} alt="" className="h-full w-full object-cover" />
+                      <span className="absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "rgba(15,23,18,.78)", color: "white" }}>
+                        {variant.vision?.score ?? "–"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {displayVision && (
+                <div className="rounded-lg p-3" style={{ background: displayVision.score >= 80 ? "var(--success-light)" : displayVision.score >= 60 ? "var(--amber-light)" : "var(--rose-light)" }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold inline-flex items-center gap-1.5" style={{ color: displayVision.score >= 80 ? "var(--success)" : displayVision.score >= 60 ? "var(--amber)" : "var(--rose)" }}>
+                      {displayVision.score >= 80 ? <CheckCircle size={14} weight="fill" /> : <WarningCircle size={14} weight="fill" />}
+                      Chất lượng ảnh {displayVision.score}/100
+                    </span>
+                    {selectedVariant?.retryCount ? <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>Đã tự sửa {selectedVariant.retryCount} lần</span> : null}
+                  </div>
+                  <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>{displayVision.summary}</p>
+                  {displayVision.issues.length > 0 && (
+                    <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
+                      {displayVision.issues.slice(0, 2).map((issue) => issue.message).join(" · ")}
+                    </p>
+                  )}
+                </div>
+              )}
               {result.quality && (
                 <div className="rounded-lg p-3" style={{ background: result.quality.score >= 80 ? "var(--success-light)" : "var(--amber-light)" }}>
                   <div className="flex items-center justify-between gap-3">
@@ -601,11 +794,14 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
                   <DownloadSimple size={13} /> Tải về
                 </Button>
               </div>
+              <Button variant="secondary" onClick={applyImageEdit} loading={editing} className="w-full">
+                <MagicWand size={13} weight="fill" /> Áp dụng crop và overlay thành phiên bản mới
+              </Button>
               <Button onClick={handleSendToPublish} className="w-full">
                 <PaperPlaneTilt size={14} weight="fill" />
                 {onGoToPublish ? "Gắn vào bài đăng →" : "Đã lưu vào bài"}
               </Button>
-              {result.generationId && (
+              {(selectedVariant?.generationId ?? result.generationId) && (
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <Button size="sm" variant="secondary" onClick={() => sendFeedback("right_style")} loading={feedbackLoading === "right_style"}>
@@ -626,6 +822,19 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
                       Bố cục xấu
                     </Button>
                   </div>
+                  {form.staffProfileId && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button size="sm" variant="ghost" onClick={() => sendFeedback("identity_match")} loading={feedbackLoading === "identity_match"}>
+                        Đúng người
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => sendFeedback("identity_mismatch")} loading={feedbackLoading === "identity_mismatch"}>
+                        Sai khuôn mặt
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => sendFeedback("bad_anatomy")} loading={feedbackLoading === "bad_anatomy"}>
+                        Lỗi tay/mặt
+                      </Button>
+                    </div>
+                  )}
                   {feedbackMessage && (
                     <p className="text-[11px] text-center" style={{ color: "var(--text-muted)" }}>{feedbackMessage}</p>
                   )}
@@ -635,6 +844,33 @@ export function ImageGenerator({ postId, facebookPageId, onImageSet, onGoToPubli
                 <p className="text-[10px] text-center" style={{ color: "var(--text-muted)" }}>
                   Hình đã được lưu vào bài nháp
                 </p>
+              )}
+              {history.length > 0 && (
+                <div className="space-y-2 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+                  <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>Phiên bản gần đây</p>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {history.slice(0, 12).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        title={`${item.format} · ${new Date(item.createdAt).toLocaleString("vi-VN")}`}
+                        onClick={() => {
+                          const variant: GeneratedVariant = { imageUrl: item.imageUrl, generationId: item.id, vision: null, retryCount: 0, status: "completed" };
+                          setResult((previous) => previous
+                            ? { ...previous, imageUrl: item.imageUrl, generationId: item.id, variants: [variant] }
+                            : { imageUrl: item.imageUrl, prompt: "Ảnh trong lịch sử", generationId: item.id, variants: [variant] });
+                          setActiveVariant(0);
+                          if (onImageSet) onImageSet(item.imageUrl);
+                        }}
+                        className="relative aspect-square overflow-hidden rounded-md"
+                        style={{ border: item.id === (selectedVariant?.generationId ?? result.generationId) ? "2px solid var(--accent)" : "1px solid var(--border)" }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           </div>

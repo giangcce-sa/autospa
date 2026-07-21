@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { assertSafeAiProviderUrl } from "./provider-url-security";
 
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 const DIRECT_CLAUDE_MODEL = "claude-sonnet-4-6";
@@ -17,7 +18,7 @@ function normalizeBaseUrl(url: string) {
 }
 
 function isAnthropicBaseUrl(url: string) {
-  return normalizeBaseUrl(url).includes("anthropic.com");
+  return new URL(url).hostname.toLowerCase() === "api.anthropic.com";
 }
 
 async function getSettings() {
@@ -26,7 +27,7 @@ async function getSettings() {
 
   return {
     apiKey: settings.claudeApiKey,
-    baseURL: normalizeBaseUrl(settings.claudeBaseUrl || ANTHROPIC_BASE_URL),
+    baseURL: await assertSafeAiProviderUrl(normalizeBaseUrl(settings.claudeBaseUrl || ANTHROPIC_BASE_URL), "claude"),
   };
 }
 

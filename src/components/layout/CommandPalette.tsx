@@ -8,6 +8,7 @@ import {
   Gear, Briefcase, Buildings, Palette, Brain, BookOpen, Scan,
   Robot, ChatsTeardrop, Lightning, ArrowsSplit, Megaphone, Sparkle,
   MagnifyingGlass, TrendUp,
+  UserCircle, FilmSlate,
 } from "@phosphor-icons/react";
 
 interface PaletteItem {
@@ -22,43 +23,45 @@ interface PaletteItem {
 
 const ITEMS: PaletteItem[] = [
   // Core
-  { id: "dashboard", label: "Dashboard — Trang chủ", group: "Trang", href: "/", icon: Gauge },
-  { id: "brain", label: "AutoSpa Brain — Học skill", group: "AI Agents", href: "/brain", icon: Brain, premium: true, keywords: "bo nao brain skill hoc train" },
-  { id: "orchestrator", label: "Orchestrator — AI Agent Hub", group: "AI Agents", href: "/orchestrator", icon: Robot, premium: true },
-  { id: "council", label: "AI Council — Phiên tranh luận", group: "AI Agents", href: "/council", icon: ChatsTeardrop, premium: true },
-  { id: "ceo-memory", label: "CEO Memory — Bộ nhớ quyết định", group: "AI Agents", href: "/ceo-memory", icon: Brain, premium: true },
+  { id: "dashboard", label: "Hôm nay", group: "Trang", href: "/", icon: Gauge, keywords: "dashboard trang chu" },
+  { id: "brain", label: "Bộ não AutoSpa — Kỹ năng đã học", group: "Trí tuệ nhân tạo", href: "/brain", icon: Brain, premium: true, keywords: "bo nao brain skill ky nang hoc train" },
+  { id: "orchestrator", label: "Trung tâm điều phối", group: "Trí tuệ nhân tạo", href: "/orchestrator", icon: Robot, premium: true, keywords: "orchestrator agent dieu phoi" },
+  { id: "council", label: "Hội đồng tư vấn", group: "Trí tuệ nhân tạo", href: "/council", icon: ChatsTeardrop, premium: true, keywords: "ai council tranh luan" },
+  { id: "ceo-memory", label: "Bộ nhớ quyết định", group: "Trí tuệ nhân tạo", href: "/ceo-memory", icon: Brain, premium: true, keywords: "ceo memory bo nho" },
   // Content
-  { id: "content", label: "Viết bài — Content AI", group: "Nội dung", href: "/content", icon: PencilSimple, keywords: "tao bai dang content" },
-  { id: "publish", label: "Đăng & Lịch — Schedule", group: "Nội dung", href: "/publish", icon: PaperPlaneTilt, keywords: "dang bai lich" },
-  { id: "library", label: "Thư viện — Bài đã tạo", group: "Nội dung", href: "/library", icon: Archive },
-  { id: "promotions", label: "Khuyến mãi — Promo", group: "Nội dung", href: "/promotions", icon: Tag },
-  { id: "images", label: "Tạo hình ảnh — Image AI", group: "Nội dung", href: "/images", icon: Image, keywords: "hinh anh anh" },
-  { id: "bulk", label: "Tạo hàng loạt — Bulk create", group: "Nội dung", href: "/bulk", icon: Stack },
-  { id: "content-research", label: "Nghiên cứu AI — Research", group: "Nội dung", href: "/content-research", icon: Sparkle },
-  { id: "ab-test", label: "A/B Testing", group: "Nội dung", href: "/ab-test", icon: ArrowsSplit },
+  { id: "content", label: "Viết bài", group: "Sáng tạo", href: "/content", icon: PencilSimple, keywords: "tao bai dang content ai" },
+  { id: "video-studio", label: "Xưởng video", group: "Sáng tạo", href: "/video-studio", icon: FilmSlate, premium: true, keywords: "ai video studio runway elevenlabs sync lipsync" },
+  { id: "publish", label: "Đăng bài và xếp lịch", group: "Sáng tạo", href: "/publish", icon: PaperPlaneTilt, keywords: "schedule dang bai lich" },
+  { id: "library", label: "Thư viện nội dung", group: "Sáng tạo", href: "/library", icon: Archive },
+  { id: "promotions", label: "Chương trình khuyến mãi", group: "Tăng trưởng", href: "/promotions", icon: Tag, keywords: "promo" },
+  { id: "images", label: "Tạo hình ảnh", group: "Sáng tạo", href: "/images", icon: Image, keywords: "hinh anh image ai" },
+  { id: "staff-visuals", label: "Hình ảnh nhân viên", group: "Sáng tạo", href: "/staff-visuals", icon: UserCircle, keywords: "visual library nhan vien anh mau khuon mat" },
+  { id: "bulk", label: "Tạo nhiều nội dung", group: "Sáng tạo", href: "/bulk", icon: Stack, keywords: "bulk create hang loat" },
+  { id: "content-research", label: "Nghiên cứu nội dung", group: "Sáng tạo", href: "/content-research", icon: Sparkle, keywords: "research ai" },
+  { id: "ab-test", label: "So sánh hai phiên bản", group: "Sáng tạo", href: "/ab-test", icon: ArrowsSplit, keywords: "ab test testing" },
   // Ads & Analytics
-  { id: "facebook-ads", label: "Facebook Ads", group: "Quảng cáo", href: "/facebook-ads", icon: Megaphone },
-  { id: "analytics", label: "Phân tích — Analytics", group: "Quảng cáo", href: "/analytics", icon: ChartBar },
-  { id: "reports", label: "Báo cáo — Reports", group: "Quảng cáo", href: "/reports", icon: ChartLine },
-  { id: "listening", label: "Social Listening", group: "Quảng cáo", href: "/listening", icon: Eye },
-  { id: "competitors", label: "Intelligence — Đối thủ", group: "Quảng cáo", href: "/competitors", icon: TrendUp },
+  { id: "facebook-ads", label: "Quảng cáo Facebook", group: "Tăng trưởng", href: "/facebook-ads", icon: Megaphone },
+  { id: "analytics", label: "Phân tích hiệu quả", group: "Tăng trưởng", href: "/analytics", icon: ChartBar, keywords: "analytics" },
+  { id: "reports", label: "Báo cáo", group: "Tăng trưởng", href: "/reports", icon: ChartLine, keywords: "reports" },
+  { id: "listening", label: "Lắng nghe mạng xã hội", group: "Tăng trưởng", href: "/listening", icon: Eye, keywords: "social listening" },
+  { id: "competitors", label: "Theo dõi đối thủ", group: "Tăng trưởng", href: "/competitors", icon: TrendUp, keywords: "intelligence" },
   // Customers
-  { id: "inbox", label: "Tin nhắn — Inbox", group: "Khách hàng", href: "/inbox", icon: ChatCircleDots, keywords: "tin nhan chat" },
-  { id: "crm", label: "CRM — Quản lý khách", group: "Khách hàng", href: "/crm", icon: UsersThree },
-  { id: "sale", label: "Chốt Sale — Leads", group: "Khách hàng", href: "/sale", icon: Flame, keywords: "lead sale" },
+  { id: "inbox", label: "Hộp thư", group: "Khách hàng", href: "/inbox", icon: ChatCircleDots, keywords: "inbox tin nhan chat" },
+  { id: "crm", label: "Hồ sơ khách hàng", group: "Khách hàng", href: "/crm", icon: UsersThree, keywords: "crm" },
+  { id: "sale", label: "Khách cần tư vấn", group: "Khách hàng", href: "/sale", icon: Flame, keywords: "lead sale chot" },
   { id: "zalo", label: "Zalo OA", group: "Khách hàng", href: "/zalo", icon: Lightning },
   // Settings
-  { id: "settings", label: "Cài đặt — Settings", group: "Thiết lập", href: "/settings", icon: Gear, keywords: "api key cai dat" },
-  { id: "services", label: "Dịch vụ — Services", group: "Thiết lập", href: "/services", icon: Briefcase },
-  { id: "brand", label: "Thương hiệu — Brand", group: "Thiết lập", href: "/brand", icon: Buildings },
-  { id: "brand-kit", label: "Brand Kit — Màu sắc logo", group: "Thiết lập", href: "/brand-kit", icon: Palette },
-  { id: "style-training", label: "Style Training — Văn phong AI", group: "Thiết lập", href: "/style-training", icon: Brain },
-  { id: "stories", label: "Câu chuyện thực tế", group: "Thiết lập", href: "/stories", icon: BookOpen },
-  { id: "skin-ai", label: "AI Da liễu — Skin AI", group: "Thiết lập", href: "/skin-ai", icon: Scan },
-  { id: "automation", label: "Tự động hóa — Workflows", group: "Thiết lập", href: "/automation", icon: Lightning },
+  { id: "settings", label: "Cài đặt", group: "Hệ thống", href: "/settings", icon: Gear, keywords: "settings api key cai dat" },
+  { id: "services", label: "Danh mục dịch vụ", group: "Hệ thống", href: "/services", icon: Briefcase, keywords: "services" },
+  { id: "brand", label: "Thông tin thương hiệu", group: "Hệ thống", href: "/brand", icon: Buildings, keywords: "brand" },
+  { id: "brand-kit", label: "Bộ nhận diện", group: "Hệ thống", href: "/brand-kit", icon: Palette, keywords: "brand kit mau sac logo" },
+  { id: "style-training", label: "Huấn luyện văn phong", group: "Hệ thống", href: "/style-training", icon: Brain, keywords: "style training ai" },
+  { id: "stories", label: "Câu chuyện thực tế", group: "Hệ thống", href: "/stories", icon: BookOpen },
+  { id: "skin-ai", label: "Phân tích da", group: "Hệ thống", href: "/skin-ai", icon: Scan, keywords: "ai da lieu skin" },
+  { id: "automation", label: "Tự động hóa", group: "Hệ thống", href: "/automation", icon: Lightning, keywords: "workflows" },
 ];
 
-const GROUPS = ["AI Agents", "Trang", "Nội dung", "Quảng cáo", "Khách hàng", "Thiết lập"];
+const GROUPS = ["Trang", "Sáng tạo", "Khách hàng", "Tăng trưởng", "Trí tuệ nhân tạo", "Hệ thống"];
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);

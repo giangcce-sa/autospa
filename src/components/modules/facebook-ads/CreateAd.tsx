@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Megaphone, CheckCircle, Image as ImageIcon, CaretDown } from "@phosphor-icons/react";
@@ -31,7 +31,8 @@ export function CreateAd({ facebookPageId, initialPostId }: Props) {
   const [budgetVnd, setBudgetVnd] = useState("100000");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [objective, setObjective] = useState("OUTCOME_AWARENESS");
+  const objective = "OUTCOME_AWARENESS";
+  const submissionRef = useRef<{ signature: string; key: string } | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ campaignId: string; adId: string } | null>(null);
@@ -46,17 +47,23 @@ export function CreateAd({ facebookPageId, initialPostId }: Props) {
   }
 
   useEffect(() => {
-    fetch("/api/content/list")
+    if (!facebookPageId) {
+      setPosts([]);
+      setSelectedPost(null);
+      return;
+    }
+    fetch(`/api/content/list?facebookPageId=${encodeURIComponent(facebookPageId)}`)
       .then((r) => r.json())
       .then((res) => {
         const list: DraftPost[] = res.data ?? [];
         setPosts(list);
+        setSelectedPost((current) => list.find((post) => post.id === current?.id) ?? null);
         if (initialPostId) {
-          const found = list.find((p) => p.id === initialPostId);
+          const found = list.find((post) => post.id === initialPostId);
           if (found) pickPost(found);
         }
       });
-  }, [initialPostId]);
+  }, [facebookPageId, initialPostId]);
 
   const genderIds = () => {
     if (gender === "male") return [1];
@@ -69,27 +76,30 @@ export function CreateAd({ facebookPageId, initialPostId }: Props) {
     setLoading(true);
     setError("");
     setResult(null);
-    const message = [selectedPost.caption, selectedPost.hashtags].filter(Boolean).join("\n\n");
+    const payload = {
+      action: "create",
+      facebookPageId,
+      postId: selectedPost.id,
+      name: name || `Quảng cáo · ${new Date().toLocaleDateString("vi-VN")}`,
+      targetAgeMin: ageMin,
+      targetAgeMax: ageMax,
+      targetGenders: genderIds(),
+      targetCountry: "VN",
+      dailyBudgetVnd: Number(budgetVnd.replace(/\D/g, "")) || 100000,
+      startTime: startDate ? new Date(startDate).toISOString() : undefined,
+      endTime: endDate ? new Date(endDate).toISOString() : undefined,
+      objective,
+    };
+    const signature = JSON.stringify(payload);
+    const idempotencyKey = submissionRef.current?.signature === signature
+      ? submissionRef.current.key
+      : crypto.randomUUID();
+    submissionRef.current = { signature, key: idempotencyKey };
     try {
       const res = await fetch("/api/facebook-ads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create",
-          facebookPageId,
-          postId: selectedPost.id,
-          name: name || `Quảng cáo · ${new Date().toLocaleDateString("vi-VN")}`,
-          message,
-          imageUrl: selectedPost.imageUrl || undefined,
-          targetAgeMin: ageMin,
-          targetAgeMax: ageMax,
-          targetGenders: genderIds(),
-          targetCountry: "VN",
-          dailyBudgetVnd: Number(budgetVnd.replace(/\D/g, "")) || 100000,
-          startTime: startDate ? new Date(startDate).toISOString() : undefined,
-          endTime: endDate ? new Date(endDate).toISOString() : undefined,
-          objective,
-        }),
+        body: JSON.stringify({ ...payload, idempotencyKey }),
       });
       const data = await res.json();
       if (!data.success) { setError(data.error); return; }
@@ -175,13 +185,13 @@ export function CreateAd({ facebookPageId, initialPostId }: Props) {
               className="w-full px-3 py-2 text-sm rounded-lg border outline-none"
               style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
               value={objective}
-              onChange={(e) => setObjective(e.target.value)}
+              disabled
             >
               <option value="OUTCOME_AWARENESS">Nhận thức (Awareness)</option>
-              <option value="OUTCOME_TRAFFIC">Lưu lượng (Traffic)</option>
-              <option value="OUTCOME_ENGAGEMENT">Tương tác (Engagement)</option>
-              <option value="OUTCOME_LEADS">Khách tiềm năng (Leads)</option>
             </select>
+            <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+              Các mục tiêu khác sẽ được mở sau khi có contract Meta tương ứng.
+            </p>
           </div>
         </div>
       </Card>

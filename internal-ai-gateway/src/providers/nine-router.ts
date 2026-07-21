@@ -330,6 +330,9 @@ export type NineRouterImageGenerationRequest = {
   quality?: string;
   style?: string;
   responseFormat?: "url" | "b64_json";
+  referenceMode?: "identity" | "appearance" | "style";
+  referenceStrength?: number;
+  referenceImages?: Array<{ image_url?: string; image_base64?: string; weight?: number }>;
   metadata?: Record<string, unknown>;
 };
 
@@ -355,6 +358,14 @@ export async function generateNineRouterImage(request: NineRouterImageGeneration
         quality: request.quality,
         style: request.style,
         response_format: request.responseFormat,
+        task_type: request.referenceImages?.length ? "image-edit" : "image-generation",
+        reference_mode: request.referenceMode,
+        reference_strength: request.referenceStrength,
+        reference_images: request.referenceImages?.map((item) => ({
+          image_url: item.image_url,
+          image_base64: item.image_base64,
+          weight: item.weight
+        })),
         metadata: {
           ...request.metadata,
           gateway_request_id: request.requestId,
@@ -519,6 +530,7 @@ export type NineRouterVisionRequest = {
   prompt: string;
   imageUrl?: string;
   imageBase64?: string;
+  referenceImages?: Array<{ image_url?: string; image_base64?: string }>;
   maxTokens?: number;
   metadata?: Record<string, unknown>;
 };
@@ -535,7 +547,16 @@ export async function analyzeNineRouterVision(request: NineRouterVisionRequest):
       messages: [
         {
           role: "user",
-          content: [{ type: "text", text: request.prompt }, imagePayload]
+          content: [
+            { type: "text", text: request.prompt },
+            imagePayload,
+            ...(request.referenceImages ?? []).map((item) => ({
+              type: "image_url",
+              image_url: {
+                url: item.image_url ?? `data:image/png;base64,${item.image_base64}`
+              }
+            }))
+          ]
         }
       ],
       max_tokens: request.maxTokens,

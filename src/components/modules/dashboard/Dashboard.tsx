@@ -1,285 +1,100 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  CalendarBlank, ChatCircleDots,
-  Flame, Bell, Sparkle, ArrowRight,
-  Gauge, ChartLine, CheckCircle, WarningCircle,
-  Check, CaretRight, Compass,
-} from "@phosphor-icons/react";
-import { Card } from "@/components/ui/Card";
-import { Stat } from "@/components/ui/Stat";
-import { MorningBriefCard } from "./MorningBriefCard";
-import { TodayQueue } from "./TodayQueue";
-import { QuickActions } from "./QuickActions";
-import { ActivityFeed } from "./ActivityFeed";
-import { CEODashboard } from "./ceo/CEODashboard";
-import { useExperienceMode } from "@/contexts/ExperienceModeContext";
+import { useSession } from "next-auth/react";
+import { ArrowRight, CheckCircle, FilmSlate, Megaphone, UsersThree, WarningCircle } from "@phosphor-icons/react";
+import { useActivePage } from "@/contexts/ActivePageContext";
 
-interface Stats {
-  totalPosts: number;
-  publishedThisMonth: number;
-  scheduled: number;
-  pendingAppointments: number;
-  unreadMessages: number;
-  services: number;
-  totalCustomers: number;
-  hotLeads: number;
-  pendingCare: number;
-  unreadAlerts: number;
+type QueueItem = {
+  id: string; type: string; priority: "critical" | "high" | "medium" | "low";
+  title: string; detail: string; href: string; primaryAction: string; dueLabel?: string;
+};
+
+interface CommandData {
+  stats: { scheduled: number; unreadMessages: number; pendingCare: number; hotLeads: number };
+  kpis: { revenueToday: number; bookingsToday: number; leadsToday: number; criticalTasks: number; queueTotal: number };
+  todayQueue: QueueItem[];
+  contentFactory: { scheduledToday: number; reviewBlocked: number };
+  adsCommand: { actionsToday: number; pendingApprovals: number };
+  aiTasks: { failedJobs: number; recentJobs: Array<{ id: string; name: string; status: string; summary?: string }> };
+  highlights: { scheduledToday: number; failedJobs: number };
 }
 
-interface CommandCenterData {
-  stats: Stats;
-  setup: {
-    completed: number;
-    total: number;
-    complete: boolean;
-    steps: Array<{
-      id: string;
-      label: string;
-      description: string;
-      href: string;
-      complete: boolean;
-    }>;
-  };
-  kpis: {
-    pendingApprovals: number;
-    criticalTasks: number;
-    queueTotal: number;
-  };
+function money(value: number) {
+  if (!value) return "0 đ";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} tr`;
+  return `${Math.round(value / 1000).toLocaleString("vi-VN")}k`;
 }
 
-const VIEW_KEY = "dashboard-view";
+function Metric({ label, value, note, danger = false }: { label: string; value: string; note: string; danger?: boolean }) {
+  return <div className="min-w-0 border-l border-[var(--border)] pl-4 first:border-l-0 first:pl-0 sm:pl-5"><p className="text-[13px] font-medium text-[var(--text-secondary)]">{label}</p><p className="mt-1 font-mono text-[23px] font-semibold leading-tight text-[var(--text)] sm:text-[26px]">{value}</p><p className={`mt-1 text-[12px] font-medium ${danger ? "text-[var(--danger)]" : "text-[var(--accent)]"}`}>{note}</p></div>;
+}
+
+function DashboardSkeleton() {
+  return <div className="space-y-8"><div className="h-20 w-full animate-pulse rounded-md bg-[var(--bg-subtle)]" /><div className="grid gap-8 xl:grid-cols-[1.35fr_.65fr]"><div className="h-72 animate-pulse rounded-md bg-[var(--bg-subtle)]" /><div className="h-72 animate-pulse rounded-md bg-[var(--bg-subtle)]" /></div></div>;
+}
 
 export function Dashboard() {
-  const { mode } = useExperienceMode();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [command, setCommand] = useState<CommandCenterData | null>(null);
-  const [view, setView] = useState<"today" | "ceo">("today");
-
+  const { data: session } = useSession();
+  const { selectedPageId } = useActivePage();
+  const [data, setData] = useState<CommandData | null>(null);
+  const [error, setError] = useState("");
   useEffect(() => {
-    fetch("/api/dashboard/command-center").then((r) => r.json()).then((res) => {
-      if (res.data) {
-        setCommand(res.data);
-        setStats(res.data.stats);
-      }
-    }).catch(() => {
-      fetch("/api/dashboard").then((r) => r.json()).then((res) => {
-        if (res.data) setStats(res.data);
-      });
-    });
-    try {
-      const saved = localStorage.getItem(VIEW_KEY);
-      if (saved === "ceo") setView("ceo");
-    } catch { /* ignore */ }
-  }, []);
+    const role = (session?.user as { role?: string } | undefined)?.role;
+    if (session && role !== "owner" && !selectedPageId) return;
+    const query = selectedPageId ? `?facebookPageId=${encodeURIComponent(selectedPageId)}` : "";
+    setError("");
+    setData(null);
+    fetch(`/api/dashboard/command-center${query}`).then(async (response) => {
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.error || "Không tải được dashboard");
+      setData(payload.data);
+    }).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
+  }, [selectedPageId, session]);
 
-  const switchView = (v: "today" | "ceo") => {
-    setView(v);
-    try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
-  };
+  const rawName = (session?.user?.name || "bạn").trim().split(/\s+/).slice(-1)[0];
+  const firstName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+  const dateLabel = useMemo(() => new Intl.DateTimeFormat("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit" }).format(new Date()), []);
+  const queue = data?.todayQueue.slice(0, 5) || [];
+  const contentQueue = data?.todayQueue.filter((item) => ["publish", "review", "approval"].includes(item.type)).slice(0, 3) || [];
 
-  // ─── View toggle ──────────────────────────────────────────
-  const ViewToggle = (
-    <div className="flex items-center gap-1 p-1 rounded-md self-start" style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)" }}>
-      <button
-        onClick={() => switchView("today")}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all"
-        style={view === "today"
-          ? { background: "var(--bg-card)", color: "var(--accent)", boxShadow: "var(--shadow-sm)" }
-          : { color: "var(--text-muted)" }}
-      >
-        <Gauge size={12} weight={view === "today" ? "fill" : "regular"} />
-        Hôm nay
-      </button>
-      <button
-        onClick={() => switchView("ceo")}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all"
-        style={view === "ceo"
-          ? { background: "var(--premium)", color: "white", boxShadow: "var(--shadow-premium)" }
-          : { color: "var(--text-muted)" }}
-      >
-        <ChartLine size={12} weight={view === "ceo" ? "fill" : "regular"} />
-        CEO
-      </button>
-    </div>
-  );
-
-  // ─── CEO Dashboard view ────────────────────────────────────
-  if (mode === "advanced" && view === "ceo") {
-    return (
-      <div className="dashboard-readable space-y-4">
-        <div className="flex justify-end">{ViewToggle}</div>
-        <CEODashboard />
-      </div>
-    );
-  }
-
-  const setup = command?.setup;
-  const nextSetupStep = setup?.steps.find((step) => !step.complete);
-
-  if (mode === "simple") {
-    return (
-      <div className="dashboard-readable space-y-6">
-        <section
-          className="rounded-lg border p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
-          style={{ background: "var(--bg-card)", borderColor: "var(--border)", boxShadow: "var(--shadow-sm)" }}
-        >
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-2 mb-1" style={{ color: "var(--accent)" }}>
-              <Compass size={16} weight="fill" />
-              <span className="text-xs font-semibold">Trung tâm công việc</span>
-            </div>
-            <h1 className="text-[28px] sm:text-[32px] font-extrabold">Hôm nay cần làm gì?</h1>
-            <p className="text-sm mt-1 max-w-2xl" style={{ color: "var(--text-muted)" }}>
-              AutoSpa đã gom các việc quan trọng theo thứ tự ưu tiên. Xử lý từ trên xuống để không bỏ sót khách hàng và nội dung.
-            </p>
-          </div>
-          <Link
-            href="/content"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-semibold shrink-0 transition-all hover:-translate-y-px active:scale-[0.98]"
-            style={{ background: "var(--accent)", color: "white", boxShadow: "0 8px 18px rgba(47,111,84,0.2)" }}
-          >
-            <Sparkle size={14} weight="fill" />
-            Tạo bài mới
-          </Link>
-        </section>
-
-        {setup && !setup.complete && (
-          <Card padding="none" className="overflow-hidden">
-            <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
-              <div className="p-5" style={{ background: "var(--accent-soft)" }}>
-                <p className="text-xs font-semibold" style={{ color: "var(--accent)" }}>Thiết lập AutoSpa</p>
-                <p className="text-3xl font-bold mt-2 tabular-nums" style={{ color: "var(--text)" }}>
-                  {setup.completed}/{setup.total}
-                </p>
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>bước đã hoàn thành</p>
-                <div className="h-2 rounded-full overflow-hidden mt-4" style={{ background: "var(--bg-card)" }}>
-                  <div
-                    className="h-full rounded-full transition-[width] duration-500"
-                    style={{ width: `${(setup.completed / setup.total) * 100}%`, background: "var(--accent)" }}
-                  />
-                </div>
-                {nextSetupStep && (
-                  <Link href={nextSetupStep.href} className="inline-flex items-center gap-1 mt-4 text-xs font-semibold" style={{ color: "var(--accent)" }}>
-                    Làm bước tiếp theo <ArrowRight size={11} />
-                  </Link>
-                )}
-              </div>
-              <div className="divide-y" style={{ borderColor: "var(--border)" }}>
-                {setup.steps.map((step) => (
-                  <Link key={step.id} href={step.href} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[var(--bg-subtle)]">
-                    <span
-                      className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
-                      style={step.complete
-                        ? { background: "var(--accent)", color: "white" }
-                        : { background: "var(--bg-subtle)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
-                    >
-                      {step.complete ? <Check size={13} weight="bold" /> : <span className="w-1.5 h-1.5 rounded-full" style={{ background: "currentColor" }} />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold" style={{ color: step.complete ? "var(--text-muted)" : "var(--text)" }}>{step.label}</p>
-                      {!step.complete && <p className="text-xs" style={{ color: "var(--text-muted)" }}>{step.description}</p>}
-                    </div>
-                    <CaretRight size={13} style={{ color: "var(--text-muted)" }} />
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </Card>
-        )}
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Stat label="Cần xử lý ngay" value={command?.kpis.criticalTasks ?? 0} icon={WarningCircle} color="var(--rose)" href="#today-queue" />
-          <Stat label="Tin nhắn mới" value={stats?.unreadMessages ?? 0} icon={ChatCircleDots} color="var(--blue)" href="/inbox" />
-          <Stat label="Lead cần chăm" value={stats?.hotLeads ?? 0} icon={Flame} color="var(--rose)" href="/sale" />
-          <Stat label="Bài đang lên lịch" value={stats?.scheduled ?? 0} icon={CalendarBlank} color="var(--amber)" href="/publish" />
-        </div>
-
-        <TodayQueue />
-
-        <section>
-          <p className="text-xs font-bold mb-2" style={{ color: "var(--text-muted)" }}>Tạo nhanh</p>
-          <QuickActions simple />
-        </section>
-
-        <MorningBriefCard />
-        <ActivityFeed />
-      </div>
-    );
-  }
-
-  // ─── Daily "Today" view ───────────────────────────────────
   return (
-    <div className="dashboard-readable space-y-6">
-      {/* View toggle */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-extrabold">Bảng điều hành nâng cao</h1>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Theo dõi toàn bộ vận hành, AI và hiệu suất marketing.</p>
+    <div>
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="mb-2 text-[13px] font-medium capitalize text-[var(--text-muted)]">{dateLabel}</p><h1 className="text-[28px] font-extrabold leading-tight sm:text-[32px]">Chào buổi sáng, {firstName}</h1><p className="mt-2 text-sm text-[var(--text-secondary)]">{data ? (data.kpis.queueTotal > 0 ? `Hôm nay có ${data.kpis.queueTotal} việc cần xử lý.` : "Hôm nay chưa có việc nào cần xử lý.") : "AutoSpa đang tổng hợp công việc trong ngày."}</p></div><div className="flex items-center gap-2 text-xs font-medium text-[var(--text-secondary)]"><span className={`h-2 w-2 rounded-full ${error ? "bg-[var(--danger)]" : "bg-[var(--success)]"}`} />{error ? "Dữ liệu cần được kiểm tra" : "Hệ thống đang hoạt động bình thường"}</div></header>
+
+      {error ? <div className="flex gap-3 border-y border-[var(--danger)]/30 bg-[var(--danger-light)] px-4 py-4 text-sm text-[var(--danger)]"><WarningCircle size={20} className="shrink-0" /><div><p className="font-semibold">Không tải được dữ liệu vận hành</p><p className="mt-1 text-xs">{error}</p></div></div> : !data ? <DashboardSkeleton /> : <>
+        <section className="grid grid-cols-2 gap-x-4 gap-y-6 border-y border-[var(--border)] py-5 sm:grid-cols-4 sm:gap-x-0">
+          <Metric label="Doanh thu hôm nay" value={money(data.kpis.revenueToday)} note={`${data.kpis.bookingsToday} lịch hẹn đã ghi nhận`} />
+          <Metric label="Lịch hẹn" value={String(data.kpis.bookingsToday)} note="Đã ghi nhận trong ngày" />
+          <Metric label="Khách mới" value={String(data.kpis.leadsToday)} note={`${data.stats.hotLeads} khách cần ưu tiên`} />
+          <Metric label="Tin nhắn mới" value={String(data.stats.unreadMessages)} note={data.stats.unreadMessages ? "Cần phản hồi" : "Đã xử lý hết"} danger={data.stats.unreadMessages > 0} />
+        </section>
+
+        <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1.35fr)_minmax(19rem,.65fr)]">
+          <section>
+            <div className="mb-3 flex items-end justify-between gap-4"><div><h2 className="text-[19px] font-bold">Việc cần làm</h2><p className="mt-1 text-[13px] text-[var(--text-muted)]">Sắp xếp theo mức độ ảnh hưởng</p></div><span className="text-[13px] font-medium text-[var(--text-secondary)]">{data.kpis.queueTotal} đang chờ</span></div>
+            <div className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
+              {queue.map((item) => <article key={item.id} className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${item.priority === "critical" ? "bg-[var(--danger)]" : item.priority === "high" ? "bg-[var(--warning)]" : "bg-[var(--text-muted)]"}`} /><h3 className="truncate text-[15px] font-semibold">{item.title}</h3></div><p className="mt-1 pl-4 text-[13px] text-[var(--text-muted)]">{item.detail}</p></div><Link href={item.href} className="flex items-center gap-2 justify-self-start text-[13px] font-semibold text-[var(--accent)] sm:justify-self-end">{item.primaryAction}<ArrowRight size={15} /></Link></article>)}
+              {queue.length === 0 && <div className="flex items-center gap-3 py-8 text-sm text-[var(--accent)]"><CheckCircle size={22} weight="fill" />Không có việc gấp cần xử lý.</div>}
+            </div>
+            {data.kpis.queueTotal > queue.length && <Link href="/automation" className="mt-4 inline-flex items-center gap-2 text-[13px] font-semibold text-[var(--accent)]">Xem toàn bộ hàng đợi <ArrowRight size={14} /></Link>}
+          </section>
+
+          <aside className="border-l border-[var(--border)] pl-6"><div className="flex items-center justify-between"><h2 className="text-[19px] font-bold">Nội dung cần chú ý</h2><Link href="/creative" className="text-[13px] font-semibold text-[var(--accent)]">Mở Sáng tạo</Link></div><div className="mt-4 divide-y divide-[var(--border)]">{contentQueue.map((item) => <Link href={item.href} key={item.id} className="block py-3"><p className="text-sm font-semibold">{item.title}</p><p className="mt-1 text-xs text-[var(--text-muted)]">{item.detail}</p></Link>)}{contentQueue.length === 0 && <div className="py-8 text-sm text-[var(--text-muted)]">Không có nội dung bị chặn hoặc chờ duyệt.</div>}</div></aside>
         </div>
-        {ViewToggle}
-      </div>
 
-      {/* 1. Daily Standup (CEO Council brief) — hero */}
-      <MorningBriefCard />
-
-      {/* 2. Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Stat
-          label="Việc gấp cần xử lý"
-          value={command?.kpis.criticalTasks ?? 0}
-          icon={WarningCircle}
-          color="var(--rose)"
-          href="#today-queue"
-        />
-        <Stat
-          label="Đang chờ duyệt"
-          value={command?.kpis.pendingApprovals ?? 0}
-          icon={CheckCircle}
-          color="var(--premium)"
-          href="/automation"
-        />
-        <Stat
-          label="Tin nhắn chưa đọc"
-          value={stats?.unreadMessages ?? 0}
-          icon={ChatCircleDots}
-          color="var(--rose)"
-          href="/inbox"
-        />
-        <Stat
-          label="Lead nóng"
-          value={stats?.hotLeads ?? 0}
-          icon={Flame}
-          color="var(--rose)"
-          href="/sale"
-        />
-        <Stat
-          label="Đang lên lịch"
-          value={stats?.scheduled ?? 0}
-          icon={CalendarBlank}
-          color="var(--amber)"
-          href="/publish"
-        />
-        <Stat
-          label="Cảnh báo mới"
-          value={stats?.unreadAlerts ?? 0}
-          icon={Bell}
-          color="var(--amber)"
-          href="/listening"
-        />
-      </div>
-
-      {/* 3. Quick actions */}
-      <QuickActions />
-
-      {/* 4. Today's command queue */}
-      <TodayQueue />
-
-      {/* 5. Activity feed */}
-      <ActivityFeed />
+        <section className="mt-9"><div className="mb-4 flex items-center justify-between"><h2 className="text-[19px] font-bold">Đang vận hành</h2><Link href="/orchestrator" className="text-[13px] font-semibold text-[var(--accent)]">Xem tất cả</Link></div><div className="grid overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--border)] md:grid-cols-3">
+          <Operation icon={FilmSlate} title="Nội dung hôm nay" detail={`${data.contentFactory.scheduledToday} sắp đăng · ${data.contentFactory.reviewBlocked} bị chặn`} tone="green" />
+          <Operation icon={Megaphone} title="Tối ưu quảng cáo" detail={`${data.adsCommand.actionsToday} hành động · ${data.adsCommand.pendingApprovals} chờ duyệt`} tone="gold" />
+          <Operation icon={UsersThree} title="Chăm sóc khách" detail={`${data.stats.pendingCare} khách đến hạn · ${data.stats.hotLeads} khách cần ưu tiên`} tone="blue" />
+        </div>{data.aiTasks.failedJobs > 0 && <Link href="/orchestrator" className="mt-3 flex items-center gap-2 text-xs font-semibold text-[var(--danger)]"><WarningCircle size={15} />{data.aiTasks.failedJobs} tác vụ AI gần đây bị lỗi</Link>}</section>
+      </>}
     </div>
   );
+}
+
+function Operation({ icon: IconComponent, title, detail, tone }: { icon: typeof FilmSlate; title: string; detail: string; tone: "green" | "gold" | "blue" }) {
+  const toneClass = tone === "green" ? "bg-[var(--accent-light)] text-[var(--accent)]" : tone === "gold" ? "bg-[var(--premium-light)] text-[var(--premium)]" : "bg-[var(--blue-light)] text-[var(--blue)]";
+  return <article className="flex min-h-28 items-center gap-4 bg-[var(--bg-card)] p-4"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md ${toneClass}`}><IconComponent size={21} weight="duotone" /></span><div><h3 className="text-sm font-semibold">{title}</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{detail}</p></div></article>;
 }
