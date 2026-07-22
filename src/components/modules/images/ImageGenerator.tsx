@@ -3,9 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { MediaAssetCard } from "@/components/media/MediaAssetCard";
+import { MediaPreviewDialog } from "@/components/media/MediaPreviewDialog";
+import { MediaStatusBadge } from "@/components/media/MediaStatusBadge";
 import { Select } from "@/components/ui/Select";
 import { useActivePage } from "@/contexts/ActivePageContext";
 import { Textarea, Input } from "@/components/ui/Input";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import {
   Sparkle, ArrowCounterClockwise, DownloadSimple, Image as ImageIcon, PaperPlaneTilt,
   CheckCircle, WarningCircle, MagicWand, ThumbsUp, ThumbsDown, UserCircle, Plus, X,
@@ -81,8 +85,18 @@ interface GeneratedVariant {
 
 interface HistoryImage {
   id: string;
+  postId: string | null;
   imageUrl: string;
+  thumbnailUrl: string;
+  model: string | null;
+  preset: string;
+  prompt: string;
+  visualBrief: string | null;
+  qualityScore: number;
+  promptScore: number;
   visionScore: number | null;
+  generationStatus: string;
+  userAccepted: boolean | null;
   format: string;
   createdAt: string;
 }
@@ -176,6 +190,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
   const [error, setError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [history, setHistory] = useState<HistoryImage[]>([]);
+  const [previewImage, setPreviewImage] = useState<HistoryImage | null>(null);
 
   useEffect(() => {
     const url = facebookPageId ? `/api/services?facebookPageId=${facebookPageId}` : "/api/services";
@@ -865,30 +880,64 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
                 </p>
               )}
               {history.length > 0 && (
-                <div className="space-y-2 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-                  <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>Phiên bản gần đây</p>
-                  <div className="grid grid-cols-6 gap-1.5">
-                    {history.slice(0, 12).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        title={`${item.format} · ${new Date(item.createdAt).toLocaleString("vi-VN")}`}
-                        onClick={() => {
-                          const variant: GeneratedVariant = { imageUrl: item.imageUrl, generationId: item.id, vision: null, retryCount: 0, status: "completed" };
-                          setResult((previous) => previous
-                            ? { ...previous, imageUrl: item.imageUrl, generationId: item.id, variants: [variant] }
-                            : { imageUrl: item.imageUrl, prompt: "Ảnh trong lịch sử", generationId: item.id, variants: [variant] });
-                          setActiveVariant(0);
-                          if (onImageSet) onImageSet(item.imageUrl);
-                        }}
-                        className="relative aspect-square overflow-hidden rounded-md"
-                        style={{ border: item.id === (selectedVariant?.generationId ?? result.generationId) ? "2px solid var(--accent)" : "1px solid var(--border)" }}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
-                      </button>
-                    ))}
+                <div className="space-y-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Thư viện gần đây</p>
+                    <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>Chọn ảnh để dùng lại hoặc mở xem chi tiết.</p>
                   </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {history.slice(0, 12).map((item) => {
+                      const selected = item.id === (selectedVariant?.generationId ?? result.generationId);
+                      return (
+                        <MediaAssetCard
+                          key={item.id}
+                          title={item.visualBrief || item.prompt || "Ảnh đã tạo"}
+                          description={item.prompt}
+                          thumbnailUrl={item.thumbnailUrl}
+                          aspectRatio={item.format}
+                          selected={selected}
+                          badges={<MediaStatusBadge status={item.userAccepted ? "approved" : item.generationStatus} />}
+                          metadata={(
+                            <>
+                              <span>{item.format}</span>
+                              <span>{item.model || "Model không rõ"}</span>
+                              <span>{item.visionScore ?? item.qualityScore}/100</span>
+                              <span>{formatDate(item.createdAt)}</span>
+                              {item.postId && <span>Đang dùng trong bài</span>}
+                            </>
+                          )}
+                          onSelect={() => {
+                            const variant: GeneratedVariant = { imageUrl: item.imageUrl, generationId: item.id, vision: null, retryCount: 0, status: item.generationStatus };
+                            setResult((previous) => previous
+                              ? { ...previous, imageUrl: item.imageUrl, prompt: item.prompt, generationId: item.id, variants: [variant] }
+                              : { imageUrl: item.imageUrl, prompt: item.prompt || "Ảnh trong lịch sử", generationId: item.id, variants: [variant] });
+                            setActiveVariant(0);
+                            setPreviewImage(item);
+                            if (onImageSet) onImageSet(item.imageUrl);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                  <MediaPreviewDialog
+                    open={Boolean(previewImage)}
+                    onOpenChange={(open) => { if (!open) setPreviewImage(null); }}
+                    title={previewImage?.visualBrief || "Ảnh đã tạo"}
+                    description={previewImage?.prompt}
+                    mediaUrl={previewImage?.imageUrl}
+                    aspectRatio={previewImage?.format}
+                    details={previewImage ? (
+                      <div className="space-y-3 text-sm">
+                        <div className="flex flex-wrap gap-2"><MediaStatusBadge status={previewImage.userAccepted ? "approved" : previewImage.generationStatus} /></div>
+                        <dl className="space-y-2 text-xs">
+                          <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">Định dạng</dt><dd>{previewImage.format}</dd></div>
+                          <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">Model</dt><dd>{previewImage.model || "Không rõ"}</dd></div>
+                          <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">Chất lượng</dt><dd>{previewImage.visionScore ?? previewImage.qualityScore}/100</dd></div>
+                          <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">Ngày tạo</dt><dd>{formatDateTime(previewImage.createdAt)}</dd></div>
+                        </dl>
+                      </div>
+                    ) : null}
+                  />
                 </div>
               )}
             </div>

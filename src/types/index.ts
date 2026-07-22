@@ -1,5 +1,5 @@
-export type PostStatus = "draft" | "scheduled" | "published" | "failed";
-export type PostType = "service" | "promotion" | "tip" | "intro" | "combo";
+export type PostStatus = "draft" | "scheduled" | "published" | "partially_published" | "publish_failed" | "failed";
+export type PostType = "service" | "promotion" | "tip" | "intro" | "combo" | "video";
 export type Tone = "friendly" | "professional" | "luxury";
 export type Platform = "facebook" | "zalo" | "tiktok";
 export type AppointmentStatus = "pending" | "confirmed" | "cancelled" | "done";

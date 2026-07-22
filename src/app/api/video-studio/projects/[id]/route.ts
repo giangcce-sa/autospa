@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
 import { projectInclude } from "@/lib/video-studio/service";
 import { serializeProject } from "@/lib/video-studio/serializers";
-import { PROJECT_RENDER_FIELDS } from "@/lib/video-studio/invalidation";
+import { invalidatedProjectRenderData, PROJECT_RENDER_FIELDS } from "@/lib/video-studio/invalidation";
 import { deleteMedia } from "@/lib/media-storage";
 
 const updateSchema = z.object({
@@ -57,11 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: {
         ...projectData,
         ...(styleSkillIds ? { styleSkillIds: JSON.stringify(styleSkillIds) } : {}),
-        ...(invalidatesRender ? {
-          inputRevision: { increment: 1 }, outputUrl: null, outputStorageKey: null, renderedRevision: null,
-          qualityScore: null, qualityReport: null, approvalStatus: "draft", approvedRevision: null,
-          approvedAt: null, approvedBy: null, status: "storyboard",
-        } : {}),
+        ...(invalidatesRender ? invalidatedProjectRenderData() : {}),
         ...(approving ? { approvedRevision: existing.inputRevision, approvedAt: new Date(), approvedBy: user.id || null, status: "approved" } : {}),
       },
     });

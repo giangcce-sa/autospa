@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { mediaStatusPresentation } from "@/lib/media-gallery";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info" | "neutral";
 
@@ -29,16 +30,12 @@ export function Badge({ children, variant = "default", className }: BadgeProps) 
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; variant: BadgeVariant }> = {
-    draft: { label: "Nháp", variant: "neutral" },
-    scheduled: { label: "Đã lên lịch", variant: "info" },
-    published: { label: "Đã đăng", variant: "success" },
-    failed: { label: "Thất bại", variant: "danger" },
-    pending: { label: "Chờ xử lý", variant: "warning" },
+  const domainStatus: Record<string, { label: string; variant: BadgeVariant }> = {
     confirmed: { label: "Đã xác nhận", variant: "success" },
     cancelled: { label: "Đã hủy", variant: "danger" },
     done: { label: "Hoàn thành", variant: "neutral" },
   };
-  const item = map[status] ?? { label: status, variant: "neutral" as BadgeVariant };
+  const mediaStatus = mediaStatusPresentation(status);
+  const item = domainStatus[status] ?? { label: mediaStatus.label, variant: mediaStatus.tone };
   return <Badge variant={item.variant}>{item.label}</Badge>;
 }

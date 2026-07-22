@@ -27,6 +27,27 @@ export async function GET(req: NextRequest) {
     for (const post of posts) {
       const fullText = [post.caption, post.hashtags].filter(Boolean).join("\n\n");
 
+      if (post.postType === "video") {
+        await prisma.post.update({
+          where: { id: post.id },
+          data: {
+            status: "draft",
+            qualityNotes: "Video phải được xuất bản từ Xưởng video sau khi QA và duyệt đúng phiên bản.",
+          },
+        });
+        await logActivity({
+          type: "publish_blocked",
+          title: "Scheduled video blocked",
+          detail: "Video phải được xuất bản từ Xưởng video.",
+          href: `/creative/video`,
+          severity: "warning",
+          source: "auto_publish",
+          metadata: { postId: post.id, platform: post.platform },
+        }).catch(() => null);
+        blocked++;
+        continue;
+      }
+
       // Last line of defense: REVIEWER GATE
       // Nếu chưa review thì review luôn
       let reviewStatus: string | undefined = post.review?.status;

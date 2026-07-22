@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { prisma } from "@/lib/db";
-import { imageSourceToBuffer, readMedia, saveMedia, storageKeyFromMediaUrl } from "@/lib/media-storage";
+import { deleteMedia, imageSourceToBuffer, readMedia, saveMedia, storageKeyFromMediaUrl } from "@/lib/media-storage";
 import { getVideoProviderConfig } from "./config";
 import { runFfmpeg } from "./ffmpeg";
 import { parseJson } from "./types";
@@ -76,8 +76,14 @@ export async function renderVideoProject(projectId: string) {
   if (!project.scenes.length) throw new Error("Dự án chưa có cảnh để render");
   if (config.mockMode) {
     const outputUrl = `mock://render/${projectId}`;
-    await saveVersion(projectId, outputUrl, null);
-    await prisma.videoProject.update({ where: { id: projectId }, data: { outputUrl, renderedRevision: project.inputRevision, status: "review", approvalStatus: "pending" } });
+    const supersededPosterKeys = await persistRenderedVersion({
+      projectId,
+      inputRevision: project.inputRevision,
+      outputUrl,
+      outputStorageKey: null,
+      poster: null,
+    });
+    await deleteStoredMedia(supersededPosterKeys);
     return { outputUrl, mock: true };
   }
 
@@ -149,32 +155,133 @@ export async function renderVideoProject(projectId: string) {
 
     const rendered = await readFile(currentOutput);
     const stored = await saveMedia({ folder: "video-studio/renders", buffer: rendered, extension: "mp4" });
-    await saveVersion(projectId, stored.url, stored.key);
-    await prisma.videoProject.update({
-      where: { id: projectId },
-      data: { outputUrl: stored.url, outputStorageKey: stored.key, renderedRevision: project.inputRevision, status: "review", approvalStatus: "pending" },
-    });
-    return { outputUrl: stored.url, storageKey: stored.key, mock: false };
+    let poster: Awaited<ReturnType<typeof createPoster>> | null = null;
+    try {
+      poster = await createPoster(currentOutput, workdir).catch(() => null);
+      const supersededPosterKeys = await persistRenderedVersion({
+        projectId,
+        inputRevision: project.inputRevision,
+        outputUrl: stored.url,
+        outputStorageKey: stored.key,
+        poster,
+      });
+      await deleteStoredMedia(supersededPosterKeys);
+      return { outputUrl: stored.url, storageKey: stored.key, thumbnailUrl: poster?.url ?? null, mock: false };
+    } catch (error) {
+      await deleteStoredMedia([stored.key, poster?.key]);
+      throw error;
+    }
   } finally {
     await rm(workdir, { recursive: true, force: true });
   }
 }
 
-async function saveVersion(projectId: string, outputUrl: string, storageKey: string | null) {
-  const [project, latest] = await Promise.all([
-    prisma.videoProject.findUnique({ where: { id: projectId }, include: { scenes: { orderBy: { position: "asc" } } } }),
-    prisma.videoVersion.findFirst({ where: { projectId }, orderBy: { version: "desc" }, select: { version: true } }),
-  ]);
-  if (!project) return;
-  await prisma.videoVersion.create({
-    data: {
-      projectId,
-      version: (latest?.version || 0) + 1,
-      label: `Bản ${(latest?.version || 0) + 1}`,
-      snapshot: JSON.stringify({ project, scenes: project.scenes }),
-      outputUrl,
-      storageKey,
-      inputRevision: project.inputRevision,
-    },
+async function createPoster(videoPath: string, workdir: string) {
+  const posterPath = path.join(workdir, "poster.jpg");
+  await runFfmpeg([
+    "-y", "-ss", "1", "-i", videoPath, "-frames:v", "1",
+    "-vf", "scale='min(960,iw)':-2", "-q:v", "3", posterPath,
+  ], 60_000);
+  const buffer = await readFile(posterPath);
+  const stored = await saveMedia({ folder: "video-studio/posters", buffer, extension: "jpg" });
+  return { ...stored, size: buffer.length };
+}
+
+type StoredPoster = {
+  key: string;
+  url: string;
+  size: number;
+};
+
+async function persistRenderedVersion(input: {
+  projectId: string;
+  inputRevision: number;
+  outputUrl: string;
+  outputStorageKey: string | null;
+  poster: StoredPoster | null;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const project = await tx.videoProject.findUnique({
+      where: { id: input.projectId },
+      include: { scenes: { orderBy: { position: "asc" } } },
+    });
+    if (!project) throw new Error("Không tìm thấy dự án");
+    if (project.inputRevision !== input.inputRevision) {
+      throw new Error("Render đã cũ vì dự án được chỉnh sửa trong lúc xử lý");
+    }
+
+    const [latest, posterAssets] = await Promise.all([
+      tx.videoVersion.findFirst({
+        where: { projectId: input.projectId },
+        orderBy: { version: "desc" },
+        select: { version: true },
+      }),
+      tx.videoAsset.findMany({
+        where: { projectId: input.projectId, type: "poster" },
+        select: { id: true, storageKey: true, metadata: true },
+      }),
+    ]);
+    const supersededPosters = posterAssets.filter((asset) => (
+      parseJson<{ inputRevision?: number }>(asset.metadata, {}).inputRevision === input.inputRevision
+    ));
+    const version = (latest?.version ?? 0) + 1;
+
+    await tx.videoVersion.create({
+      data: {
+        projectId: input.projectId,
+        version,
+        label: `Bản ${version}`,
+        snapshot: JSON.stringify({ project, scenes: project.scenes }),
+        outputUrl: input.outputUrl,
+        storageKey: input.outputStorageKey,
+        inputRevision: input.inputRevision,
+      },
+    });
+    if (supersededPosters.length > 0) {
+      await tx.videoAsset.deleteMany({
+        where: { id: { in: supersededPosters.map((asset) => asset.id) } },
+      });
+    }
+    if (input.poster) {
+      await tx.videoAsset.create({
+        data: {
+          projectId: input.projectId,
+          type: "poster",
+          source: "render",
+          name: `Poster revision ${input.inputRevision}`,
+          url: input.poster.url,
+          storageKey: input.poster.key,
+          mimeType: "image/jpeg",
+          sizeBytes: input.poster.size,
+          metadata: JSON.stringify({ inputRevision: input.inputRevision, timestampSec: 1 }),
+          status: "ready",
+          validatedAt: new Date(),
+        },
+      });
+    }
+    await tx.videoProject.update({
+      where: { id: input.projectId },
+      data: {
+        outputUrl: input.outputUrl,
+        outputStorageKey: input.outputStorageKey,
+        thumbnailUrl: input.poster?.url ?? null,
+        renderedRevision: input.inputRevision,
+        qualityScore: null,
+        qualityReport: null,
+        status: "review",
+        approvalStatus: "pending",
+        approvedRevision: null,
+        approvedAt: null,
+        approvedBy: null,
+      },
+    });
+
+    return supersededPosters.map((asset) => asset.storageKey).filter((key): key is string => Boolean(key));
   });
+}
+
+async function deleteStoredMedia(keys: Array<string | null | undefined>) {
+  await Promise.all([...new Set(keys.filter((key): key is string => Boolean(key)))].map(
+    (key) => deleteMedia(key).catch(() => undefined),
+  ));
 }

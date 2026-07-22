@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
-import { sceneInvalidationFor } from "@/lib/video-studio/invalidation";
+import { invalidatedProjectRenderData, sceneInvalidationFor } from "@/lib/video-studio/invalidation";
 import { validateSceneMediaUrl } from "@/lib/video-studio/media-security";
 
 const schema = z.object({
@@ -46,11 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (invalidation.invalidatesProject) {
         await tx.videoProject.update({
           where: { id: scene.projectId },
-          data: {
-            inputRevision: { increment: 1 }, outputUrl: null, outputStorageKey: null, renderedRevision: null,
-            qualityScore: null, qualityReport: null, approvalStatus: "draft", approvedRevision: null,
-            approvedAt: null, approvedBy: null, status: "storyboard",
-          },
+          data: invalidatedProjectRenderData(),
         });
       }
       return next;

@@ -8,6 +8,9 @@ import {
 } from "@phosphor-icons/react";
 import { useActivePage } from "@/contexts/ActivePageContext";
 import { Button } from "@/components/ui/Button";
+import { MediaAssetCard } from "@/components/media/MediaAssetCard";
+import { MediaPreviewDialog } from "@/components/media/MediaPreviewDialog";
+import { MediaStatusBadge } from "@/components/media/MediaStatusBadge";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
@@ -24,7 +27,13 @@ type Scene = {
   visualPrompt: string; cameraDirection?: string; staffProfileId?: string; voiceProfileId?: string; sourceImageUrl?: string;
   sourceVideoUrl?: string; generatedVideoUrl?: string; audioUrl?: string; lipSyncVideoUrl?: string; status: string; locked: boolean;
 };
-type ProjectSummary = { id: string; name: string; brief: string; status: string; approvalStatus: string; platform: string; aspectRatio: string; durationSec: number; qualityScore?: number; outputUrl?: string; updatedAt: string; _count: { scenes: number; jobs: number; versions: number } };
+type ProjectSummary = {
+  id: string; name: string; brief: string; status: string; approvalStatus: string; platform: string; aspectRatio: string;
+  durationSec: number; qualityScore?: number; outputUrl?: string; thumbnailUrl?: string; posterUrl?: string; firstSceneImageUrl?: string;
+  inputRevision: number; renderedRevision?: number; approvedRevision?: number; renderFresh: boolean; approvalFresh: boolean; mock: boolean;
+  publishedPostId?: string; updatedAt: string; activeJob?: { status: string; progress: number } | null;
+  _count: { scenes: number; jobs: number; versions: number };
+};
 type Project = ProjectSummary & { objective: string; caption?: string; hashtags?: string; staffProfileId?: string; voiceProfileId?: string; scenes: Scene[]; jobs: Array<{ id: string; type: string; provider: string; status: string; progress: number; error?: string }>; assets: Array<{ id: string; type: string; name: string; url: string }>; qualityReport?: { score: number; passed: boolean; issues: Array<{ code: string; severity: string; sceneId?: string; message: string; suggestion: string }> } };
 type VideoConfig = { runwayApiKey?: string; runwayBaseUrl: string; runwayVideoModel: string; elevenLabsApiKey?: string; elevenLabsBaseUrl: string; elevenLabsVoiceModel: string; syncLabsApiKey?: string; syncLabsBaseUrl: string; syncLabsModel: string; videoMockMode: boolean; videoBudgetUsd: number; configured: Record<string, boolean> };
 
@@ -133,6 +142,7 @@ export function VideoStudio() {
 
 function ProjectsHome({ projects, staff, voices, skills, pageId, busy, onCreated, onSelect, onError }: { projects: ProjectSummary[]; staff: Staff[]; voices: Voice[]; skills: Skill[]; pageId: string; busy: string | null; onCreated: (id: string) => void; onSelect: (id: string) => void; onError: (text: string) => void }) {
   const [creating, setCreating] = useState(false);
+  const [previewProject, setPreviewProject] = useState<ProjectSummary | null>(null);
   const showCreate = creating || projects.length === 0;
   const [form, setForm] = useState({ name: "", brief: "", objective: "booking", platform: "tiktok", aspectRatio: "9:16", durationSec: 30, staffProfileId: "", voiceProfileId: "", styleSkillIds: [] as string[] });
   const submit = async () => {
@@ -145,10 +155,32 @@ function ProjectsHome({ projects, staff, voices, skills, pageId, busy, onCreated
     <section>
       <div className="mb-4 flex items-center justify-between"><div><h2 className="text-base font-bold" style={{ color: "var(--text)" }}>Dự án gần đây</h2><p className="text-xs" style={{ color: "var(--text-muted)" }}>{projects.length} dự án trong Trang Facebook đang chọn</p></div><Button size="sm" onClick={() => setCreating(true)}><Plus size={16} />Tạo dự án</Button></div>
       {projects.length === 0 ? <div className="flex min-h-72 flex-col items-center justify-center border-y text-center" style={{ borderColor: "var(--border)" }}><FilmSlate size={36} color="var(--text-muted)" /><p className="mt-3 font-semibold">Chưa có dự án video</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Nhập một mô tả ngắn, AutoSpa sẽ tạo kịch bản theo từng cảnh.</p></div>
-      : <div className="divide-y border-y" style={{ borderColor: "var(--border)" }}>{projects.map((item) => <button key={item.id} onClick={() => onSelect(item.id)} className="group grid w-full gap-3 px-2 py-4 text-left transition-colors hover:bg-[var(--bg-subtle)] sm:grid-cols-[minmax(0,1fr)_auto]">
-        <div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold" style={{ color: "var(--text)" }}>{item.name}</h3><Status value={item.status} />{item.qualityScore != null && <Badge variant={item.qualityScore >= 75 ? "success" : "warning"}>QA {item.qualityScore}</Badge>}</div><p className="mt-1 line-clamp-2 text-sm" style={{ color: "var(--text-secondary)" }}>{item.brief}</p></div>
-        <div className="flex items-center gap-4 text-xs tabular-nums" style={{ color: "var(--text-muted)" }}><span>{item._count.scenes} cảnh</span><span>{item.durationSec}s</span><span>{item.aspectRatio}</span><Play size={18} className="transition-transform group-hover:translate-x-0.5" /></div>
-      </button>)}</div>}
+      : <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">{projects.map((item) => {
+        const cardStatus = item.mock ? "mock" : item.outputUrl && !item.renderFresh ? "stale" : item.status;
+        return <MediaAssetCard
+          key={item.id}
+          kind="video"
+          title={item.name}
+          description={item.brief}
+          thumbnailUrl={item.posterUrl}
+          aspectRatio={item.aspectRatio}
+          badges={<><MediaStatusBadge status={cardStatus} />{item.qualityScore != null && <Badge variant={item.qualityScore >= 75 ? "success" : "warning"}>QA {item.qualityScore}</Badge>}</>}
+          metadata={<><span>{item._count.scenes} cảnh</span><span>{item.durationSec}s</span><span>{item.aspectRatio}</span><span>Rev {item.renderedRevision ?? "–"}/{item.inputRevision}</span>{item.activeJob && <span>{item.activeJob.status} {item.activeJob.progress}%</span>}{item.publishedPostId && <span>Đã xuất bản</span>}</>}
+          onSelect={() => setPreviewProject(item)}
+        />;
+      })}</div>}
+      <MediaPreviewDialog
+        open={Boolean(previewProject)}
+        onOpenChange={(open) => { if (!open) setPreviewProject(null); }}
+        title={previewProject?.name || "Dự án video"}
+        description={previewProject?.brief}
+        kind="video"
+        mediaUrl={previewProject?.renderFresh ? previewProject.outputUrl : null}
+        posterUrl={previewProject?.posterUrl}
+        aspectRatio={previewProject?.aspectRatio}
+        details={previewProject ? <div className="space-y-3 text-xs"><div className="flex flex-wrap gap-2"><MediaStatusBadge status={previewProject.mock ? "mock" : previewProject.outputUrl && !previewProject.renderFresh ? "stale" : previewProject.status} /><MediaStatusBadge status={previewProject.approvalFresh ? "approved" : previewProject.approvalStatus} /></div><dl className="space-y-2"><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">Nền tảng</dt><dd>{previewProject.platform}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">Thời lượng</dt><dd>{previewProject.durationSec}s</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">Revision</dt><dd>{previewProject.renderedRevision ?? "–"}/{previewProject.inputRevision}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">QA</dt><dd>{previewProject.qualityScore ?? "Chưa kiểm tra"}</dd></div></dl></div> : null}
+        actions={previewProject ? <Button className="w-full" onClick={() => { const id = previewProject.id; setPreviewProject(null); onSelect(id); }}><Play size={16} />Mở dự án</Button> : null}
+      />
     </section>
     <aside className={cn("border-l pl-6", showCreate ? "block" : "hidden")} style={{ borderColor: "var(--border)" }}>
       <div className="mb-4 flex items-center justify-between"><div><h2 className="font-bold">Brief mới</h2><p className="text-xs" style={{ color: "var(--text-muted)" }}>AI sẽ chia thành các cảnh có thể sửa</p></div>{projects.length > 0 && <button onClick={() => setCreating(false)} aria-label="Đóng"><X size={18} /></button>}</div>

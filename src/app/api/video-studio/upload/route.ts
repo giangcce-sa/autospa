@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { deleteMedia, saveMedia } from "@/lib/media-storage";
 import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { invalidatedProjectRenderData } from "@/lib/video-studio/invalidation";
 import { assertMediaSignature, mediaChecksum, probeMediaBuffer } from "@/lib/video-studio/media-security";
 
 const MAX_VIDEO_BYTES = 150 * 1024 * 1024;
@@ -71,18 +72,10 @@ export async function POST(req: NextRequest) {
         } });
       }
       if (scene && ["source_video", "source_audio"].includes(purpose)) {
-        await tx.videoProject.update({ where: { id: projectId }, data: {
-          inputRevision: { increment: 1 }, outputUrl: null, outputStorageKey: null, renderedRevision: null,
-          qualityScore: null, qualityReport: null, approvalStatus: "draft", approvedRevision: null,
-          approvedAt: null, approvedBy: null, status: "storyboard",
-        } });
+        await tx.videoProject.update({ where: { id: projectId }, data: invalidatedProjectRenderData() });
       }
       if (purpose === "music") {
-        await tx.videoProject.update({ where: { id: projectId }, data: {
-          inputRevision: { increment: 1 }, outputUrl: null, outputStorageKey: null, renderedRevision: null,
-          qualityScore: null, qualityReport: null, approvalStatus: "draft", approvedRevision: null,
-          approvedAt: null, approvedBy: null, status: "storyboard",
-        } });
+        await tx.videoProject.update({ where: { id: projectId }, data: invalidatedProjectRenderData() });
       }
       return created;
     });

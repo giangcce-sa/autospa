@@ -11,6 +11,7 @@ import { getVideoProviderConfig } from "./config";
 import { parseJson, type ProviderTask } from "./types";
 import { assertStaffConsent } from "./consent";
 import { inspectRenderedVideo } from "./render-inspection";
+import { invalidatedProjectRenderData } from "./invalidation";
 
 export const projectInclude = {
   scenes: { orderBy: { position: "asc" as const } },
@@ -145,17 +146,7 @@ export async function buildStoryboard(projectId: string) {
         storyboard: JSON.stringify(result),
         caption: result.caption,
         hashtags: result.hashtags.join(" "),
-        inputRevision: { increment: 1 },
-        outputUrl: null,
-        outputStorageKey: null,
-        renderedRevision: null,
-        approvedRevision: null,
-        approvedAt: null,
-        approvedBy: null,
-        qualityScore: null,
-        qualityReport: null,
-        status: "storyboard",
-        approvalStatus: "draft",
+        ...invalidatedProjectRenderData(),
       },
     });
   });

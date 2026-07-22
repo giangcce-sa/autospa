@@ -23,3 +23,20 @@ export const PROJECT_RENDER_FIELDS = new Set([
   "brief", "objective", "platform", "aspectRatio", "durationSec", "serviceId", "staffProfileId",
   "voiceProfileId", "styleSkillIds", "styleStrength", "caption", "hashtags",
 ]);
+
+export function invalidatedProjectRenderData() {
+  return {
+    inputRevision: { increment: 1 },
+    outputUrl: null,
+    outputStorageKey: null,
+    thumbnailUrl: null,
+    renderedRevision: null,
+    qualityScore: null,
+    qualityReport: null,
+    approvalStatus: "draft",
+    approvedRevision: null,
+    approvedAt: null,
+    approvedBy: null,
+    status: "storyboard",
+  } as const;
+}

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { MediaThumbnail } from "@/components/media/MediaThumbnail";
 import { StatusBadge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Archive, Trash, CalendarBlank, PaperPlaneTilt } from "@phosphor-icons/react";
@@ -13,6 +14,7 @@ interface Post {
   id: string;
   caption: string;
   hashtags: string | null;
+  imageUrl: string | null;
   platform: string;
   postType: string;
   status: string;
@@ -86,8 +88,16 @@ export function LibraryView() {
       ) : (
         <div className="space-y-2">
           {posts.map((post) => (
-            <Card key={post.id} className="group">
-              <div className="flex items-start gap-3">
+            <Card key={post.id} className="group" padding="none">
+              <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
+                <MediaThumbnail
+                  src={post.imageUrl}
+                  alt={post.caption || "Media bài viết"}
+                  kind={post.postType === "video" ? "video" : "image"}
+                  aspectRatio={post.postType === "video" ? "16:9" : "feed"}
+                  className="h-full min-h-32 rounded-t-xl sm:rounded-l-xl sm:rounded-tr-none"
+                />
+                <div className="flex min-w-0 items-start gap-3 p-4 sm:pl-1">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <StatusBadge status={post.status} />
@@ -108,13 +118,14 @@ export function LibraryView() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 shrink-0 transition-opacity">
+                <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                   <Button size="sm" variant="secondary" onClick={() => handleReuse(post.id)} title="Dùng lại bài này">
                     <PaperPlaneTilt size={12} weight="fill" /> Dùng lại
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(post.id)} style={{ color: "var(--rose)" }}>
-                    <Trash size={13} />
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(post.id)} style={{ color: "var(--rose)" }} aria-label="Xóa bài viết">
+                    <Trash size={13} aria-hidden="true" />
                   </Button>
+                </div>
                 </div>
               </div>
             </Card>

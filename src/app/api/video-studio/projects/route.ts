@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { videoPosterUrl, videoRevisionState } from "@/lib/media-gallery";
 
 const createSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -27,12 +28,54 @@ export async function GET(req: NextRequest) {
       where: { facebookPageId },
       orderBy: { updatedAt: "desc" },
       take: 80,
-      include: {
+      select: {
+        id: true,
+        name: true,
+        brief: true,
+        status: true,
+        approvalStatus: true,
+        platform: true,
+        aspectRatio: true,
+        durationSec: true,
+        qualityScore: true,
+        outputUrl: true,
+        thumbnailUrl: true,
+        inputRevision: true,
+        renderedRevision: true,
+        approvedRevision: true,
+        publishedPostId: true,
+        updatedAt: true,
         _count: { select: { scenes: true, jobs: true, versions: true } },
-        scenes: { orderBy: { position: "asc" }, take: 1, select: { sourceImageUrl: true, generatedVideoUrl: true, lipSyncVideoUrl: true } },
+        scenes: { orderBy: { position: "asc" }, take: 1, select: { sourceImageUrl: true } },
+        jobs: {
+          where: { status: { in: ["queued", "processing"] } },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { status: true, progress: true },
+        },
       },
     });
-    return NextResponse.json({ success: true, data: projects });
+    const data = projects.map((project) => {
+      const revisions = videoRevisionState(project.inputRevision, project.renderedRevision, project.approvedRevision);
+      const firstSceneImageUrl = project.scenes[0]?.sourceImageUrl ?? null;
+      return {
+        ...project,
+        posterUrl: videoPosterUrl({
+          thumbnailUrl: project.thumbnailUrl,
+          firstSceneImageUrl,
+          inputRevision: project.inputRevision,
+          renderedRevision: project.renderedRevision,
+        }),
+        firstSceneImageUrl,
+        renderFresh: revisions.renderFresh,
+        approvalFresh: revisions.approvalFresh,
+        mock: project.outputUrl?.startsWith("mock://") ?? false,
+        activeJob: project.jobs[0] ?? null,
+        jobs: undefined,
+        scenes: undefined,
+      };
+    });
+    return NextResponse.json({ success: true, data });
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;

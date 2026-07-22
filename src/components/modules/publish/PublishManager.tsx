@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { ChannelMediaPreview } from "@/components/media/ChannelMediaPreview";
 import { Textarea } from "@/components/ui/Input";
 import { StatusBadge } from "@/components/ui/Badge";
 import { useRouter } from "next/navigation";
@@ -20,6 +21,7 @@ interface DraftPost {
   caption: string;
   hashtags: string | null;
   imageUrl: string | null;
+  facebookPageId: string | null;
   postType: string;
   tone: string;
   platform: string;
@@ -37,6 +39,7 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
   const [postId, setPostId] = useState<string | undefined>(initialPostId);
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
+  const [postType, setPostType] = useState("service");
   const [imageUrl, setImageUrl] = useState(initialImageUrl ?? "");
   const [scheduledAt, setScheduledAt] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
@@ -72,7 +75,7 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
       if (res.data) {
         const active = res.data.filter((p: FbPage) => p.isActive);
         setFbPages(active);
-        if (active.length > 0) setSelectedPageId(active[0].id);
+        if (active.length > 0) setSelectedPageId((current) => current || active[0].id);
       }
     });
     fetch("/api/instagram").then((r) => r.json()).then((res) => {
@@ -97,7 +100,9 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
         if (res.data) {
           setCaption(res.data.caption ?? "");
           setHashtags(res.data.hashtags ?? "");
+          setPostType(res.data.postType ?? "service");
           setImageUrl(res.data.imageUrl ?? "");
+          setSelectedPageId(res.data.facebookPageId ?? "");
           setSourceLabel(res.data.service?.name ? `Từ nội dung AI · ${res.data.service.name}` : "Từ nội dung AI");
           // Trigger reviewer
           fetch("/api/reviewer", {
@@ -127,15 +132,21 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
     setPostId(draft.id);
     setCaption(draft.caption ?? "");
     setHashtags(draft.hashtags ?? "");
+    setPostType(draft.postType ?? "service");
     setImageUrl(draft.imageUrl ?? "");
+    setSelectedPageId(draft.facebookPageId ?? "");
     setSourceLabel(draft.service?.name ? `Bài nháp · ${draft.service.name}` : "Bài nháp");
     setStatus(null);
-    setError("");
+    setError(draft.postType === "video" ? "Video chỉ được xuất bản từ Xưởng video sau khi render, QA và duyệt đúng phiên bản." : "");
     setShowDrafts(false);
   };
 
   const handleAction = async (action: string, force = false) => {
     if (!caption.trim()) return;
+    if (postType === "video" && action !== "draft") {
+      setError("Video chỉ được xuất bản từ Xưởng video sau khi render, QA và duyệt đúng phiên bản.");
+      return;
+    }
     setLoading(action);
     setError("");
     setReviewBlocked(false);
@@ -148,6 +159,7 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
           postId,
           caption,
           hashtags,
+          postType,
           imageUrl: imageUrl.trim() || undefined,
           scheduledAt: scheduledAt || undefined,
           facebookPageId: selectedPageId || undefined,
@@ -210,7 +222,7 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
           <CaretDown size={10} />
         </Button>
         {sourceLabel && (
-          <button className="text-xs underline" style={{ color: "var(--text-muted)" }} onClick={() => { setPostId(undefined); setCaption(""); setHashtags(""); setImageUrl(""); setSourceLabel(null); setStatus(null); }}>
+          <button className="text-xs underline" style={{ color: "var(--text-muted)" }} onClick={() => { setPostId(undefined); setCaption(""); setHashtags(""); setPostType("service"); setImageUrl(""); setSourceLabel(null); setStatus(null); setError(""); }}>
             Xóa, tạo bài mới
           </button>
         )}
@@ -266,7 +278,7 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
             {/* Image URL */}
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
-                Hình ảnh (URL)
+                Media đính kèm (URL legacy)
               </label>
               <div className="flex gap-2">
                 <input
@@ -404,16 +416,24 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
               )}
             </div>
 
+            {postType === "video" && (
+              <div className="rounded-lg border p-3 text-xs" style={{ borderColor: "var(--amber)", background: "var(--amber-light)", color: "var(--text-secondary)" }}>
+                Video cần được render, kiểm tra QA và duyệt đúng phiên bản trong Xưởng video trước khi xuất bản.
+                <Button size="sm" variant="secondary" className="mt-2" onClick={() => router.push("/creative/video")}>
+                  Mở Xưởng video
+                </Button>
+              </div>
+            )}
             <div className="flex gap-2 flex-wrap">
               <Button variant="secondary" onClick={() => handleAction("draft")} loading={loading === "draft"} className="flex-1">
                 <FloppyDisk size={13} /> Lưu nháp
               </Button>
-              {scheduledAt && (
+              {scheduledAt && postType !== "video" && (
                 <Button variant="secondary" onClick={() => handleAction("schedule")} loading={loading === "schedule"} className="flex-1">
                   <CalendarBlank size={13} /> Lên lịch
                 </Button>
               )}
-              {reviewBlocked ? (
+              {postType !== "video" && (reviewBlocked ? (
                 <Button onClick={() => handleAction("publish-now", true)} loading={loading === "publish-now"} variant="danger" className="flex-1">
                   <PaperPlaneTilt size={13} weight="fill" /> Đăng mặc dù
                 </Button>
@@ -421,7 +441,7 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
                 <Button onClick={() => handleAction("publish-now")} loading={loading === "publish-now"} className="flex-1">
                   <PaperPlaneTilt size={13} weight="fill" /> Đăng ngay
                 </Button>
-              )}
+              ))}
             </div>
           </div>
         </Card>
@@ -452,9 +472,9 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
             )}
 
             {imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt="Post image" className="w-full object-cover" style={{ maxHeight: 280 }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              <div className="p-3">
+                <ChannelMediaPreview mediaUrl={imageUrl} kind={postType === "video" ? "video" : "image"} title="Media bài đăng" />
+              </div>
             ) : (
               !fullText && (
                 <div className="p-6 text-center" style={{ color: "var(--text-muted)" }}>

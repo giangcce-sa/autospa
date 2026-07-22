@@ -40,6 +40,12 @@ export async function POST(req: NextRequest) {
       if (resolvedPageId === null) throw new AccessError("Bài viết thuộc Facebook Page khác", 403);
       if (!resolvedPageId) return NextResponse.json({ error: "Hãy chọn Facebook Page", success: false }, { status: 400 });
       await requirePageAccess(resolvedPageId);
+      const resolvedPostType = action === "draft"
+        ? postType ?? post?.postType ?? "service"
+        : post?.postType ?? postType ?? "service";
+      if (action === "schedule" && resolvedPostType === "video") {
+        return NextResponse.json({ error: "Video phải được xuất bản từ Xưởng video sau khi QA và duyệt", success: false }, { status: 400 });
+      }
 
       if (post) {
         const updated = await prisma.post.update({
@@ -50,6 +56,7 @@ export async function POST(req: NextRequest) {
             ...(caption !== undefined && { caption }),
             ...(hashtags !== undefined && { hashtags }),
             ...(imageUrl !== undefined && { imageUrl }),
+            ...(postType !== undefined && { postType: resolvedPostType }),
             ...(post.facebookPageId ? {} : { facebookPageId: resolvedPageId }),
           },
         });
@@ -79,6 +86,10 @@ export async function POST(req: NextRequest) {
       if (resolvedPageId === null) throw new AccessError("Bài viết thuộc Facebook Page khác", 403);
       if (!resolvedPageId) return NextResponse.json({ error: "Hãy chọn Facebook Page", success: false }, { status: 400 });
       await requirePageAccess(resolvedPageId);
+      const finalPostType = post?.postType ?? postType ?? "service";
+      if (finalPostType === "video") {
+        return NextResponse.json({ error: "Video phải được xuất bản từ Xưởng video sau khi QA và duyệt", success: false }, { status: 400 });
+      }
 
       const finalCaption = caption ?? post?.caption ?? "";
       const finalHashtags = hashtags ?? post?.hashtags ?? null;

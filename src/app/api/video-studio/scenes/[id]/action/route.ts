@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { invalidatedProjectRenderData } from "@/lib/video-studio/invalidation";
 import { generateSceneLipSync, generateSceneVideo, generateSceneVoice } from "@/lib/video-studio/service";
 
 const schema = z.object({ action: z.enum(["generate-video", "generate-voice", "lip-sync", "move-up", "move-down"]) });
@@ -23,11 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await tx.videoScene.update({ where: { id: scene.id }, data: { position: -1 } });
         await tx.videoScene.update({ where: { id: adjacent.id }, data: { position: scene.position } });
         await tx.videoScene.update({ where: { id: scene.id }, data: { position: adjacent.position } });
-        await tx.videoProject.update({ where: { id: scene.projectId }, data: {
-          inputRevision: { increment: 1 }, outputUrl: null, outputStorageKey: null, renderedRevision: null,
-          qualityScore: null, qualityReport: null, approvalStatus: "draft", approvedRevision: null,
-          approvedAt: null, approvedBy: null, status: "storyboard",
-        } });
+        await tx.videoProject.update({ where: { id: scene.projectId }, data: invalidatedProjectRenderData() });
       });
       return NextResponse.json({ success: true, data: { moved: true } });
     }
