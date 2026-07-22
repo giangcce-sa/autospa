@@ -127,7 +127,7 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
         postId = data.data.postId;
         if (postId && onSaved) onSaved(postId, data.data.caption, data.data.hashtags);
       }
-      if (result?.generationId) await saveFeedback();
+      if (result?.generationId && !await saveFeedback()) return;
       if (target === "image" && onGoToImage) onGoToImage();
       if (target === "publish" && onGoToPublish) onGoToPublish(postId);
     } finally { setSaving(false); }

@@ -4,26 +4,35 @@
 
 @layer base {
   :root {
-    /* Surfaces */
-    --bg: #f4f5f1;
-    --bg-card: #ffffff;
-    --bg-subtle: #eceee8;
-    --bg-elevated: #fafbf8;
+    /* Semantic surfaces */
+    --surface-page: #f4f5f1;
+    --surface-card: #ffffff;
+    --surface-subtle: #eceee8;
+    --surface-elevated: #fafbf8;
+    --bg: var(--surface-page);
+    --bg-card: var(--surface-card);
+    --bg-subtle: var(--surface-subtle);
+    --bg-elevated: var(--surface-elevated);
 
-    /* Borders */
+    /* Semantic borders */
+    --border-subtle: #e8ebe5;
     --border: #dde2d9;
     --border-strong: #c6cec1;
 
-    /* Typography */
-    --text: #171b16;
-    --text-secondary: #525b50;
-    --text-muted: #788174;
+    /* Semantic content */
+    --content-primary: #171b16;
+    --content-secondary: #525b50;
+    --content-muted: #788174;
+    --text: var(--content-primary);
+    --text-secondary: var(--content-secondary);
+    --text-muted: var(--content-muted);
 
     /* Spa accent (primary) — wellness green */
     --accent: #2f6f54;
     --accent-light: #e5f1ea;
     --accent-soft: #f2f8f4;
     --accent-hover: #245a43;
+    --accent-foreground: #ffffff;
 
     /* Premium accent — AI strategic agents (gold/champagne) */
     --premium: #a3762c;
@@ -37,6 +46,7 @@
     --warning-light: #fffbeb;
     --danger: #dc2626;
     --danger-light: #fef2f2;
+    --danger-foreground: #ffffff;
     --info: #2563eb;
     --info-light: #eff6ff;
 
@@ -64,22 +74,24 @@
   }
 
   .dark {
-    --bg: #0d100d;
-    --bg-card: #171b17;
-    --bg-subtle: #20261f;
-    --bg-elevated: #1c211b;
+    --surface-page: #0d100d;
+    --surface-card: #171b17;
+    --surface-subtle: #20261f;
+    --surface-elevated: #1c211b;
 
+    --border-subtle: #222a21;
     --border: #293127;
     --border-strong: #3a4637;
 
-    --text: #f4f7f0;
-    --text-secondary: #c2cabd;
-    --text-muted: #8e9989;
+    --content-primary: #f4f7f0;
+    --content-secondary: #c2cabd;
+    --content-muted: #8e9989;
 
     --accent: #65c08b;
     --accent-light: #183125;
     --accent-soft: #12251c;
     --accent-hover: #7ad69f;
+    --accent-foreground: #0d100d;
 
     --premium: #d4a554;
     --premium-light: #2a2010;
@@ -91,6 +103,7 @@
     --warning-light: #2a2010;
     --danger: #f08080;
     --danger-light: #2a1818;
+    --danger-foreground: #0d100d;
     --info: #60a5fa;
     --info-light: #0f1f3a;
 
@@ -300,6 +313,13 @@ button, a {
 .text-balance { text-wrap: balance; }
 .text-pretty { text-wrap: pretty; }
 
+.command-group [cmdk-group-heading] {
+  padding: 0.4rem 0.75rem 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 /* ═══ CEO View animations ════════════════════════════════ */
 
 @keyframes float-orb {
@@ -396,4 +416,34 @@ button, a {
     border-color 0.25s ease,
     color 0.25s ease,
     box-shadow 0.25s ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .page-enter,
+  .ceo-orb,
+  .ceo-orb-2,
+  .ceo-orb-3,
+  .ceo-hero-gradient,
+  .status-dot-active,
+  .status-dot-warning,
+  .badge-pulse,
+  .skeleton {
+    animation: none !important;
+  }
+
+  .card-hover:hover,
+  .ceo-kpi-card:hover {
+    transform: none !important;
+  }
 }

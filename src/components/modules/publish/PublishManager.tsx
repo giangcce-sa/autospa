@@ -163,7 +163,13 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
         setError("Reviewer Agent đã chặn vì có vấn đề nghiêm trọng. Sửa nội dung hoặc nhấn 'Đăng mặc dù' để bỏ qua.");
         return;
       }
-      if (!res.ok) { setError(data.error); return; }
+      if (!res.ok) {
+        const facebookResult = typeof data.results?.facebook === "string"
+          ? data.results.facebook.replace(/^error:/, "").trim()
+          : "";
+        setError(data.error || facebookResult || "Không thể đăng bài lên Facebook. Hãy kiểm tra kết nối và thử lại.");
+        return;
+      }
       setStatus(data.data.status);
       if (!postId && data.data.id) setPostId(data.data.id);
     } finally { setLoading(null); }

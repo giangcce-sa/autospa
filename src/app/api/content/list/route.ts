@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { accessErrorResponse, getAuthorizedPageIds, requirePageAccess, requireUser } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await requireUser();
+    const authorizedPageIds = await getAuthorizedPageIds(user);
     // Auto-cleanup expired posts based on retention settings
     const settings = await prisma.settings.findFirst();
     if (settings) {
@@ -25,7 +27,11 @@ export async function GET(req: NextRequest) {
 
     const posts = await prisma.post.findMany({
       where: {
-        ...(facebookPageId ? { facebookPageId } : {}),
+        ...(facebookPageId
+          ? { facebookPageId }
+          : authorizedPageIds
+            ? { facebookPageId: { in: authorizedPageIds } }
+            : {}),
         ...(status ? { status } : {}),
       },
       include: { service: { select: { name: true } } },
@@ -43,9 +49,15 @@ export async function GET(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { id } = await req.json();
+    if (!id) return NextResponse.json({ error: "Thiếu id", success: false }, { status: 400 });
+    const post = await prisma.post.findUnique({ where: { id }, select: { facebookPageId: true } });
+    if (!post) return NextResponse.json({ error: "Không tìm thấy bài", success: false }, { status: 404 });
+    await requirePageAccess(post.facebookPageId);
     await prisma.post.delete({ where: { id } });
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
     return NextResponse.json({ error: "Lỗi khi xóa", success: false }, { status: 500 });
   }
 }

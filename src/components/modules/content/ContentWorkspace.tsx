@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { ContentGenerator } from "./ContentGenerator";
 import { ImageGenerator } from "@/components/modules/images/ImageGenerator";
 import { PublishManager } from "@/components/modules/publish/PublishManager";
@@ -15,21 +16,51 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "publish", label: "Đăng bài", icon: <PaperPlaneTilt size={14} weight="fill" /> },
 ];
 
-export function ContentWorkspace() {
+export function ContentWorkspace({
+  initialView = "content",
+  initialPostId,
+}: {
+  initialView?: Tab;
+  initialPostId?: string;
+}) {
   const { selectedPageId } = useActivePage();
-  const [tab, setTab] = useState<Tab>("content");
+  const pathname = usePathname();
+  const router = useRouter();
+  const [tab, setTab] = useState<Tab>(initialView);
 
   // Shared state across tabs
-  const [postId, setPostId] = useState<string | undefined>();
+  const [postId, setPostId] = useState<string | undefined>(initialPostId);
   const [imageUrl, setImageUrl] = useState<string | undefined>();
+  const previousPageId = useRef(selectedPageId);
 
   useEffect(() => {
+    if (!selectedPageId) return;
+
+    if (!previousPageId.current) {
+      previousPageId.current = selectedPageId;
+      return;
+    }
+
+    if (previousPageId.current === selectedPageId) return;
+
+    previousPageId.current = selectedPageId;
     setPostId(undefined);
     setImageUrl(undefined);
-  }, [selectedPageId]);
+    router.replace(`${pathname}?view=content`, { scroll: false });
+    setTab("content");
+  }, [pathname, router, selectedPageId]);
+
+  const navigate = (view: Tab, id = postId) => {
+    const params = new URLSearchParams();
+    params.set("view", view);
+    if (id) params.set("postId", id);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    setTab(view);
+  };
 
   const handleSaved = (id: string) => {
     setPostId(id);
+    navigate(tab, id);
   };
 
   const handleImageSet = (url: string) => {
@@ -38,11 +69,11 @@ export function ContentWorkspace() {
 
   const handleGoToPublish = (id?: string) => {
     if (id) setPostId(id);
-    setTab("publish");
+    navigate("publish", id);
   };
 
   const handleGoToImage = () => {
-    setTab("image");
+    navigate("image");
   };
 
   return (
@@ -51,7 +82,7 @@ export function ContentWorkspace() {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex gap-1 p-1 rounded-xl" style={{ background: "var(--bg-subtle)" }}>
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} type="button" onClick={() => navigate(t.id)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
               style={{
                 background: tab === t.id ? "var(--bg-card)" : "transparent",

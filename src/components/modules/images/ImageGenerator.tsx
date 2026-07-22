@@ -171,6 +171,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
   const [activeVariant, setActiveVariant] = useState(0);
   const [loading, setLoading] = useState(false);
   const [feedbackLoading, setFeedbackLoading] = useState<string | null>(null);
+  const [attaching, setAttaching] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
@@ -335,12 +336,30 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
     a.click();
   };
 
-  const handleSendToPublish = () => {
+  const handleSendToPublish = async () => {
     if (!result) return;
     const selected = result.variants?.[activeVariant];
-    if (selected && onImageSet) onImageSet(selected.imageUrl);
-    if (onGoToPublish) {
-      onGoToPublish();
+    const selectedImageUrl = selected?.imageUrl ?? result.imageUrl;
+    const generationId = selected?.generationId ?? result.generationId;
+    setAttaching(true);
+    setError("");
+    try {
+      if (postId && generationId) {
+        const response = await fetch("/api/images/select", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ postId, generationId }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setError(data.error ?? "Không gắn được ảnh vào bài viết");
+          return;
+        }
+      }
+      if (onImageSet) onImageSet(selectedImageUrl);
+      onGoToPublish?.();
+    } finally {
+      setAttaching(false);
     }
   };
 
@@ -797,7 +816,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
               <Button variant="secondary" onClick={applyImageEdit} loading={editing} className="w-full">
                 <MagicWand size={13} weight="fill" /> Áp dụng crop và overlay thành phiên bản mới
               </Button>
-              <Button onClick={handleSendToPublish} className="w-full">
+              <Button onClick={handleSendToPublish} loading={attaching} className="w-full">
                 <PaperPlaneTilt size={14} weight="fill" />
                 {onGoToPublish ? "Gắn vào bài đăng →" : "Đã lưu vào bài"}
               </Button>

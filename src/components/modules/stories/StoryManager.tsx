@@ -43,8 +43,15 @@ function typeLabel(type: string) {
 
 const BLANK = { type: "testimonial", customerName: "", content: "", service: "", imageUrl: "" };
 
-export function StoryManager() {
-  const { selectedPageId } = useActivePage();
+export function StoryManager({
+  facebookPageId,
+  canMutate = true,
+}: {
+  facebookPageId?: string;
+  canMutate?: boolean;
+} = {}) {
+  const { selectedPageId: contextPageId } = useActivePage();
+  const selectedPageId = facebookPageId ?? contextPageId;
   const [stories, setStories] = useState<Story[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Story | null>(null);
@@ -142,13 +149,15 @@ export function StoryManager() {
             <p className="text-[10px]" style={{ color: "var(--accent)" }}>Đang dùng cho AI</p>
           </div>
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={14} weight="bold" /> Thêm câu chuyện
-        </Button>
+        {canMutate && (
+          <Button onClick={openCreate}>
+            <Plus size={14} weight="bold" /> Thêm câu chuyện
+          </Button>
+        )}
       </div>
 
       {/* Form */}
-      {showForm && (
+      {canMutate && showForm && (
         <Card>
           <CardHeader>
             <CardTitle>{editing ? "Chỉnh sửa câu chuyện" : "Thêm câu chuyện mới"}</CardTitle>
@@ -230,9 +239,11 @@ export function StoryManager() {
             <p className="text-xs mt-1 max-w-xs" style={{ color: "var(--text-muted)" }}>
               Thêm phản hồi khách hàng, kết quả điều trị, hoặc sự kiện tại spa — AI sẽ kết hợp vào bài viết để nội dung thật hơn.
             </p>
-            <Button onClick={openCreate} className="mt-4">
-              <Plus size={13} weight="bold" /> Thêm câu chuyện đầu tiên
-            </Button>
+            {canMutate && (
+              <Button onClick={openCreate} className="mt-4">
+                <Plus size={13} weight="bold" /> Thêm câu chuyện đầu tiên
+              </Button>
+            )}
           </div>
         </Card>
       ) : (
@@ -277,34 +288,38 @@ export function StoryManager() {
               </div>
 
               {/* Actions */}
-              <div className="flex flex-col gap-1.5 shrink-0">
-                <button
-                  onClick={() => toggleActive(story)}
-                  className="text-[10px] px-2 py-1 rounded-lg font-medium transition-colors"
-                  style={
-                    story.isActive
-                      ? { background: "var(--accent)", color: "white" }
-                      : { background: "var(--bg-subtle)", color: "var(--text-muted)" }
-                  }
-                >
-                  {story.isActive ? "Bật" : "Tắt"}
-                </button>
-                <button
-                  onClick={() => openEdit(story)}
-                  className="p-1.5 rounded-lg hover:opacity-70"
-                  style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)" }}
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  onClick={() => handleDelete(story.id)}
-                  disabled={deleting === story.id}
-                  className="p-1.5 rounded-lg hover:opacity-70"
-                  style={{ background: "var(--bg-subtle)", color: "var(--rose)" }}
-                >
-                  <Trash size={12} />
-                </button>
-              </div>
+              {canMutate ? (
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button
+                    onClick={() => toggleActive(story)}
+                    className="text-[10px] px-2 py-1 rounded-lg font-medium transition-colors"
+                    style={
+                      story.isActive
+                        ? { background: "var(--accent)", color: "white" }
+                        : { background: "var(--bg-subtle)", color: "var(--text-muted)" }
+                    }
+                  >
+                    {story.isActive ? "Bật" : "Tắt"}
+                  </button>
+                  <button
+                    onClick={() => openEdit(story)}
+                    className="p-1.5 rounded-lg hover:opacity-70"
+                    style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)" }}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(story.id)}
+                    disabled={deleting === story.id}
+                    className="p-1.5 rounded-lg hover:opacity-70"
+                    style={{ background: "var(--bg-subtle)", color: "var(--rose)" }}
+                  >
+                    <Trash size={12} />
+                  </button>
+                </div>
+              ) : (
+                <span className="shrink-0 text-[10px] font-semibold text-[var(--text-muted)]">{story.isActive ? "Đang dùng" : "Đã tắt"}</span>
+              )}
             </div>
           ))}
         </div>

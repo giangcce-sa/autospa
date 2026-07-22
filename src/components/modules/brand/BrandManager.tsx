@@ -20,7 +20,7 @@ const categories = [
 
 const emptyForm = { category: "", title: "", content: "" };
 
-export function BrandManager() {
+export function BrandManager({ canMutate = true }: { canMutate?: boolean } = {}) {
   const [items, setItems] = useState<BrandItem[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
@@ -51,22 +51,24 @@ export function BrandManager() {
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <Card>
-        <CardHeader>
-          <CardTitle>Thêm thông tin mới</CardTitle>
-        </CardHeader>
-        <div className="space-y-3">
-          <Select label="Danh mục" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-            <option value="">Chọn danh mục</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </Select>
-          <Input label="Tiêu đề" placeholder="VD: Slogan của spa" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          <Textarea label="Nội dung" placeholder="Nhập thông tin chi tiết..." rows={4} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
-          <div className="flex justify-end">
-            <Button onClick={handleAdd} loading={loading}><Plus size={14} /> Thêm</Button>
+      {canMutate && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Thêm thông tin mới</CardTitle>
+          </CardHeader>
+          <div className="space-y-3">
+            <Select label="Danh mục" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+              <option value="">Chọn danh mục</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </Select>
+            <Input label="Tiêu đề" placeholder="VD: Slogan của spa" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <Textarea label="Nội dung" placeholder="Nhập thông tin chi tiết..." rows={4} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
+            <div className="flex justify-end">
+              <Button onClick={handleAdd} loading={loading}><Plus size={14} /> Thêm</Button>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {categories.map((cat) => {
         const catItems = grouped[cat] ?? [];
@@ -87,9 +89,11 @@ export function BrandManager() {
                     <p className="text-xs font-medium mb-1" style={{ color: "var(--text)" }}>{item.title}</p>
                     <p className="text-xs line-clamp-2" style={{ color: "var(--text-secondary)" }}>{item.content}</p>
                   </div>
-                  <button onClick={() => handleDelete(item.id)} className="shrink-0 p-1" style={{ color: "var(--rose)" }}>
-                    <Trash size={13} />
-                  </button>
+                  {canMutate && (
+                    <button onClick={() => handleDelete(item.id)} className="shrink-0 p-1" style={{ color: "var(--rose)" }}>
+                      <Trash size={13} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

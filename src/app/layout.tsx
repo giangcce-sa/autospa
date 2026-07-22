@@ -12,8 +12,11 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 const manrope = Manrope({ variable: "--font-display", subsets: ["latin", "vietnamese"], weight: ["500", "600", "700", "800"] });
 
 export const metadata: Metadata = {
-  title: "AutoSpa - Marketing Tool",
-  description: "Công cụ marketing tự động cho spa",
+  title: {
+    default: "AutoSpa — Trợ lý vận hành spa",
+    template: "%s — AutoSpa",
+  },
+  description: "Trợ lý nội dung, khách hàng và tăng trưởng dành cho spa.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

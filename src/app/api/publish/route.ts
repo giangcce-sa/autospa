@@ -3,6 +3,8 @@ import { postToFacebook } from "@/lib/facebook";
 import { postToInstagram } from "@/lib/instagram";
 import { postPhotoToTikTok } from "@/lib/tiktok";
 import { reviewContent } from "@/lib/reviewer";
+import { AccessError, accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { getPublishStatus, resolvePostPageId } from "@/lib/page-scope-policy";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -12,8 +14,11 @@ export async function GET(req: NextRequest) {
     if (!postId) return NextResponse.json({ error: "Thiếu postId", success: false }, { status: 400 });
     const post = await prisma.post.findUnique({ where: { id: postId }, include: { service: { select: { name: true } } } });
     if (!post) return NextResponse.json({ error: "Không tìm thấy bài", success: false }, { status: 404 });
+    await requirePageAccess(post.facebookPageId);
     return NextResponse.json({ data: post, success: true });
-  } catch {
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
     return NextResponse.json({ error: "Lỗi khi tải bài", success: false }, { status: 500 });
   }
 }
@@ -29,15 +34,23 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (action === "schedule" || action === "draft") {
-      if (postId) {
+      const post = postId ? await prisma.post.findUnique({ where: { id: postId } }) : null;
+      if (postId && !post) return NextResponse.json({ error: "Không tìm thấy bài", success: false }, { status: 404 });
+      const resolvedPageId = resolvePostPageId(post?.facebookPageId, facebookPageId);
+      if (resolvedPageId === null) throw new AccessError("Bài viết thuộc Facebook Page khác", 403);
+      if (!resolvedPageId) return NextResponse.json({ error: "Hãy chọn Facebook Page", success: false }, { status: 400 });
+      await requirePageAccess(resolvedPageId);
+
+      if (post) {
         const updated = await prisma.post.update({
-          where: { id: postId },
+          where: { id: post.id },
           data: {
             status: action === "schedule" ? "scheduled" : "draft",
             scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
             ...(caption !== undefined && { caption }),
             ...(hashtags !== undefined && { hashtags }),
             ...(imageUrl !== undefined && { imageUrl }),
+            ...(post.facebookPageId ? {} : { facebookPageId: resolvedPageId }),
           },
         });
         return NextResponse.json({ data: updated, success: true });
@@ -53,6 +66,7 @@ export async function POST(req: NextRequest) {
           postType: postType ?? "service",
           status: action === "schedule" ? "scheduled" : "draft",
           scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+          facebookPageId: resolvedPageId,
         },
       });
       return NextResponse.json({ data: created, success: true });
@@ -60,96 +74,132 @@ export async function POST(req: NextRequest) {
 
     if (action === "publish-now") {
       const post = postId ? await prisma.post.findUnique({ where: { id: postId } }) : null;
-      const text = post ? `${post.caption}\n\n${post.hashtags ?? ""}`.trim() : `${caption}\n\n${hashtags ?? ""}`.trim();
-      const img = post?.imageUrl ?? imageUrl;
+      if (postId && !post) return NextResponse.json({ error: "Không tìm thấy bài", success: false }, { status: 404 });
+      const resolvedPageId = resolvePostPageId(post?.facebookPageId, facebookPageId);
+      if (resolvedPageId === null) throw new AccessError("Bài viết thuộc Facebook Page khác", 403);
+      if (!resolvedPageId) return NextResponse.json({ error: "Hãy chọn Facebook Page", success: false }, { status: 400 });
+      await requirePageAccess(resolvedPageId);
 
-      // Reviewer gate
-      const reviewInput = post
-        ? { id: post.id, caption: post.caption, hashtags: post.hashtags, platform: post.platform, facebookPageId: post.facebookPageId }
-        : null;
+      const finalCaption = caption ?? post?.caption ?? "";
+      const finalHashtags = hashtags ?? post?.hashtags ?? null;
+      const finalImageUrl = imageUrl !== undefined ? imageUrl : post?.imageUrl ?? null;
+      const finalPlatform = platform ?? post?.platform ?? "facebook";
+      const text = `${finalCaption}\n\n${finalHashtags ?? ""}`.trim();
+      if (!text) return NextResponse.json({ error: "Nội dung bài viết đang trống", success: false }, { status: 400 });
 
-      if (reviewInput) {
-        const review = await reviewContent(reviewInput).catch(() => null);
-        if (review && review.status === "fail" && !force) {
-          return NextResponse.json({ error: "REVIEW_BLOCKED", review, success: false }, { status: 422 });
-        }
+      let reviewPostId = post?.id;
+      if (!reviewPostId) {
+        const draft = await prisma.post.create({
+          data: {
+            caption: finalCaption,
+            hashtags: finalHashtags,
+            imageUrl: finalImageUrl,
+            platform: finalPlatform,
+            tone: tone ?? "friendly",
+            postType: postType ?? "service",
+            facebookPageId: resolvedPageId,
+          },
+        });
+        reviewPostId = draft.id;
+      } else {
+        await prisma.post.update({
+          where: { id: reviewPostId },
+          data: {
+            caption: finalCaption,
+            hashtags: finalHashtags,
+            imageUrl: finalImageUrl,
+            ...(post?.facebookPageId ? {} : { facebookPageId: resolvedPageId }),
+          },
+        });
+      }
+
+      const review = await reviewContent({
+        id: reviewPostId,
+        caption: finalCaption,
+        hashtags: finalHashtags,
+        platform: finalPlatform,
+        facebookPageId: resolvedPageId,
+      }).catch(() => null);
+      if (review?.status === "fail" && !force) {
+        return NextResponse.json({ error: "REVIEW_BLOCKED", review, success: false }, { status: 422 });
       }
 
       const results: Record<string, string | null> = { facebook: null, instagram: null, tiktok: null };
-
-      // ── Facebook (always)
       try {
-        results.facebook = await postToFacebook(text, img ?? undefined, facebookPageId ?? undefined);
+        results.facebook = await postToFacebook(text, finalImageUrl ?? undefined, resolvedPageId);
       } catch (e) {
         results.facebook = `error:${e instanceof Error ? e.message : String(e)}`;
       }
 
-      // ── Instagram (optional, requires igAccountId on page)
-      if (publishToInstagram && img) {
-        try {
-          const fbPage = facebookPageId
-            ? await prisma.facebookPage.findUnique({ where: { id: facebookPageId } })
-            : await prisma.facebookPage.findFirst({ where: { isActive: true, igAccountId: { not: null } } });
-
-          if (fbPage?.igAccountId) {
-            results.instagram = await postToInstagram(fbPage.igAccountId, fbPage.accessToken, text, img);
-          } else {
-            results.instagram = "error:Chưa kết nối Instagram";
+      if (publishToInstagram) {
+        if (!finalImageUrl) {
+          results.instagram = "error:Instagram yêu cầu hình ảnh";
+        } else {
+          try {
+            const fbPage = await prisma.facebookPage.findUnique({ where: { id: resolvedPageId } });
+            if (fbPage?.igAccountId) {
+              results.instagram = await postToInstagram(fbPage.igAccountId, fbPage.accessToken, text, finalImageUrl);
+            } else {
+              results.instagram = "error:Chưa kết nối Instagram";
+            }
+          } catch (e) {
+            results.instagram = `error:${e instanceof Error ? e.message : String(e)}`;
           }
-        } catch (e) {
-          results.instagram = `error:${e instanceof Error ? e.message : String(e)}`;
         }
       }
 
-      // ── TikTok (optional, requires image URL)
-      if (publishToTikTok && img) {
-        try {
-          const tiktokAccount = await prisma.tikTokAccount.findFirst({ where: { isActive: true } });
-          if (tiktokAccount) {
-            const { publishId } = await postPhotoToTikTok(tiktokAccount.accessToken, tiktokAccount.openId, text, [img]);
-            results.tiktok = publishId;
-          } else {
-            results.tiktok = "error:Chưa kết nối TikTok";
+      if (publishToTikTok) {
+        if (!finalImageUrl) {
+          results.tiktok = "error:TikTok yêu cầu hình ảnh";
+        } else {
+          try {
+            const tiktokAccount = await prisma.tikTokAccount.findFirst({ where: { isActive: true } });
+            if (tiktokAccount) {
+              const { publishId } = await postPhotoToTikTok(tiktokAccount.accessToken, tiktokAccount.openId, text, [finalImageUrl]);
+              results.tiktok = publishId;
+            } else {
+              results.tiktok = "error:Chưa kết nối TikTok";
+            }
+          } catch (e) {
+            results.tiktok = `error:${e instanceof Error ? e.message : String(e)}`;
           }
-        } catch (e) {
-          results.tiktok = `error:${e instanceof Error ? e.message : String(e)}`;
         }
       }
 
-      const fbPostId = results.facebook?.startsWith("error:") ? undefined : results.facebook ?? undefined;
+      const requestedChannels = ["facebook", ...(publishToInstagram ? ["instagram"] : []), ...(publishToTikTok ? ["tiktok"] : [])];
+      const status = getPublishStatus(results, requestedChannels);
+      const facebookError = results.facebook?.startsWith("error:")
+        ? results.facebook.slice("error:".length).trim()
+        : null;
+      const fbPostId = facebookError ? undefined : results.facebook ?? undefined;
       const igPostId = results.instagram?.startsWith("error:") ? undefined : results.instagram ?? undefined;
       const tiktokVideoId = results.tiktok?.startsWith("error:") ? undefined : results.tiktok ?? undefined;
-
-      const updated = await prisma.post.upsert({
-        where: { id: postId ?? "new" },
-        create: {
-          caption: caption ?? "",
-          hashtags, imageUrl,
-          platform: platform ?? "facebook",
-          tone: "friendly",
-          postType: "service",
-          status: "published",
-          publishedAt: new Date(),
-          fbPostId,
-          igPostId,
-          tiktokVideoId,
-          facebookPageId: facebookPageId ?? null,
-        },
-        update: {
-          status: "published",
-          publishedAt: new Date(),
+      const updated = await prisma.post.update({
+        where: { id: reviewPostId },
+        data: {
+          status,
+          publishedAt: fbPostId ? new Date() : null,
           fbPostId,
           ...(igPostId && { igPostId }),
           ...(tiktokVideoId && { tiktokVideoId }),
-          facebookPageId: facebookPageId ?? null,
         },
       });
 
-      return NextResponse.json({ data: updated, results, success: true });
+      return NextResponse.json(
+        {
+          data: updated,
+          results,
+          success: status !== "publish_failed",
+          ...(facebookError && { error: facebookError }),
+        },
+        { status: status === "publish_failed" ? 502 : 200 },
+      );
     }
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return access;
     const msg = err instanceof Error ? err.message : "Lỗi không xác định";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }

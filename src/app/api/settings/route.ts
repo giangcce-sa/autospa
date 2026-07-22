@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { logActivity } from "@/lib/activity-log";
 import { accessErrorResponse, requireUser } from "@/lib/page-access";
 import { assertSafeAiProviderUrl, ProviderUrlError, sameProviderOrigin } from "@/lib/provider-url-security";
+import { getSecretReplacement, maskSecret, resolveSecretInput } from "@/lib/settings-secrets";
 import { NextRequest, NextResponse } from "next/server";
 
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
@@ -27,18 +28,20 @@ function boundedNumber(value: unknown, min: number, max: number, field: string) 
 function safeSettings(settings: NonNullable<Awaited<ReturnType<typeof prisma.settings.findFirst>>>) {
   return {
     ...settings,
-    claudeApiKey: settings.claudeApiKey ? "••••••••" + settings.claudeApiKey.slice(-4) : null,
-    openaiApiKey: settings.openaiApiKey ? "••••••••" + settings.openaiApiKey.slice(-4) : null,
-    zaloToken: settings.zaloToken ? "••••••••" + settings.zaloToken.slice(-4) : null,
-    spaApiKey: settings.spaApiKey ? "••••••••" + settings.spaApiKey.slice(-4) : null,
-    spaWebhookSecret: settings.spaWebhookSecret ? "••••••••" + settings.spaWebhookSecret.slice(-4) : null,
-    telegramBotToken: settings.telegramBotToken ? "••••••••" + settings.telegramBotToken.slice(-4) : null,
-    telegramWebhookSecret: settings.telegramWebhookSecret ? "••••••••" : null,
-    runwayApiKey: settings.runwayApiKey ? "••••••••" : null,
-    elevenLabsApiKey: settings.elevenLabsApiKey ? "••••••••" : null,
-    syncLabsApiKey: settings.syncLabsApiKey ? "••••••••" : null,
+    claudeApiKey: maskSecret(settings.claudeApiKey),
+    openaiApiKey: maskSecret(settings.openaiApiKey),
+    zaloToken: maskSecret(settings.zaloToken),
+    spaApiKey: maskSecret(settings.spaApiKey),
+    spaWebhookSecret: maskSecret(settings.spaWebhookSecret),
+    webhookVerifyToken: maskSecret(settings.webhookVerifyToken),
+    telegramBotToken: maskSecret(settings.telegramBotToken),
+    telegramWebhookSecret: maskSecret(settings.telegramWebhookSecret, 0),
+    runwayApiKey: maskSecret(settings.runwayApiKey, 0),
+    elevenLabsApiKey: maskSecret(settings.elevenLabsApiKey, 0),
+    syncLabsApiKey: maskSecret(settings.syncLabsApiKey, 0),
     hasSpaApiKey: !!settings.spaApiKey,
     hasSpaWebhookSecret: !!settings.spaWebhookSecret,
+    hasWebhookVerifyToken: !!settings.webhookVerifyToken,
     hasTelegramBotToken: !!settings.telegramBotToken,
   };
 }
@@ -67,13 +70,9 @@ export async function POST(req: NextRequest) {
       const { service, apiKey, baseUrl } = body;
       // Use value passed from form; fall back to DB only if form field is masked/empty
       const settings = await prisma.settings.findFirst();
-      const resolveKey = (formVal: string | undefined, dbVal: string | null | undefined) => {
-        if (formVal && !formVal.includes("••")) return formVal;
-        return dbVal || null;
-      };
 
       if (service === "claude") {
-        const key = resolveKey(apiKey, settings?.claudeApiKey);
+        const key = resolveSecretInput(apiKey, settings?.claudeApiKey);
         const savedUrl = normalizeBaseUrl(settings?.claudeBaseUrl || ANTHROPIC_BASE_URL);
         const requestedUrl = normalizeBaseUrl((baseUrl && !baseUrl.includes("••")) ? baseUrl : savedUrl);
         const url = await assertSafeAiProviderUrl(requestedUrl, "claude");
@@ -106,7 +105,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (service === "openai") {
-        const key = resolveKey(apiKey, settings?.openaiApiKey);
+        const key = resolveSecretInput(apiKey, settings?.openaiApiKey);
         const savedOpenAiUrl = settings?.openaiBaseUrl || "https://api.openai.com/v1";
         const requestedOpenAiUrl = (body.openaiBaseUrl && !body.openaiBaseUrl.includes("••"))
           ? body.openaiBaseUrl
@@ -142,7 +141,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (service === "zalo") {
-        const token = resolveKey(apiKey, settings?.zaloToken);
+        const token = resolveSecretInput(apiKey, settings?.zaloToken);
         if (!token) return NextResponse.json({ success: false, message: "Chưa có Zalo Token — nhập rồi test" });
         try {
           const res = await fetch("https://openapi.zalo.me/v2.0/oa/getoa", {
@@ -159,25 +158,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Service không hợp lệ" });
     }
 
-    const { claudeApiKey, claudeBaseUrl, openaiApiKey, openaiBaseUrl, imageModel, zaloToken, zaloOaId, draftRetentionDays, publishedRetentionDays, webhookVerifyToken, autoReplyComments, autoReplyMessages } = body;
+    const { claudeApiKey, claudeBaseUrl, openaiApiKey, openaiBaseUrl, imageModel, zaloToken, zaloOaId, draftRetentionDays, publishedRetentionDays, autoReplyComments, autoReplyMessages } = body;
     const updateData: Record<string, string | number | boolean | null> = {};
-    // Secret fields: only update if a non-empty, non-masked value is provided
-    if (claudeApiKey?.trim()) updateData.claudeApiKey = claudeApiKey.trim();
-    if (openaiApiKey?.trim()) updateData.openaiApiKey = openaiApiKey.trim();
-    if (zaloToken?.trim()) updateData.zaloToken = zaloToken.trim();
-    if (body.spaApiKey?.trim()) updateData.spaApiKey = body.spaApiKey.trim();
-    // Non-secret fields: always update
+    const claudeKeyReplacement = getSecretReplacement(claudeApiKey);
+    const openaiKeyReplacement = getSecretReplacement(openaiApiKey);
+    const secretReplacements = {
+      claudeApiKey: claudeKeyReplacement,
+      openaiApiKey: openaiKeyReplacement,
+      zaloToken: getSecretReplacement(zaloToken),
+      spaApiKey: getSecretReplacement(body.spaApiKey),
+      spaWebhookSecret: getSecretReplacement(body.spaWebhookSecret),
+      webhookVerifyToken: getSecretReplacement(body.webhookVerifyToken),
+    };
+    for (const [field, value] of Object.entries(secretReplacements)) {
+      if (value !== undefined) updateData[field] = value;
+    }
+
     const currentSettings = await prisma.settings.findFirst();
     if (claudeBaseUrl) {
       const safeUrl = await assertSafeAiProviderUrl(claudeBaseUrl, "claude");
-      if (currentSettings?.claudeApiKey && !claudeApiKey?.trim() && !sameProviderOrigin(safeUrl, currentSettings.claudeBaseUrl)) {
+      if (currentSettings?.claudeApiKey && !claudeKeyReplacement && !sameProviderOrigin(safeUrl, currentSettings.claudeBaseUrl)) {
         return NextResponse.json({ error: "Khi đổi gateway Claude, bạn phải nhập lại khóa truy cập", success: false }, { status: 400 });
       }
       updateData.claudeBaseUrl = safeUrl;
     }
     if (openaiBaseUrl) {
       const safeUrl = await assertSafeAiProviderUrl(openaiBaseUrl, "openai");
-      if (currentSettings?.openaiApiKey && !openaiApiKey?.trim() && !sameProviderOrigin(safeUrl, currentSettings.openaiBaseUrl)) {
+      if (currentSettings?.openaiApiKey && !openaiKeyReplacement && !sameProviderOrigin(safeUrl, currentSettings.openaiBaseUrl)) {
         return NextResponse.json({ error: "Khi đổi gateway OpenAI, bạn phải nhập lại khóa truy cập", success: false }, { status: 400 });
       }
       updateData.openaiBaseUrl = safeUrl;
@@ -187,13 +194,11 @@ export async function POST(req: NextRequest) {
     if (zaloOaId !== undefined) updateData.zaloOaId = zaloOaId;
     if (draftRetentionDays !== undefined) updateData.draftRetentionDays = Number(draftRetentionDays);
     if (publishedRetentionDays !== undefined) updateData.publishedRetentionDays = Number(publishedRetentionDays);
-    if (webhookVerifyToken !== undefined) updateData.webhookVerifyToken = webhookVerifyToken;
     if (body.webhookMode) updateData.webhookMode = body.webhookMode;
     if (autoReplyComments !== undefined) updateData.autoReplyComments = Boolean(autoReplyComments);
     if (autoReplyMessages !== undefined) updateData.autoReplyMessages = Boolean(autoReplyMessages);
     // Autonomous marketing fields
     if (body.spaApiUrl !== undefined) updateData.spaApiUrl = body.spaApiUrl || null;
-    if (body.spaWebhookSecret !== undefined) updateData.spaWebhookSecret = body.spaWebhookSecret || null;
     if (body.leadHandoffMode) updateData.leadHandoffMode = body.leadHandoffMode;
     if (body.leadHandoffLink !== undefined) updateData.leadHandoffLink = body.leadHandoffLink || null;
     if (body.automationLevel) {

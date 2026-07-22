@@ -19,9 +19,11 @@ export function ThemeToggle() {
 
   return (
     <button
+      type="button"
       onClick={toggle}
-      className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--bg-subtle)] text-[var(--text-secondary)] hover:text-[var(--text)]"
-      title="Đổi giao diện"
+      className="flex h-10 w-10 items-center justify-center rounded-md text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text)]"
+      aria-label={theme === "dark" ? "Dùng giao diện sáng" : "Dùng giao diện tối"}
+      data-theme-toggle
     >
       {theme === "dark" ? <Sun size={16} weight="duotone" /> : <Moon size={16} weight="duotone" />}
     </button>

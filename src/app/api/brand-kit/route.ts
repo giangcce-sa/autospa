@@ -1,14 +1,18 @@
 import { prisma } from "@/lib/db";
+import { accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
   try {
-    const facebookPageId = new URL(req.url).searchParams.get("facebookPageId") || null;
+    const facebookPageId = new URL(req.url).searchParams.get("facebookPageId");
+    await requireExplicitPageAccess(facebookPageId);
     const kit = await prisma.brandKit.findFirst({
       where: { facebookPageId },
     });
     return NextResponse.json({ data: kit, success: true });
-  } catch {
+  } catch (error) {
+    const accessResponse = accessErrorResponse(error);
+    if (accessResponse) return accessResponse;
     return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
   }
 }
@@ -17,7 +21,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { facebookPageId: rawPageId, logoUrl, primaryColor, accentColor, fontStyle, spaName, tagline } = body;
-    const facebookPageId = rawPageId || null;
+    const { page } = await requireExplicitPageAccess(rawPageId, { owner: true });
+    const facebookPageId = page!.id;
     const existing = await prisma.brandKit.findFirst({ where: { facebookPageId } });
     const kit = existing
       ? await prisma.brandKit.update({
@@ -36,7 +41,9 @@ export async function POST(req: NextRequest) {
           },
         });
     return NextResponse.json({ data: kit, success: true });
-  } catch {
+  } catch (error) {
+    const accessResponse = accessErrorResponse(error);
+    if (accessResponse) return accessResponse;
     return NextResponse.json({ error: "Lỗi khi lưu", success: false }, { status: 500 });
   }
 }

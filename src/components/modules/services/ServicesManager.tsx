@@ -23,8 +23,15 @@ interface Service {
 const categories = ["Chăm sóc da", "Triệt lông", "Giảm béo", "Trị mụn", "Nail", "Massage", "Khác"];
 const emptyForm = { name: "", description: "", price: "", category: "", duration: "" };
 
-export function ServicesManager() {
-  const { selectedPageId } = useActivePage();
+export function ServicesManager({
+  facebookPageId,
+  canMutate = true,
+}: {
+  facebookPageId?: string;
+  canMutate?: boolean;
+} = {}) {
+  const { selectedPageId: contextPageId } = useActivePage();
+  const selectedPageId = facebookPageId ?? contextPageId;
   const [services, setServices] = useState<Service[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Service | null>(null);
@@ -78,12 +85,14 @@ export function ServicesManager() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div />
-        <Button onClick={openCreate}>
-          <Plus size={14} weight="bold" /> Thêm dịch vụ
-        </Button>
+        {canMutate && (
+          <Button onClick={openCreate}>
+            <Plus size={14} weight="bold" /> Thêm dịch vụ
+          </Button>
+        )}
       </div>
 
-      {showForm && (
+      {canMutate && showForm && (
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-sm" style={{ color: "var(--text)" }}>
@@ -113,7 +122,7 @@ export function ServicesManager() {
       )}
 
       {services.length === 0 ? (
-        <EmptyState icon={<Briefcase size={40} />} title="Chưa có dịch vụ nào" description="Thêm dịch vụ đầu tiên để bắt đầu tạo nội dung" action={<Button onClick={openCreate}><Plus size={14} /> Thêm ngay</Button>} />
+        <EmptyState icon={<Briefcase size={40} />} title="Chưa có dịch vụ nào" description="Thêm dịch vụ đầu tiên để bắt đầu tạo nội dung" action={canMutate ? <Button onClick={openCreate}><Plus size={14} /> Thêm ngay</Button> : undefined} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {services.map((s) => (
@@ -123,14 +132,16 @@ export function ServicesManager() {
                   <p className="font-medium text-sm truncate" style={{ color: "var(--text)" }}>{s.name}</p>
                   {s.category && <span className="text-xs" style={{ color: "var(--text-muted)" }}>{s.category}</span>}
                 </div>
-                <div className="flex items-center gap-1 ml-2">
-                  <button onClick={() => openEdit(s)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--text-secondary)" }}>
-                    <PencilSimple size={13} />
-                  </button>
-                  <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--rose)" }}>
-                    <Trash size={13} />
-                  </button>
-                </div>
+                {canMutate && (
+                  <div className="flex items-center gap-1 ml-2">
+                    <button onClick={() => openEdit(s)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--text-secondary)" }}>
+                      <PencilSimple size={13} />
+                    </button>
+                    <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--rose)" }}>
+                      <Trash size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
               {s.description && <p className="text-xs mb-3 line-clamp-2" style={{ color: "var(--text-secondary)" }}>{s.description}</p>}
               <div className="flex items-center justify-between">
@@ -138,9 +149,13 @@ export function ServicesManager() {
                   {s.price && <Badge variant="neutral">{s.price}</Badge>}
                   {s.duration && <Badge variant="neutral">{s.duration}</Badge>}
                 </div>
-                <button onClick={() => toggleActive(s)} className="text-xs font-medium">
+                {canMutate ? (
+                  <button onClick={() => toggleActive(s)} className="text-xs font-medium">
+                    <Badge variant={s.active ? "success" : "neutral"}>{s.active ? "Hoạt động" : "Ẩn"}</Badge>
+                  </button>
+                ) : (
                   <Badge variant={s.active ? "success" : "neutral"}>{s.active ? "Hoạt động" : "Ẩn"}</Badge>
-                </button>
+                )}
               </div>
             </Card>
           ))}

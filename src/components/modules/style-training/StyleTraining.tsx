@@ -19,8 +19,18 @@ interface FbPost {
   shares?: { count: number };
 }
 
-export function StyleTraining() {
-  const { selectedPageId, selectedPage } = useActivePage();
+export function StyleTraining({
+  facebookPageId,
+  facebookPageName,
+  canMutate = true,
+}: {
+  facebookPageId?: string;
+  facebookPageName?: string;
+  canMutate?: boolean;
+} = {}) {
+  const { selectedPageId: contextPageId, selectedPage: contextPage } = useActivePage();
+  const selectedPageId = facebookPageId ?? contextPageId;
+  const selectedPageName = facebookPageName ?? (facebookPageId && contextPage?.id !== facebookPageId ? undefined : contextPage?.pageName);
   const [samples, setSamples] = useState<Sample[]>([]);
   const [profile, setProfile] = useState<string | null>(null);
   const [form, setForm] = useState({ content: "", likes: "", comments: "", shares: "" });
@@ -78,7 +88,7 @@ export function StyleTraining() {
   };
 
   const handleDelete = async (id: string) => {
-    await fetch("/api/style-training", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    await fetch("/api/style-training", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, facebookPageId: selectedPageId }) });
     load(selectedPageId || undefined);
   };
 
@@ -86,7 +96,7 @@ export function StyleTraining() {
     await fetch("/api/style-training", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "set-learning-status", id, learningStatus }),
+      body: JSON.stringify({ action: "set-learning-status", id, learningStatus, facebookPageId: selectedPageId }),
     });
     load(selectedPageId || undefined);
   };
@@ -100,7 +110,7 @@ export function StyleTraining() {
         body: JSON.stringify({
           action: "fetch-fb",
           source: scanSource,
-          facebookPageId: scanSource === "own" ? selectedPageId : undefined,
+          facebookPageId: selectedPageId,
           pageId: scanSource === "competitor" ? competitorPageId.trim().replace(/.*facebook\.com\//i, "").replace(/\/$/, "") : undefined,
           limit: +scanLimit || 20,
         }),
@@ -191,6 +201,8 @@ export function StyleTraining() {
     <div className="space-y-4 max-w-5xl">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="space-y-4">
+          {canMutate && (
+            <>
           {/* Tab switcher */}
           <div className="flex gap-2">
             <Button size="sm" variant={tab === "manual" ? "primary" : "secondary"} onClick={() => setTab("manual")}>
@@ -256,10 +268,10 @@ export function StyleTraining() {
                 </div>
 
                 {scanSource === "own" && (
-                  <div className="p-2.5 rounded-lg text-xs space-y-1" style={{ background: selectedPage ? "var(--accent-light)" : "var(--rose-light)", border: `1px solid ${selectedPage ? "var(--accent)" : "var(--rose)"}` }}>
-                    {selectedPage ? (
+                  <div className="p-2.5 rounded-lg text-xs space-y-1" style={{ background: selectedPageName ? "var(--accent-light)" : "var(--rose-light)", border: `1px solid ${selectedPageName ? "var(--accent)" : "var(--rose)"}` }}>
+                    {selectedPageName ? (
                       <>
-                        <p style={{ color: "var(--accent)" }}>✓ Đang dùng token của trang: {selectedPage.pageName}</p>
+                        <p style={{ color: "var(--accent)" }}>✓ Đang dùng token của trang: {selectedPageName}</p>
                         <p style={{ color: "var(--text-muted)" }}>Token từ Graph API Explorer chỉ có hiệu lực ~1 giờ. Nếu bị lỗi, vào Cài đặt → Facebook Page → cập nhật token.</p>
                       </>
                     ) : (
@@ -396,6 +408,8 @@ export function StyleTraining() {
               )}
             </Card>
           )}
+            </>
+          )}
 
           <Card>
             <CardHeader>
@@ -403,7 +417,7 @@ export function StyleTraining() {
                 <Brain size={14} style={{ color: "var(--accent)" }} />
                 <CardTitle>Bài mẫu ({samples.length})</CardTitle>
               </div>
-              {samples.length >= 3 && (
+              {canMutate && samples.length >= 3 && (
                 <Button size="sm" onClick={handleAnalyze} loading={analyzing}>
                   <Sparkle size={12} /> Phân tích
                 </Button>
@@ -428,23 +442,25 @@ export function StyleTraining() {
                       <span className="flex items-center gap-1"><ChatCircle size={10} />{s.comments}</span>
                       <span className="flex items-center gap-1"><Share size={10} />{s.shares}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        title="Dùng để học"
-                        onClick={() => setLearningStatus(s.id, "approved")}
-                        style={{ color: s.learningStatus === "approved" ? "var(--success)" : "var(--text-muted)" }}
-                      >
-                        <ThumbsUp size={12} weight={s.learningStatus === "approved" ? "fill" : "regular"} />
-                      </button>
-                      <button
-                        title="Không dùng để học"
-                        onClick={() => setLearningStatus(s.id, "rejected")}
-                        style={{ color: s.learningStatus === "rejected" ? "var(--rose)" : "var(--text-muted)" }}
-                      >
-                        <ThumbsDown size={12} weight={s.learningStatus === "rejected" ? "fill" : "regular"} />
-                      </button>
-                      <button title="Xóa bài mẫu" onClick={() => handleDelete(s.id)} style={{ color: "var(--rose)" }}><Trash size={12} /></button>
-                    </div>
+                    {canMutate && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          title="Dùng để học"
+                          onClick={() => setLearningStatus(s.id, "approved")}
+                          style={{ color: s.learningStatus === "approved" ? "var(--success)" : "var(--text-muted)" }}
+                        >
+                          <ThumbsUp size={12} weight={s.learningStatus === "approved" ? "fill" : "regular"} />
+                        </button>
+                        <button
+                          title="Không dùng để học"
+                          onClick={() => setLearningStatus(s.id, "rejected")}
+                          style={{ color: s.learningStatus === "rejected" ? "var(--rose)" : "var(--text-muted)" }}
+                        >
+                          <ThumbsDown size={12} weight={s.learningStatus === "rejected" ? "fill" : "regular"} />
+                        </button>
+                        <button title="Xóa bài mẫu" onClick={() => handleDelete(s.id)} style={{ color: "var(--rose)" }}><Trash size={12} /></button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

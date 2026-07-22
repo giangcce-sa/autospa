@@ -83,8 +83,15 @@ async function cleanupUpload(storageKey?: string | null) {
   }).catch(() => null);
 }
 
-export function StaffVisualLibrary() {
-  const { selectedPageId } = useActivePage();
+export function StaffVisualLibrary({
+  facebookPageId,
+  canMutate = true,
+}: {
+  facebookPageId?: string;
+  canMutate?: boolean;
+} = {}) {
+  const { selectedPageId: contextPageId } = useActivePage();
+  const selectedPageId = facebookPageId ?? contextPageId;
   const [staff, setStaff] = useState<StaffVisual[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<StaffForm>(blankForm);
@@ -237,7 +244,7 @@ export function StaffVisualLibrary() {
         <Card>
           <CardHeader>
             <CardTitle>Nhân viên</CardTitle>
-            <Button size="sm" onClick={newStaff}><Plus size={12} /> Thêm</Button>
+            {canMutate && <Button size="sm" onClick={newStaff}><Plus size={12} /> Thêm</Button>}
           </CardHeader>
           <div className="space-y-2">
             {staff.length === 0 ? (
@@ -273,7 +280,7 @@ export function StaffVisualLibrary() {
         </Card>
       </div>
 
-      <div className="space-y-4">
+      <fieldset disabled={!canMutate} className="min-w-0 space-y-4 disabled:opacity-75">
         <Card>
           <CardHeader>
             <CardTitle>{selected ? `Hồ sơ ${selected.name}` : "Thêm nhân viên mẫu"}</CardTitle>
@@ -418,7 +425,7 @@ export function StaffVisualLibrary() {
             </div>
           </Card>
         )}
-      </div>
+      </fieldset>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { generateContent } from "@/lib/claude";
+import { AccessError, accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 async function fetchFbPosts(pageId: string, token: string, limit = 20) {
@@ -20,7 +21,8 @@ async function fetchFbPosts(pageId: string, token: string, limit = 20) {
 
 export async function GET(req: NextRequest) {
   try {
-    const facebookPageId = new URL(req.url).searchParams.get("facebookPageId") || null;
+    const facebookPageId = new URL(req.url).searchParams.get("facebookPageId");
+    await requireExplicitPageAccess(facebookPageId);
     const [samples, profile] = await Promise.all([
       prisma.styleSample.findMany({
         where: { facebookPageId },
@@ -31,7 +33,9 @@ export async function GET(req: NextRequest) {
       }),
     ]);
     return NextResponse.json({ data: { samples, profile }, success: true });
-  } catch {
+  } catch (error) {
+    const accessResponse = accessErrorResponse(error);
+    if (accessResponse) return accessResponse;
     return NextResponse.json({ error: "Lỗi khi tải dữ liệu", success: false }, { status: 500 });
   }
 }
@@ -40,20 +44,18 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { action, content, likes, comments, shares, platform, facebookPageId: rawFbPageId } = body;
-    const facebookPageId = rawFbPageId || null;
+    const { page: authorizedPage } = await requireExplicitPageAccess(rawFbPageId, { owner: true });
+    const facebookPageId = authorizedPage!.id;
 
     if (action === "fetch-fb") {
       const { pageId, source } = body;
 
       let resolvedPageId: string | undefined = pageId;
-      let token: string | undefined;
-      if (source === "own" || facebookPageId) {
-        const fbPage = facebookPageId
-          ? await prisma.facebookPage.findUnique({ where: { id: facebookPageId } })
-          : await prisma.facebookPage.findFirst({ where: { isActive: true } });
-        if (!fbPage) return NextResponse.json({ error: "Chưa cấu hình Facebook Page trong Cài đặt", success: false }, { status: 400 });
+      const fbPage = await prisma.facebookPage.findUnique({ where: { id: facebookPageId } });
+      if (!fbPage) return NextResponse.json({ error: "Chưa cấu hình Facebook Page trong Cài đặt", success: false }, { status: 400 });
+      const token = fbPage.accessToken;
+      if (source === "own") {
         resolvedPageId = fbPage.fbPageId;
-        token = fbPage.accessToken;
       }
 
       if (!resolvedPageId) return NextResponse.json({ error: "Chưa có Page ID", success: false }, { status: 400 });
@@ -89,7 +91,7 @@ export async function POST(req: NextRequest) {
               comments: p.comments,
               shares: p.shares,
               source: "facebook",
-              facebookPageId: facebookPageId ?? null,
+              facebookPageId,
             },
           })
         )
@@ -105,7 +107,7 @@ export async function POST(req: NextRequest) {
           comments: comments ?? 0,
           shares: shares ?? 0,
           platform: platform ?? "facebook",
-          facebookPageId: facebookPageId ?? null,
+          facebookPageId,
         },
       });
       return NextResponse.json({ data: sample, success: true });
@@ -115,8 +117,10 @@ export async function POST(req: NextRequest) {
       if (!body.id || !["approved", "rejected"].includes(body.learningStatus)) {
         return NextResponse.json({ error: "Trạng thái học không hợp lệ", success: false }, { status: 400 });
       }
+      const existing = await prisma.styleSample.findFirst({ where: { id: body.id, facebookPageId } });
+      if (!existing) throw new AccessError("Không tìm thấy bài mẫu trong Facebook Page này", 404);
       const sample = await prisma.styleSample.update({
-        where: { id: body.id },
+        where: { id: existing.id },
         data: { learningStatus: body.learningStatus },
       });
       return NextResponse.json({ data: sample, success: true });
@@ -124,7 +128,7 @@ export async function POST(req: NextRequest) {
 
     if (action === "analyze") {
       const samples = await prisma.styleSample.findMany({
-        where: { facebookPageId: facebookPageId ?? undefined, learningStatus: "approved" },
+        where: { facebookPageId, learningStatus: "approved" },
         take: 20,
       });
       if (!samples.length) return NextResponse.json({ error: "Chưa có bài mẫu nào", success: false }, { status: 400 });
@@ -134,17 +138,19 @@ export async function POST(req: NextRequest) {
       const systemPrompt = `Bạn là chuyên gia phân tích văn phong. Hãy phân tích kỹ và trả về hồ sơ văn phong gồm: cách xưng hô, tone giọng, cách dùng emoji, độ dài câu, cách mở đầu/kết thúc, cách gọi khách hàng, phong cách hashtag, và các đặc điểm nổi bật khác. Viết bằng tiếng Việt, súc tích và có thể dùng làm hướng dẫn viết bài sau này.`;
 
       const profile = await generateContent(prompt, systemPrompt);
-      const existing = await prisma.styleProfile.findFirst({ where: { facebookPageId: facebookPageId ?? null } });
+      const existing = await prisma.styleProfile.findFirst({ where: { facebookPageId } });
       if (existing) {
         await prisma.styleProfile.update({ where: { id: existing.id }, data: { profile } });
       } else {
-        await prisma.styleProfile.create({ data: { facebookPageId: facebookPageId ?? null, profile } });
+        await prisma.styleProfile.create({ data: { facebookPageId, profile } });
       }
       return NextResponse.json({ data: { profile }, success: true });
     }
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
+    const accessResponse = accessErrorResponse(err);
+    if (accessResponse) return accessResponse;
     const msg = err instanceof Error ? err.message : "Lỗi không xác định";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }
@@ -152,10 +158,15 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { id } = await req.json();
-    await prisma.styleSample.delete({ where: { id } });
+    const { id, facebookPageId } = await req.json();
+    const { page } = await requireExplicitPageAccess(facebookPageId, { owner: true });
+    const sample = await prisma.styleSample.findFirst({ where: { id, facebookPageId: page!.id } });
+    if (!sample) throw new AccessError("Không tìm thấy bài mẫu trong Facebook Page này", 404);
+    await prisma.styleSample.delete({ where: { id: sample.id } });
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
+    const accessResponse = accessErrorResponse(error);
+    if (accessResponse) return accessResponse;
     return NextResponse.json({ error: "Lỗi khi xóa", success: false }, { status: 500 });
   }
 }

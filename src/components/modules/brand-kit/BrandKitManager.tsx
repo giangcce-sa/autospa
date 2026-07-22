@@ -14,8 +14,15 @@ interface BrandKit { logoUrl: string | null; primaryColor: string; accentColor: 
 const PRESET_COLORS = ["#2d6a4f", "#1a5276", "#6c3483", "#cb4335", "#d68910", "#1e8449", "#2471a3"];
 const EMPTY_FORM: BrandKit = { logoUrl: "", primaryColor: "#2d6a4f", accentColor: "#40c074", fontStyle: "elegant", spaName: "", tagline: "" };
 
-export function BrandKitManager() {
-  const { selectedPageId } = useActivePage();
+export function BrandKitManager({
+  facebookPageId,
+  canMutate = true,
+}: {
+  facebookPageId?: string;
+  canMutate?: boolean;
+} = {}) {
+  const { selectedPageId: contextPageId } = useActivePage();
+  const selectedPageId = facebookPageId ?? contextPageId;
   const [form, setForm] = useState<BrandKit>(EMPTY_FORM);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -44,7 +51,7 @@ export function BrandKitManager() {
     <div className="space-y-4 max-w-4xl">
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="space-y-4">
+        <fieldset disabled={!canMutate} className="min-w-0 space-y-4 disabled:opacity-75">
           <Card>
             <CardHeader><CardTitle>Thông tin cơ bản</CardTitle></CardHeader>
             <div className="space-y-3">
@@ -89,10 +96,12 @@ export function BrandKitManager() {
             </Select>
           </Card>
 
-          <Button onClick={handleSave} loading={loading} className="w-full">
-            {saved ? <><CheckCircle size={14} weight="fill" /> Đã lưu!</> : "Lưu Brand Kit"}
-          </Button>
-        </div>
+          {canMutate && (
+            <Button onClick={handleSave} loading={loading} className="w-full">
+              {saved ? <><CheckCircle size={14} weight="fill" /> Đã lưu!</> : "Lưu Brand Kit"}
+            </Button>
+          )}
+        </fieldset>
 
         <Card>
           <CardHeader><CardTitle>Xem trước</CardTitle></CardHeader>

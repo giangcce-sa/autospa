@@ -3,9 +3,11 @@ import { prisma } from "@/lib/db";
 import { runAllLearningLoops } from "@/lib/learning";
 import { getBehaviorInsights } from "@/lib/learning/customer-behavior";
 import { getCompetitorMemory } from "@/lib/learning/competitor-learning";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 
 export async function GET(req: NextRequest) {
   try {
+    await requireUser();
     const { searchParams } = new URL(req.url);
     const action = searchParams.get("action");
 
@@ -64,12 +66,15 @@ export async function GET(req: NextRequest) {
       data: { contentMem, sourceWeights, recentInsights, behavior, competitorMemory },
     });
   } catch (e) {
+    const accessResponse = accessErrorResponse(e);
+    if (accessResponse) return accessResponse;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const { action } = await req.json();
 
     if (action === "run") {
@@ -79,6 +84,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (e) {
+    const accessResponse = accessErrorResponse(e);
+    if (accessResponse) return accessResponse;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }

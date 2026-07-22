@@ -31,7 +31,7 @@ export function CreateContentDrawer({ open, onClose }: { open: boolean; onClose:
           </div>
           <div className="mt-7 border-y border-[var(--border)] py-4"><p className="text-[13px] font-semibold">Bước tiếp theo</p><p className="mt-1 text-[13px] leading-6 text-[var(--text-muted)]">Chọn dịch vụ, mục tiêu và nhân viên. AutoSpa chỉ tạo bản nháp để bạn kiểm tra trước khi đăng.</p></div>
         </div>
-        <footer className="flex items-center justify-between border-t border-[var(--border)] px-5 py-4 sm:px-7"><button onClick={onClose} className="h-10 px-2 text-sm font-semibold text-[var(--text-secondary)]">Hủy</button><button onClick={launch} className="flex h-10 items-center gap-2 rounded-md bg-[var(--accent)] px-5 text-sm font-semibold text-white hover:bg-[var(--accent-hover)] active:translate-y-px"><Sparkle size={16} />Mở {current.label.toLowerCase()}<ArrowRight size={16} /></button></footer>
+        <footer className="flex items-center justify-between border-t border-[var(--border)] px-5 py-4 sm:px-7"><button onClick={onClose} className="h-10 px-2 text-sm font-semibold text-[var(--text-secondary)]">Hủy</button><button onClick={launch} className="flex h-10 items-center gap-2 rounded-md bg-[var(--accent)] px-5 text-sm font-semibold text-[var(--accent-foreground)] hover:bg-[var(--accent-hover)] active:translate-y-px"><Sparkle size={16} />Mở {current.label.toLowerCase()}<ArrowRight size={16} /></button></footer>
       </aside>
     </div>
   );

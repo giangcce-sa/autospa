@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { contentChangeRatio, scoreHumanWriting } from "@/lib/content-humanizer";
 import { rebuildHumanVoiceProfile } from "@/lib/human-voice";
+import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
     if (!generation) {
       return NextResponse.json({ success: false, error: "Không tìm thấy phiên bản nội dung" }, { status: 404 });
     }
+    await requirePageAccess(generation.facebookPageId);
 
     const finalCaption = caption.trim();
     const ratio = contentChangeRatio(generation.editorCaption, finalCaption);
@@ -96,6 +98,8 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : String(error),

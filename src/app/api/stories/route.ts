@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/db";
+import { AccessError, accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const facebookPageId = searchParams.get("facebookPageId") || null;
+    const facebookPageId = searchParams.get("facebookPageId");
+    await requireExplicitPageAccess(facebookPageId);
     const type = searchParams.get("type") || undefined;
     const activeOnly = searchParams.get("active") !== "false";
 
@@ -18,7 +20,9 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ data: stories, success: true });
-  } catch {
+  } catch (error) {
+    const accessResponse = accessErrorResponse(error);
+    if (accessResponse) return accessResponse;
     return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
   }
 }
@@ -30,11 +34,12 @@ export async function POST(req: NextRequest) {
 
     if (action === "create") {
       const { facebookPageId, type, customerName, content, service, imageUrl } = body;
+      const { page } = await requireExplicitPageAccess(facebookPageId, { owner: true });
       if (!content?.trim()) return NextResponse.json({ error: "Nội dung câu chuyện không được để trống", success: false }, { status: 400 });
 
       const story = await prisma.spaStory.create({
         data: {
-          facebookPageId: facebookPageId || null,
+          facebookPageId: page!.id,
           type: type ?? "testimonial",
           customerName: customerName || null,
           content: content.trim(),
@@ -47,6 +52,9 @@ export async function POST(req: NextRequest) {
 
     if (action === "update") {
       const { id, type, customerName, content, service, imageUrl, isActive } = body;
+      const existing = await prisma.spaStory.findUnique({ where: { id }, select: { facebookPageId: true } });
+      if (!existing) throw new AccessError("Không tìm thấy câu chuyện", 404);
+      await requireExplicitPageAccess(existing.facebookPageId, { owner: true });
       const story = await prisma.spaStory.update({
         where: { id },
         data: {
@@ -63,12 +71,17 @@ export async function POST(req: NextRequest) {
 
     if (action === "delete") {
       const { id } = body;
+      const existing = await prisma.spaStory.findUnique({ where: { id }, select: { facebookPageId: true } });
+      if (!existing) throw new AccessError("Không tìm thấy câu chuyện", 404);
+      await requireExplicitPageAccess(existing.facebookPageId, { owner: true });
       await prisma.spaStory.delete({ where: { id } });
       return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
+    const accessResponse = accessErrorResponse(err);
+    if (accessResponse) return accessResponse;
     const msg = err instanceof Error ? err.message : "Lỗi không xác định";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }

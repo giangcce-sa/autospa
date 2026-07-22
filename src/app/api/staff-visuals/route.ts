@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { deleteMedia } from "@/lib/media-storage";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 const CONSENT_STATUSES = new Set(["consented", "limited", "blocked"]);
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const facebookPageId = pageIdFrom(searchParams.get("facebookPageId"));
-    await requirePageAccess(facebookPageId);
+    await requireExplicitPageAccess(facebookPageId);
     const includeInactive = searchParams.get("includeInactive") === "true";
 
     const staff = await prisma.staffVisualProfile.findMany({
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const action = body.action ?? "create";
     const facebookPageId = pageIdFrom(body.facebookPageId);
-    await requirePageAccess(facebookPageId, { owner: true });
+    await requireExplicitPageAccess(facebookPageId, { owner: true });
 
     if (action === "create") {
       const name = compact(body.name, 120);

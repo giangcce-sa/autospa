@@ -52,6 +52,8 @@ interface SavedFlags {
   openaiApiKey: boolean;
   zaloToken: boolean;
   spaApiKey: boolean;
+  spaWebhookSecret: boolean;
+  webhookVerifyToken: boolean;
 }
 
 interface FbPage {
@@ -142,7 +144,12 @@ export function SettingsForm() {
     adsOptimizeMinRoas: "1.5",
   });
   const [saved, setSaved] = useState<SavedFlags>({
-    claudeApiKey: false, openaiApiKey: false, zaloToken: false, spaApiKey: false,
+    claudeApiKey: false,
+    openaiApiKey: false,
+    zaloToken: false,
+    spaApiKey: false,
+    spaWebhookSecret: false,
+    webhookVerifyToken: false,
   });
   const [loading, setLoading] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
@@ -179,6 +186,8 @@ export function SettingsForm() {
         openaiApiKey: !!d.openaiApiKey,
         zaloToken: !!d.zaloToken,
         spaApiKey: !!d.hasSpaApiKey,
+        spaWebhookSecret: !!d.hasSpaWebhookSecret,
+        webhookVerifyToken: !!d.hasWebhookVerifyToken,
       });
       setForm((prev) => ({
         ...prev,
@@ -189,12 +198,12 @@ export function SettingsForm() {
         zaloOaId: d.zaloOaId ?? "",
         draftRetentionDays: String(d.draftRetentionDays ?? 30),
         publishedRetentionDays: String(d.publishedRetentionDays ?? 90),
-        webhookVerifyToken: d.webhookVerifyToken ?? "",
+        webhookVerifyToken: "",
         webhookMode: d.webhookMode ?? "manual",
         autoReplyComments: d.autoReplyComments ?? false,
         autoReplyMessages: d.autoReplyMessages ?? false,
         spaApiUrl: d.spaApiUrl ?? "",
-        spaWebhookSecret: d.spaWebhookSecret ?? "",
+        spaWebhookSecret: "",
         leadHandoffMode: d.leadHandoffMode ?? "staff",
         leadHandoffLink: d.leadHandoffLink ?? "",
         automationLevel: d.automationLevel ?? "supervised",
@@ -300,37 +309,50 @@ export function SettingsForm() {
   const handleSave = async () => {
     setLoading(true);
     try {
-      const body: Record<string, string | number | boolean> = {
-        claudeBaseUrl: form.claudeBaseUrl,
-        openaiBaseUrl: form.openaiBaseUrl,
-        imageModel: form.imageModel,
-        openaiChatModel: form.openaiChatModel,
-        zaloOaId: form.zaloOaId,
-        draftRetentionDays: Number(form.draftRetentionDays) || 0,
-        publishedRetentionDays: Number(form.publishedRetentionDays) || 0,
-        webhookVerifyToken: form.webhookVerifyToken,
-        webhookMode: form.webhookMode,
-        autoReplyComments: form.autoReplyComments,
-        autoReplyMessages: form.autoReplyMessages,
-        spaApiUrl: form.spaApiUrl,
-        spaWebhookSecret: form.spaWebhookSecret,
-        leadHandoffMode: form.leadHandoffMode,
-        leadHandoffLink: form.leadHandoffLink,
-        automationLevel: form.automationLevel,
-        zaloApprovalRecipient: form.zaloApprovalRecipient,
-        adsOptimizePauseCtr: Number(form.adsOptimizePauseCtr) || 0.5,
-        adsOptimizeScaleCtr: Number(form.adsOptimizeScaleCtr) || 2.0,
-        adsOptimizeFreqLimit: Number(form.adsOptimizeFreqLimit) || 3.0,
-        adsOptimizeScalePct: Number(form.adsOptimizeScalePct) || 20,
-        adsOptimizeMinSpend: Number(form.adsOptimizeMinSpend) || 100000,
-        adsOptimizeMaxBudget: Number(form.adsOptimizeMaxBudget) || 2000000,
-        adsOptimizeCooldownHrs: Number(form.adsOptimizeCooldownHrs) || 24,
-        adsOptimizeMinRoas: Number(form.adsOptimizeMinRoas) || 1.5,
-      };
-      if (form.claudeApiKey.trim()) body.claudeApiKey = form.claudeApiKey.trim();
-      if (form.openaiApiKey.trim()) body.openaiApiKey = form.openaiApiKey.trim();
-      if (form.zaloToken.trim()) body.zaloToken = form.zaloToken.trim();
-      if (form.spaApiKey.trim()) body.spaApiKey = form.spaApiKey.trim();
+      const body: Record<string, string | number | boolean> = {};
+      if (tab === "api") {
+        Object.assign(body, {
+          claudeBaseUrl: form.claudeBaseUrl,
+          openaiBaseUrl: form.openaiBaseUrl,
+          imageModel: form.imageModel,
+          openaiChatModel: form.openaiChatModel,
+          spaApiUrl: form.spaApiUrl,
+        });
+        if (form.claudeApiKey.trim()) body.claudeApiKey = form.claudeApiKey.trim();
+        if (form.openaiApiKey.trim()) body.openaiApiKey = form.openaiApiKey.trim();
+        if (form.spaApiKey.trim()) body.spaApiKey = form.spaApiKey.trim();
+        if (form.spaWebhookSecret.trim()) body.spaWebhookSecret = form.spaWebhookSecret.trim();
+      }
+      if (tab === "social") {
+        body.zaloOaId = form.zaloOaId;
+        if (form.zaloToken.trim()) body.zaloToken = form.zaloToken.trim();
+      }
+      if (tab === "automation") {
+        Object.assign(body, {
+          webhookMode: form.webhookMode,
+          autoReplyComments: form.autoReplyComments,
+          autoReplyMessages: form.autoReplyMessages,
+          leadHandoffMode: form.leadHandoffMode,
+          leadHandoffLink: form.leadHandoffLink,
+          automationLevel: form.automationLevel,
+          zaloApprovalRecipient: form.zaloApprovalRecipient,
+          adsOptimizePauseCtr: Number(form.adsOptimizePauseCtr) || 0.5,
+          adsOptimizeScaleCtr: Number(form.adsOptimizeScaleCtr) || 2.0,
+          adsOptimizeFreqLimit: Number(form.adsOptimizeFreqLimit) || 3.0,
+          adsOptimizeScalePct: Number(form.adsOptimizeScalePct) || 20,
+          adsOptimizeMinSpend: Number(form.adsOptimizeMinSpend) || 100000,
+          adsOptimizeMaxBudget: Number(form.adsOptimizeMaxBudget) || 2000000,
+          adsOptimizeCooldownHrs: Number(form.adsOptimizeCooldownHrs) || 24,
+          adsOptimizeMinRoas: Number(form.adsOptimizeMinRoas) || 1.5,
+        });
+        if (form.webhookVerifyToken.trim()) body.webhookVerifyToken = form.webhookVerifyToken.trim();
+      }
+      if (tab === "library") {
+        Object.assign(body, {
+          draftRetentionDays: Number(form.draftRetentionDays) || 0,
+          publishedRetentionDays: Number(form.publishedRetentionDays) || 0,
+        });
+      }
 
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -339,12 +361,24 @@ export function SettingsForm() {
       });
       if (res.ok) {
         setSaved((prev) => ({
-          claudeApiKey: prev.claudeApiKey || !!form.claudeApiKey.trim(),
-          openaiApiKey: prev.openaiApiKey || !!form.openaiApiKey.trim(),
-          zaloToken: prev.zaloToken || !!form.zaloToken.trim(),
-          spaApiKey: prev.spaApiKey || !!form.spaApiKey.trim(),
+          claudeApiKey: prev.claudeApiKey || (tab === "api" && !!form.claudeApiKey.trim()),
+          openaiApiKey: prev.openaiApiKey || (tab === "api" && !!form.openaiApiKey.trim()),
+          zaloToken: prev.zaloToken || (tab === "social" && !!form.zaloToken.trim()),
+          spaApiKey: prev.spaApiKey || (tab === "api" && !!form.spaApiKey.trim()),
+          spaWebhookSecret: prev.spaWebhookSecret || (tab === "api" && !!form.spaWebhookSecret.trim()),
+          webhookVerifyToken: prev.webhookVerifyToken || (tab === "automation" && !!form.webhookVerifyToken.trim()),
         }));
-        setForm((prev) => ({ ...prev, claudeApiKey: "", openaiApiKey: "", zaloToken: "", spaApiKey: "" }));
+        setForm((prev) => ({
+          ...prev,
+          ...(tab === "api" ? {
+            claudeApiKey: "",
+            openaiApiKey: "",
+            spaApiKey: "",
+            spaWebhookSecret: "",
+          } : {}),
+          ...(tab === "social" ? { zaloToken: "" } : {}),
+          ...(tab === "automation" ? { webhookVerifyToken: "" } : {}),
+        }));
         setTests({ claude: initTest(), openai: initTest(), zalo: initTest(), spa: initTest() });
         setSaveOk(true);
         setTimeout(() => setSaveOk(false), 3000);
@@ -514,7 +548,7 @@ export function SettingsForm() {
             <div className="space-y-3">
               <Input label="Spa API URL" placeholder="https://api.yourspa.com" value={form.spaApiUrl} onChange={set("spaApiUrl")} hint="Base URL của phần mềm spa. Cần endpoint: GET /revenue/today, POST /leads" />
               <Input label="Spa API Key" type="password" placeholder={saved.spaApiKey ? "Để trống = giữ nguyên key cũ" : "Bearer token..."} value={form.spaApiKey} onChange={set("spaApiKey")} />
-              <Input label="Webhook Secret" placeholder="Secret để verify webhook từ spa gửi về" value={form.spaWebhookSecret} onChange={set("spaWebhookSecret")} hint="Spa software sẽ gửi webhook đến /api/spa khi có booking/payment mới" />
+              <Input label="Webhook Secret" type="password" placeholder={saved.spaWebhookSecret ? "Để trống = giữ nguyên secret cũ" : "Secret để verify webhook từ spa gửi về"} value={form.spaWebhookSecret} onChange={set("spaWebhookSecret")} hint="Spa software sẽ gửi webhook đến /api/spa khi có booking/payment mới" />
             </div>
             <TestResult test={tests.spa} />
           </Card>
@@ -712,7 +746,7 @@ export function SettingsForm() {
                     </div>
                     <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>Thay <code>yourdomain.com</code> bằng domain sau khi deploy</p>
                   </div>
-                  <Input label="Verify Token" placeholder="VD: autospa_webhook_secret_2024" value={f.webhookVerifyToken} onChange={set("webhookVerifyToken")} hint="Tạo chuỗi bất kỳ, dán cùng chuỗi này vào Meta Developer Console" />
+                  <Input label="Verify Token" type="password" placeholder={saved.webhookVerifyToken ? "Để trống = giữ nguyên token cũ" : "VD: autospa_webhook_secret_2024"} value={f.webhookVerifyToken} onChange={set("webhookVerifyToken")} hint="Tạo chuỗi bất kỳ, dán cùng chuỗi này vào Meta Developer Console" />
                   <div className="space-y-2">
                     <label className="block text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Tự động xử lý khi nhận webhook</label>
                     <label className="flex items-center gap-3 cursor-pointer">

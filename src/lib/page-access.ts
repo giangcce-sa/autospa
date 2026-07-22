@@ -19,6 +19,27 @@ export async function requireUser(options: { owner?: boolean } = {}) {
   return user;
 }
 
+export async function getAuthorizedPageIds(user: Awaited<ReturnType<typeof requireUser>>) {
+  if (user.role === "owner") return null;
+  if (!user.id) throw new AccessError("Phiên đăng nhập thiếu định danh người dùng", 401);
+  const access = await prisma.userPageAccess.findMany({
+    where: { userId: user.id },
+    select: { facebookPageId: true },
+  });
+  return access.map((entry) => entry.facebookPageId);
+}
+
+export async function requireExplicitPageAccess(
+  facebookPageId: string | null | undefined,
+  options: { owner?: boolean } = {},
+) {
+  if (!facebookPageId?.trim()) {
+    throw new AccessError("Hãy chọn Facebook Page", 400);
+  }
+
+  return requirePageAccess(facebookPageId.trim(), options);
+}
+
 export async function requirePageAccess(facebookPageId: string | null | undefined, options: { owner?: boolean } = {}) {
   const user = await requireUser(options);
   if (!facebookPageId) {

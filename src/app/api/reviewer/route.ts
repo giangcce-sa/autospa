@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { reviewContent } from "@/lib/reviewer";
+import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -10,6 +11,7 @@ export async function POST(req: NextRequest) {
 
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post) return NextResponse.json({ error: "Không tìm thấy bài", success: false }, { status: 404 });
+    await requirePageAccess(post.facebookPageId);
 
     const result = await reviewContent({
       id: post.id,
@@ -21,6 +23,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: result, success: true });
   } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return access;
     const msg = err instanceof Error ? err.message : "Lỗi";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }

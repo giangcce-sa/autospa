@@ -5,6 +5,8 @@ import { getContentContext } from "@/lib/learning/content-memory";
 import { getCompetitorContext } from "@/lib/learning/competitor-learning";
 import { getHumanVoiceProfile } from "@/lib/human-voice";
 import { humanEditorPrompt, scoreHumanWriting } from "@/lib/content-humanizer";
+import { AccessError, accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { pageScopeMatches } from "@/lib/page-scope-policy";
 import { NextRequest, NextResponse } from "next/server";
 
 const POST_TYPE_LABELS: Record<string, string> = {
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest) {
       serviceId, postType, tone, customNote, platform, saveToLibrary, facebookPageId,
       includeStory, storyId, mode = "quick", narrator = "brand", material = {},
     } = body;
+    await requirePageAccess(facebookPageId);
 
     const [brandContext, styleProfile, styleSamples, service, learningCtx, competitorCtx, humanVoice, settings] = await Promise.all([
       getBrandContext(),
@@ -47,6 +50,9 @@ export async function POST(req: NextRequest) {
       getHumanVoiceProfile(facebookPageId),
       prisma.settings.findFirst({ select: { claudeBaseUrl: true, openaiChatModel: true } }),
     ]);
+    if (service && !pageScopeMatches(service.facebookPageId, facebookPageId, { allowGlobalRecord: true })) {
+      throw new AccessError("Dịch vụ không thuộc Facebook Page đã chọn", 403);
+    }
 
     // Pick a real spa story to weave into the post
     let storyContext: string | null = null;
@@ -54,6 +60,10 @@ export async function POST(req: NextRequest) {
       let story = storyId
         ? await prisma.spaStory.findUnique({ where: { id: storyId } })
         : null;
+      if (storyId && !story) throw new AccessError("Không tìm thấy câu chuyện", 404);
+      if (story && !pageScopeMatches(story.facebookPageId, facebookPageId, { allowGlobalRecord: true })) {
+        throw new AccessError("Câu chuyện không thuộc Facebook Page đã chọn", 403);
+      }
 
       if (!story) {
         // Auto-pick: prefer stories matching the service name, else any active
@@ -231,6 +241,8 @@ HASHTAGS:
       success: true,
     });
   } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return access;
     const msg = err instanceof Error ? err.message : "Lỗi không xác định";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }

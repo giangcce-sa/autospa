@@ -1,228 +1,139 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Gauge, PencilSimple, PaperPlaneTilt, Archive, Tag, Image, Stack,
-  ChartBar, Eye, ChartLine, ChatCircleDots, UsersThree, Flame,
-  Gear, Briefcase, Buildings, Palette, Brain, BookOpen, Scan,
-  Robot, ChatsTeardrop, Lightning, ArrowsSplit, Megaphone, Sparkle,
-  MagnifyingGlass, TrendUp,
-  UserCircle, FilmSlate,
-} from "@phosphor-icons/react";
+import { MagnifyingGlass } from "@phosphor-icons/react";
+import { Command } from "cmdk";
+import * as Dialog from "@radix-ui/react-dialog";
+import { ROUTE_ICONS } from "@/config/route-icons";
+import { getCommandRoutes, getSection, type AppRoute, type AppSectionId } from "@/config/routes";
+import { useExperienceMode } from "@/contexts/ExperienceModeContext";
 
-interface PaletteItem {
-  id: string;
-  label: string;
-  group: string;
-  href?: string;
-  icon: React.ElementType;
-  premium?: boolean;
-  keywords?: string;
-}
-
-const ITEMS: PaletteItem[] = [
-  // Core
-  { id: "dashboard", label: "Hôm nay", group: "Trang", href: "/", icon: Gauge, keywords: "dashboard trang chu" },
-  { id: "brain", label: "Bộ não AutoSpa — Kỹ năng đã học", group: "Trí tuệ nhân tạo", href: "/brain", icon: Brain, premium: true, keywords: "bo nao brain skill ky nang hoc train" },
-  { id: "orchestrator", label: "Trung tâm điều phối", group: "Trí tuệ nhân tạo", href: "/orchestrator", icon: Robot, premium: true, keywords: "orchestrator agent dieu phoi" },
-  { id: "council", label: "Hội đồng tư vấn", group: "Trí tuệ nhân tạo", href: "/council", icon: ChatsTeardrop, premium: true, keywords: "ai council tranh luan" },
-  { id: "ceo-memory", label: "Bộ nhớ quyết định", group: "Trí tuệ nhân tạo", href: "/ceo-memory", icon: Brain, premium: true, keywords: "ceo memory bo nho" },
-  // Content
-  { id: "content", label: "Viết bài", group: "Sáng tạo", href: "/content", icon: PencilSimple, keywords: "tao bai dang content ai" },
-  { id: "video-studio", label: "Xưởng video", group: "Sáng tạo", href: "/video-studio", icon: FilmSlate, premium: true, keywords: "ai video studio runway elevenlabs sync lipsync" },
-  { id: "publish", label: "Đăng bài và xếp lịch", group: "Sáng tạo", href: "/publish", icon: PaperPlaneTilt, keywords: "schedule dang bai lich" },
-  { id: "library", label: "Thư viện nội dung", group: "Sáng tạo", href: "/library", icon: Archive },
-  { id: "promotions", label: "Chương trình khuyến mãi", group: "Tăng trưởng", href: "/promotions", icon: Tag, keywords: "promo" },
-  { id: "images", label: "Tạo hình ảnh", group: "Sáng tạo", href: "/images", icon: Image, keywords: "hinh anh image ai" },
-  { id: "staff-visuals", label: "Hình ảnh nhân viên", group: "Sáng tạo", href: "/staff-visuals", icon: UserCircle, keywords: "visual library nhan vien anh mau khuon mat" },
-  { id: "bulk", label: "Tạo nhiều nội dung", group: "Sáng tạo", href: "/bulk", icon: Stack, keywords: "bulk create hang loat" },
-  { id: "content-research", label: "Nghiên cứu nội dung", group: "Sáng tạo", href: "/content-research", icon: Sparkle, keywords: "research ai" },
-  { id: "ab-test", label: "So sánh hai phiên bản", group: "Sáng tạo", href: "/ab-test", icon: ArrowsSplit, keywords: "ab test testing" },
-  // Ads & Analytics
-  { id: "facebook-ads", label: "Quảng cáo Facebook", group: "Tăng trưởng", href: "/facebook-ads", icon: Megaphone },
-  { id: "analytics", label: "Phân tích hiệu quả", group: "Tăng trưởng", href: "/analytics", icon: ChartBar, keywords: "analytics" },
-  { id: "reports", label: "Báo cáo", group: "Tăng trưởng", href: "/reports", icon: ChartLine, keywords: "reports" },
-  { id: "listening", label: "Lắng nghe mạng xã hội", group: "Tăng trưởng", href: "/listening", icon: Eye, keywords: "social listening" },
-  { id: "competitors", label: "Theo dõi đối thủ", group: "Tăng trưởng", href: "/competitors", icon: TrendUp, keywords: "intelligence" },
-  // Customers
-  { id: "inbox", label: "Hộp thư", group: "Khách hàng", href: "/inbox", icon: ChatCircleDots, keywords: "inbox tin nhan chat" },
-  { id: "crm", label: "Hồ sơ khách hàng", group: "Khách hàng", href: "/crm", icon: UsersThree, keywords: "crm" },
-  { id: "sale", label: "Khách cần tư vấn", group: "Khách hàng", href: "/sale", icon: Flame, keywords: "lead sale chot" },
-  { id: "zalo", label: "Zalo OA", group: "Khách hàng", href: "/zalo", icon: Lightning },
-  // Settings
-  { id: "settings", label: "Cài đặt", group: "Hệ thống", href: "/settings", icon: Gear, keywords: "settings api key cai dat" },
-  { id: "services", label: "Danh mục dịch vụ", group: "Hệ thống", href: "/services", icon: Briefcase, keywords: "services" },
-  { id: "brand", label: "Thông tin thương hiệu", group: "Hệ thống", href: "/brand", icon: Buildings, keywords: "brand" },
-  { id: "brand-kit", label: "Bộ nhận diện", group: "Hệ thống", href: "/brand-kit", icon: Palette, keywords: "brand kit mau sac logo" },
-  { id: "style-training", label: "Huấn luyện văn phong", group: "Hệ thống", href: "/style-training", icon: Brain, keywords: "style training ai" },
-  { id: "stories", label: "Câu chuyện thực tế", group: "Hệ thống", href: "/stories", icon: BookOpen },
-  { id: "skin-ai", label: "Phân tích da", group: "Hệ thống", href: "/skin-ai", icon: Scan, keywords: "ai da lieu skin" },
-  { id: "automation", label: "Tự động hóa", group: "Hệ thống", href: "/automation", icon: Lightning, keywords: "workflows" },
-];
-
-const GROUPS = ["Trang", "Sáng tạo", "Khách hàng", "Tăng trưởng", "Trí tuệ nhân tạo", "Hệ thống"];
+const GROUP_ORDER: readonly AppSectionId[] = ["today", "creative", "customers", "growth", "system"];
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
+  const [search, setSearch] = useState("");
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const { mode } = useExperienceMode();
   const router = useRouter();
 
-  const onSelect = useCallback((item: PaletteItem) => {
-    if (item.href) {
-      router.push(item.href);
-      setOpen(false);
-      setValue("");
-    }
-  }, [router]);
+  const routes = useMemo(
+    () => getCommandRoutes().filter((route) => route.visibility === "simple" || mode === "advanced"),
+    [mode],
+  );
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setOpen((v) => !v);
-      }
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+  const close = useCallback(() => {
+    setOpen(false);
+    setSearch("");
+    requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
 
-  if (!open) return null;
+  const onSelect = useCallback((route: AppRoute) => {
+    router.push(route.path);
+    close();
+  }, [close, router]);
 
-  const filtered = value.trim()
-    ? ITEMS.filter((item) => {
-        const q = value.toLowerCase();
-        return (
-          item.label.toLowerCase().includes(q) ||
-          item.group.toLowerCase().includes(q) ||
-          (item.keywords ?? "").includes(q)
-        );
-      })
-    : ITEMS;
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (!event.repeat && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        if (open) {
+          close();
+        } else {
+          triggerRef.current = document.activeElement as HTMLElement | null;
+          setOpen(true);
+        }
+      }
+    };
+    const handleOpen = () => {
+      triggerRef.current = document.activeElement as HTMLElement | null;
+      setOpen(true);
+    };
+
+    window.addEventListener("keydown", handleKey);
+    window.addEventListener("autospa:open-command-palette", handleOpen);
+
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("autospa:open-command-palette", handleOpen);
+    };
+  }, [close, open]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
-      style={{ background: "rgba(19,24,20,0.42)", backdropFilter: "blur(6px)" }}
-      onClick={() => setOpen(false)}
+    <Command.Dialog
+      open={open}
+      onOpenChange={(next) => next ? setOpen(true) : close()}
+      label="Tìm trang và tính năng"
+      loop
+      overlayClassName="fixed inset-0 z-50 bg-[rgba(19,24,20,0.48)] backdrop-blur-sm"
+      contentClassName="fixed left-1/2 top-[12vh] z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-lg)]"
     >
-      <div
-        className="w-full max-w-lg rounded-lg overflow-hidden"
-        style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "var(--shadow-lg)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Search input */}
-        <div
-          className="flex items-center gap-3 px-4 py-3 border-b"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <MagnifyingGlass size={15} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-          <input
-            autoFocus
-            placeholder="Tìm trang, tính năng..."
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="flex-1 text-sm outline-none bg-transparent"
-            style={{ color: "var(--text)" }}
-          />
-          <kbd className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: "var(--bg-subtle)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
-            Esc
-          </kbd>
-        </div>
-
-        {/* Results */}
-        <div className="max-h-[60vh] overflow-y-auto py-2">
-          {value.trim() ? (
-            <div className="px-2">
-              {filtered.length === 0 ? (
-                <p className="text-xs text-center py-6" style={{ color: "var(--text-muted)" }}>Không tìm thấy</p>
-              ) : (
-                filtered.map((item) => (
-                  <PaletteRow key={item.id} item={item} onSelect={() => onSelect(item)} />
-                ))
-              )}
-            </div>
-          ) : (
-            GROUPS.map((group) => {
-              const groupItems = filtered.filter((i) => i.group === group);
-              if (!groupItems.length) return null;
-              return (
-                <div key={group} className="mb-1">
-                  <p className="px-4 py-1 text-[11px] font-semibold" style={{ color: "var(--text-muted)" }}>
-                    {group}
-                  </p>
-                  <div className="px-2">
-                    {groupItems.map((item) => (
-                      <PaletteRow key={item.id} item={item} onSelect={() => onSelect(item)} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Footer hint */}
-        <div
-          className="px-4 py-2 border-t flex items-center gap-4"
-          style={{ borderColor: "var(--border)" }}
-        >
-          {[["↑↓", "điều hướng"], ["↵", "chọn"], ["Esc", "đóng"]].map(([key, label]) => (
-            <span key={key} className="flex items-center gap-1 text-[10px]" style={{ color: "var(--text-muted)" }}>
-              <kbd className="px-1 py-0.5 rounded font-mono text-[9px]" style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)" }}>{key}</kbd>
-              {label}
-            </span>
-          ))}
-        </div>
+      <Dialog.Title className="sr-only">Tìm trang và tính năng</Dialog.Title>
+      <Dialog.Description className="sr-only">Tìm và mở nhanh một khu vực trong AutoSpa.</Dialog.Description>
+      <div className="flex min-h-14 items-center gap-3 border-b border-[var(--border)] px-4">
+        <MagnifyingGlass size={18} className="shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+        <Command.Input
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Tìm trang, khách hàng hoặc công cụ..."
+          className="h-14 min-w-0 flex-1 bg-transparent text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
+        />
+        <kbd className="rounded border border-[var(--border)] bg-[var(--bg-subtle)] px-2 py-1 font-mono text-[11px] text-[var(--text-muted)]">Esc</kbd>
       </div>
-    </div>
+
+      <Command.List label="Kết quả tìm kiếm" className="max-h-[min(65vh,34rem)] overflow-y-auto p-2">
+        <Command.Empty className="px-4 py-12 text-center text-[13px] text-[var(--text-muted)]">Không tìm thấy trang hoặc tính năng phù hợp.</Command.Empty>
+        {GROUP_ORDER.map((sectionId) => {
+          const section = getSection(sectionId);
+          const groupRoutes = routes.filter((route) => route.section === sectionId);
+          if (!section || groupRoutes.length === 0) return null;
+          return (
+            <Command.Group key={sectionId} heading={section.label} className="command-group mb-2">
+              {groupRoutes.map((route) => <CommandRouteItem key={route.id} route={route} onSelect={() => onSelect(route)} />)}
+            </Command.Group>
+          );
+        })}
+      </Command.List>
+
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--border)] px-4 py-2.5 text-[11px] text-[var(--text-muted)]">
+        <span><kbd className="font-mono">↑↓</kbd> điều hướng</span>
+        <span><kbd className="font-mono">Enter</kbd> mở</span>
+        <span><kbd className="font-mono">Esc</kbd> đóng</span>
+      </div>
+    </Command.Dialog>
   );
 }
 
-function PaletteRow({ item, onSelect }: { item: PaletteItem; onSelect: () => void }) {
-  const Icon = item.icon;
+function CommandRouteItem({ route, onSelect }: { route: AppRoute; onSelect: () => void }) {
+  const Icon = ROUTE_ICONS[route.icon];
   return (
-    <button
-      onClick={onSelect}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors hover:bg-[var(--bg-subtle)] group"
+    <Command.Item
+      value={`${route.label} ${route.description}`}
+      keywords={route.searchAliases}
+      onSelect={onSelect}
+      className="flex min-h-12 cursor-default select-none items-center gap-3 rounded-md px-3 py-2 text-left outline-none data-[selected=true]:bg-[var(--accent-light)] data-[selected=true]:text-[var(--accent)]"
     >
-      <div
-        className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
-        style={{
-          background: item.premium ? "var(--premium-light)" : "var(--bg-subtle)",
-        }}
-      >
-        <Icon
-          size={13}
-          weight="fill"
-          style={{ color: item.premium ? "var(--premium)" : "var(--text-secondary)" }}
-        />
-      </div>
-      <span className="text-sm flex-1 truncate" style={{ color: "var(--text)" }}>{item.label}</span>
-      {item.premium && (
-        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md shrink-0" style={{ background: "var(--premium-light)", color: "var(--premium)" }}>
-          AI
-        </span>
-      )}
-    </button>
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${route.premium ? "bg-[var(--premium-light)] text-[var(--premium)]" : "bg-[var(--bg-subtle)] text-[var(--text-secondary)]"}`}>
+        <Icon size={16} weight="duotone" />
+      </span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{route.label}</span><span className="block truncate text-xs text-[var(--text-muted)]">{route.description}</span></span>
+      {route.premium && <span className="rounded bg-[var(--premium-light)] px-2 py-0.5 text-[10px] font-bold text-[var(--premium)]">AI</span>}
+    </Command.Item>
   );
 }
 
 export function CommandPaletteButton() {
   return (
     <button
-      onClick={() => {
-        window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
-      }}
-      className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors hover:bg-[var(--bg-subtle)]"
-      style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
+      type="button"
+      onClick={() => window.dispatchEvent(new Event("autospa:open-command-palette"))}
+      className="hidden min-h-9 items-center gap-2 rounded-md border border-[var(--border)] px-3 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] sm:flex"
+      aria-label="Mở tìm kiếm nhanh"
     >
-      <MagnifyingGlass size={12} />
+      <MagnifyingGlass size={14} aria-hidden="true" />
       Tìm kiếm
-      <kbd className="flex items-center gap-0.5 font-mono text-[10px]" style={{ color: "var(--text-muted)" }}>
-        <span>⌘K</span>
-      </kbd>
+      <kbd className="font-mono text-[11px]">⌘K</kbd>
     </button>
   );
 }

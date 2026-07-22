@@ -15,6 +15,9 @@ const SECRET_FIELDS = new Set([
   "telegramWebhookSecret",
   "telegramChatId",
   "webhookVerifyToken",
+  "runwayApiKey",
+  "elevenLabsApiKey",
+  "syncLabsApiKey",
 ]);
 
 function stripSecrets<T extends Row>(row: T): T {

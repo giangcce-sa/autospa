@@ -64,10 +64,10 @@ export function SkeletonList({ rows = 3 }: { rows?: number }) {
 
 export function SkeletonChart({ bars = 30 }: { bars?: number }) {
   return (
-    <div className="flex items-end gap-0.5 h-32">
-      {Array.from({ length: bars }).map((_, i) => (
-        <div key={i} className="flex-1" style={{ minWidth: 6 }}>
-          <Skeleton style={{ height: `${30 + Math.random() * 70}%` }} className="w-full" />
+    <div className="flex h-32 items-end gap-0.5">
+      {Array.from({ length: bars }).map((_, index) => (
+        <div key={index} className="flex-1" style={{ minWidth: 6 }}>
+          <Skeleton style={{ height: `${30 + ((index * 37) % 70)}%` }} className="w-full" />
         </div>
       ))}
     </div>
