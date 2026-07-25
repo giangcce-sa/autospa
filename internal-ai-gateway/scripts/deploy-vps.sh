@@ -23,7 +23,14 @@ if [[ ! "${release}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]]; then
   exit 1
 fi
 
-rsync -az --delete \
+ssh_options=()
+rsync_ssh=()
+if [[ -n "${SSH_IDENTITY_FILE:-}" ]]; then
+  ssh_options=(-i "${SSH_IDENTITY_FILE}")
+  rsync_ssh=(-e "ssh -i ${SSH_IDENTITY_FILE@Q}")
+fi
+
+rsync -az --delete "${rsync_ssh[@]}" \
   --exclude node_modules \
   --exclude dist \
   --exclude data \
@@ -35,7 +42,7 @@ rsync -az --delete \
   --exclude .git \
   "${project_dir}/" "${ssh_target}:${remote_dir}/"
 
-ssh "${ssh_target}" bash -s -- "${remote_dir}" "${release}" <<'REMOTE'
+ssh "${ssh_options[@]}" "${ssh_target}" bash -s -- "${remote_dir}" "${release}" <<'REMOTE'
 set -euo pipefail
 
 remote_dir="$1"
