@@ -13,9 +13,11 @@ interface Holiday {
   description: string | null;
   daysUntil: number;
   isActive: boolean;
+  configuredEstimate: boolean;
+  occurrenceNote: string | null;
 }
 
-export function HolidayCalendar() {
+export function HolidayCalendar({ canMutate = true }: { canMutate?: boolean }) {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [generating, setGenerating] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, string>>({});
@@ -23,11 +25,17 @@ export function HolidayCalendar() {
   const [error, setError] = useState("");
 
   const load = () =>
-    fetch("/api/holidays").then((r) => r.json()).then((res) => res.data && setHolidays(res.data));
+    fetch("/api/holidays").then(async (response) => {
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Không thể tải lịch");
+      setHolidays(result.data ?? []);
+    }).catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Không thể tải lịch"));
 
   useEffect(() => { load(); }, []);
 
   const handleGenerate = async (h: Holiday) => {
+    if (!canMutate) return;
+
     setGenerating(h.id);
     setError("");
     try {
@@ -39,6 +47,8 @@ export function HolidayCalendar() {
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setResults((prev) => ({ ...prev, [h.id]: data.data.content }));
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : "Không thể tạo nội dung");
     } finally { setGenerating(null); }
   };
 
@@ -49,8 +59,21 @@ export function HolidayCalendar() {
   };
 
   const handleToggle = async (id: string) => {
-    await fetch("/api/holidays", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "toggle", holidayId: id }) });
-    load();
+    if (!canMutate) return;
+
+    setError("");
+    try {
+      const response = await fetch("/api/holidays", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "toggle", holidayId: id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Không thể cập nhật dịp đặc biệt");
+      await load();
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : "Không thể cập nhật dịp đặc biệt");
+    }
   };
 
   const urgency = (days: number) => {
@@ -75,10 +98,13 @@ export function HolidayCalendar() {
                 {h.daysUntil === 0 ? "Hôm nay!" : `${h.daysUntil} ngày`}
               </Badge>
             </div>
-            {h.description && <p className="text-xs mb-3" style={{ color: "var(--text-secondary)" }}>{h.description}</p>}
-            <Button size="sm" onClick={() => handleGenerate(h)} loading={generating === h.id} className="w-full">
-              <Sparkle size={12} weight="fill" /> Tạo content
-            </Button>
+            {h.description && <p className="text-xs mb-1" style={{ color: "var(--text-secondary)" }}>{h.description}</p>}
+            {h.occurrenceNote && <p className="text-[10px] mb-3" style={{ color: "var(--amber)" }}>{h.occurrenceNote}</p>}
+            {canMutate && (
+              <Button size="sm" onClick={() => handleGenerate(h)} loading={generating === h.id} className="w-full">
+                <Sparkle size={12} weight="fill" /> Tạo content
+              </Button>
+            )}
           </Card>
         ))}
       </div>
@@ -91,16 +117,26 @@ export function HolidayCalendar() {
         <div className="space-y-1">
           {holidays.map((h) => (
             <div key={h.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:opacity-80" style={{ background: "var(--bg-subtle)" }}>
-              <button onClick={() => handleToggle(h.id)} className="w-4 h-4 rounded border flex items-center justify-center shrink-0" style={{ borderColor: h.isActive ? "var(--accent)" : "var(--border)", background: h.isActive ? "var(--accent)" : "transparent" }}>
+              <button
+                type="button"
+                onClick={() => handleToggle(h.id)}
+                disabled={!canMutate}
+                aria-label={`${h.isActive ? "Tắt" : "Bật"} ${h.name}`}
+                className="w-4 h-4 rounded border flex items-center justify-center shrink-0 disabled:cursor-default"
+                style={{ borderColor: h.isActive ? "var(--accent)" : "var(--border)", background: h.isActive ? "var(--accent)" : "transparent" }}
+              >
                 {h.isActive && <CheckCircle size={12} color="white" weight="fill" />}
               </button>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium" style={{ color: "var(--text)" }}>{h.name}</p>
                 <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{h.date} - còn {h.daysUntil} ngày</p>
+                {h.occurrenceNote && <p className="text-[10px]" style={{ color: "var(--amber)" }}>{h.occurrenceNote}</p>}
               </div>
-              <Button size="sm" variant="secondary" onClick={() => handleGenerate(h)} loading={generating === h.id}>
-                <Sparkle size={11} />
-              </Button>
+              {canMutate && (
+                <Button size="sm" variant="secondary" onClick={() => handleGenerate(h)} loading={generating === h.id} aria-label={`Tạo content cho ${h.name}`}>
+                  <Sparkle size={11} />
+                </Button>
+              )}
             </div>
           ))}
         </div>

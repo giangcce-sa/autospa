@@ -1,7 +1,6 @@
 import { prisma } from "./db";
 import { postToZalo } from "./zalo";
 import { getInsights } from "./facebook-ads";
-import { pullSpaRevenue } from "./spa-client";
 
 function fmt(n: number) { return n.toLocaleString("vi-VN"); }
 function fmtVnd(n: number) { return n.toLocaleString("vi-VN") + "đ"; }
@@ -39,12 +38,10 @@ export async function buildDailyReport(): Promise<string> {
     if (insights.length) adsLine = `Chi: ${fmtVnd(spend)} | CTR: ${ctr.toFixed(1)}% | ROAS: ${spend > 0 ? "—" : "N/A"}`;
   } catch { /* no ad account configured */ }
 
-  // Spa revenue (best effort)
-  let spaLine = "Chưa kết nối";
-  try {
-    const spa = await pullSpaRevenue();
-    spaLine = `Lịch hẹn: ${fmt(spa.bookingCountToday)} | Doanh thu: ${fmtVnd(spa.revenueToday)}`;
-  } catch { /* no spa integration */ }
+  const spa = await prisma.spaSync.findUnique({ where: { id: "1" } });
+  const spaLine = spa
+    ? `Lịch hẹn: ${fmt(spa.bookingCountToday)} | Doanh thu: ${fmtVnd(spa.revenueToday)}`
+    : "Chưa đồng bộ";
 
   // Upcoming scheduled posts for tomorrow (supervised mode content plan)
   const tomorrowPosts = await prisma.post.findMany({

@@ -6,13 +6,13 @@ import { TrendUp, TrendDown } from "@phosphor-icons/react";
 interface Day {
   date: string;
   label: string;
-  engagement: number;
-  reach: number;
+  engagement: number | null;
+  reach: number | null;
   posts: number;
-  ctr: number;
+  engagementRate: number | null;
 }
 
-type Metric = "engagement" | "reach" | "ctr";
+type Metric = "engagement" | "reach" | "engagementRate";
 
 export function EngagementTrend() {
   const [trend, setTrend] = useState<Day[]>([]);
@@ -30,19 +30,19 @@ export function EngagementTrend() {
   const METRICS: { key: Metric; label: string; color: string }[] = [
     { key: "engagement", label: "Tương tác", color: "var(--accent)" },
     { key: "reach", label: "Tiếp cận", color: "var(--blue)" },
-    { key: "ctr", label: "CTR %", color: "var(--amber)" },
+    { key: "engagementRate", label: "Tỷ lệ tương tác", color: "var(--amber)" },
   ];
 
   const active = METRICS.find((m) => m.key === metric)!;
-  const values = trend.map((d) => d[metric]);
+  const values = trend.map((day) => day[metric] ?? 0);
   const max = Math.max(...values, 1);
 
   // show only every 5th label to avoid crowding
   const showLabel = (i: number) => i === 0 || i === trend.length - 1 || i % 5 === 0;
 
   // weekly delta: last 7 vs prev 7
-  const last7 = trend.slice(-7).reduce((s, d) => s + d[metric], 0);
-  const prev7 = trend.slice(-14, -7).reduce((s, d) => s + d[metric], 0);
+  const last7 = trend.slice(-7).reduce((sum, day) => sum + (day[metric] ?? 0), 0);
+  const prev7 = trend.slice(-14, -7).reduce((sum, day) => sum + (day[metric] ?? 0), 0);
   const delta = prev7 > 0 ? Math.round(((last7 - prev7) / prev7) * 100) : null;
   const positive = delta !== null && delta >= 0;
 
@@ -108,7 +108,8 @@ export function EngagementTrend() {
         {/* Bars */}
         <div className="absolute inset-0 flex items-end gap-px">
           {trend.map((day, i) => {
-            const h = max > 0 ? (day[metric] / max) * 100 : 0;
+            const value = day[metric];
+            const h = max > 0 ? ((value ?? 0) / max) * 100 : 0;
             return (
               <div
                 key={day.date}
@@ -119,11 +120,11 @@ export function EngagementTrend() {
                 <div
                   className="w-full rounded-t-sm transition-all duration-300 group-hover:opacity-100"
                   style={{
-                    height: `${Math.max(h, day[metric] > 0 ? 4 : 0)}%`,
+                    height: `${Math.max(h, (value ?? 0) > 0 ? 4 : 0)}%`,
                     background: tooltip?.day.date === day.date
                       ? active.color
                       : `color-mix(in srgb, ${active.color} 60%, transparent)`,
-                    minHeight: day[metric] > 0 ? 3 : 0,
+                    minHeight: (value ?? 0) > 0 ? 3 : 0,
                   }}
                 />
                 {showLabel(i) && (
@@ -152,9 +153,9 @@ export function EngagementTrend() {
           >
             <p className="font-semibold mb-1" style={{ color: "var(--text)" }}>{tooltip.day.label}</p>
             <div className="space-y-0.5" style={{ color: "var(--text-muted)" }}>
-              <p>Tương tác: <span className="font-medium" style={{ color: "var(--accent)" }}>{tooltip.day.engagement}</span></p>
-              <p>Tiếp cận: <span className="font-medium" style={{ color: "var(--blue)" }}>{tooltip.day.reach.toLocaleString("vi-VN")}</span></p>
-              <p>CTR: <span className="font-medium" style={{ color: "var(--amber)" }}>{tooltip.day.ctr}%</span></p>
+              <p>Tương tác: <span className="font-medium" style={{ color: "var(--accent)" }}>{tooltip.day.engagement ?? "Chưa đo"}</span></p>
+              <p>Tiếp cận: <span className="font-medium" style={{ color: "var(--blue)" }}>{tooltip.day.reach == null ? "Chưa đo" : tooltip.day.reach.toLocaleString("vi-VN")}</span></p>
+              <p>Tỷ lệ tương tác: <span className="font-medium" style={{ color: "var(--amber)" }}>{tooltip.day.engagementRate == null ? "Chưa đo" : `${tooltip.day.engagementRate}%`}</span></p>
               {tooltip.day.posts > 0 && <p>{tooltip.day.posts} bài đăng</p>}
             </div>
           </div>

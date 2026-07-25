@@ -1,31 +1,13 @@
 import Link from "next/link";
 import { ArrowRight, BookOpenText, Brain, CheckCircle, WarningCircle } from "@phosphor-icons/react/dist/ssr";
-import type { BrandAssetsOverviewData, BrandAssetsPageReadiness } from "@/lib/brand-assets-overview";
+import type { BrandAssetsOverviewData } from "@/lib/brand-assets-overview";
+import { BRAND_ASSET_AREAS, getBrandAssetsReadiness } from "@/lib/brand-assets-readiness";
 
 function dateLabel(value: Date | null) {
   return value
     ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(value)
     : "Chưa có dữ liệu";
 }
-
-function readiness(page: BrandAssetsPageReadiness) {
-  const checks = [
-    page.hasBrandKit,
-    page.serviceCount > 0,
-    page.consentedStaffCount > 0,
-    page.storyCount > 0,
-    page.approvedStyleSampleCount >= 3 && page.hasStyleProfile,
-  ];
-  return { complete: checks.filter(Boolean).length, total: checks.length };
-}
-
-const PAGE_AREAS = [
-  { view: "kit", label: "Bộ nhận diện", ready: (page: BrandAssetsPageReadiness) => page.hasBrandKit },
-  { view: "services", label: "Dịch vụ", ready: (page: BrandAssetsPageReadiness) => page.serviceCount > 0 },
-  { view: "staff", label: "Nhân viên & consent", ready: (page: BrandAssetsPageReadiness) => page.consentedStaffCount > 0 },
-  { view: "stories", label: "Câu chuyện", ready: (page: BrandAssetsPageReadiness) => page.storyCount > 0 },
-  { view: "style", label: "Văn phong", ready: (page: BrandAssetsPageReadiness) => page.approvedStyleSampleCount >= 3 && page.hasStyleProfile },
-] as const;
 
 export function BrandAssetsOverview({ data }: { data: BrandAssetsOverviewData }) {
   return (
@@ -63,7 +45,7 @@ export function BrandAssetsOverview({ data }: { data: BrandAssetsOverviewData })
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
             {data.pages.map((page) => {
-              const score = readiness(page);
+              const score = getBrandAssetsReadiness(page);
               return (
                 <article key={page.id} className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5">
                   <div className="flex items-start justify-between gap-3">
@@ -76,7 +58,7 @@ export function BrandAssetsOverview({ data }: { data: BrandAssetsOverviewData })
                     </span>
                   </div>
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    {PAGE_AREAS.map((area) => {
+                    {BRAND_ASSET_AREAS.map((area) => {
                       const ready = area.ready(page);
                       return (
                         <Link

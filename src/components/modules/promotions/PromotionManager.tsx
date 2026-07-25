@@ -1,91 +1,76 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Textarea, Input } from "@/components/ui/Input";
 import { StatusBadge } from "@/components/ui/Badge";
 import { useActivePage } from "@/contexts/ActivePageContext";
-import { Sparkle, Tag, Copy, CheckCircle, PaperPlaneTilt, CalendarBlank } from "@phosphor-icons/react";
+import { Sparkle, Tag, Copy, CheckCircle, PaperPlaneTilt } from "@phosphor-icons/react";
 import { formatDateTime, truncate } from "@/lib/utils";
 
 interface Service { id: string; name: string; }
 interface Post { id: string; caption: string; status: string; createdAt: string; service: { name: string } | null; }
 
-export function PromotionManager() {
+export function PromotionManager({
+  facebookPageId,
+  initialServices,
+  initialHistory,
+  canMutate = true,
+}: {
+  facebookPageId?: string;
+  initialServices?: Service[];
+  initialHistory?: Post[];
+  canMutate?: boolean;
+} = {}) {
+  const router = useRouter();
   const { selectedPageId } = useActivePage();
-  const [services, setServices] = useState<Service[]>([]);
-  const [history, setHistory] = useState<Post[]>([]);
+  const resolvedPageId = facebookPageId ?? selectedPageId ?? undefined;
+  const [services, setServices] = useState<Service[]>(initialServices ?? []);
+  const [history, setHistory] = useState<Post[]>(initialHistory ?? []);
   const [form, setForm] = useState({
     dealName: "",
     discount: "20",
     validUntil: "",
     serviceId: "",
     description: "",
-    platform: "facebook",
   });
   const [result, setResult] = useState<{ caption: string; hashtags: string } | null>(null);
-  const [imageUrl, setImageUrl] = useState("");
-  const [scheduledAt, setScheduledAt] = useState("");
+  const [postId, setPostId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [publishing, setPublishing] = useState(false);
-  const [published, setPublished] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const q = selectedPageId ? `?facebookPageId=${selectedPageId}` : "";
+    if (initialServices && initialHistory) {
+      setServices(initialServices);
+      setHistory(initialHistory);
+      return;
+    }
+    if (!resolvedPageId) return;
+    const q = `?facebookPageId=${encodeURIComponent(resolvedPageId)}`;
     fetch(`/api/services${q}`).then((r) => r.json()).then((d) => setServices(d.data ?? []));
     fetch(`/api/promotions${q}`).then((r) => r.json()).then((d) => setHistory(d.data ?? []));
-  }, [selectedPageId]);
+  }, [initialHistory, initialServices, resolvedPageId]);
 
   const handleGenerate = async () => {
     if (!form.dealName || !form.discount) { setError("Điền tên chương trình và % giảm giá"); return; }
     setGenerating(true);
     setError("");
-    setPublished(false);
     try {
       const res = await fetch("/api/promotions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate", facebookPageId: selectedPageId || null, ...form }),
+        body: JSON.stringify({ action: "generate", facebookPageId: resolvedPageId, ...form }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setResult(data.data);
+      setPostId(data.data.postId);
+      if (initialHistory) router.refresh();
     } finally { setGenerating(false); }
-  };
-
-  const handlePublish = async (schedule = false) => {
-    if (!result) return;
-    if (schedule && !scheduledAt) { setError("Chọn thời gian lên lịch"); return; }
-    setPublishing(true);
-    setError("");
-    try {
-      const res = await fetch("/api/promotions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "publish",
-          facebookPageId: selectedPageId || null,
-          caption: result.caption,
-          hashtags: result.hashtags,
-          imageUrl: imageUrl || undefined,
-          platform: form.platform,
-          scheduledAt: schedule ? scheduledAt : undefined,
-          serviceId: form.serviceId || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
-      setPublished(true);
-      setResult(null);
-      setForm({ dealName: "", discount: "20", validUntil: "", serviceId: "", description: "", platform: "facebook" });
-      // Refresh history
-      const q = selectedPageId ? `?facebookPageId=${selectedPageId}` : "";
-      fetch(`/api/promotions${q}`).then((r) => r.json()).then((d) => setHistory(d.data ?? []));
-    } finally { setPublishing(false); }
   };
 
   const handleCopy = () => {
@@ -136,14 +121,6 @@ export function PromotionManager() {
               <option value="">Tất cả dịch vụ</option>
               {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Select>
-            <Select
-              label="Đăng lên"
-              value={form.platform}
-              onChange={(e) => setForm({ ...form, platform: e.target.value })}
-            >
-              <option value="facebook">Facebook</option>
-              <option value="zalo">Zalo OA</option>
-            </Select>
             <Textarea
               label="Chi tiết thêm (tùy chọn)"
               placeholder="VD: Giảm 30% khi đặt online trước 12h trưa..."
@@ -152,21 +129,20 @@ export function PromotionManager() {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
             {error && <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
-            {published && (
-              <div className="flex items-center gap-2 text-xs p-2 rounded" style={{ background: "var(--accent-light)", color: "var(--accent)" }}>
-                <CheckCircle size={13} weight="fill" /> Đã đăng/lên lịch thành công!
-              </div>
+            {canMutate ? (
+              <Button onClick={handleGenerate} loading={generating} disabled={!resolvedPageId} className="w-full">
+                <Sparkle size={14} weight="fill" /> Tạo và lưu draft
+              </Button>
+            ) : (
+              <p className="rounded-lg bg-[var(--bg-subtle)] p-3 text-xs text-[var(--text-secondary)]">Chỉ owner mới có thể tạo draft khuyến mãi.</p>
             )}
-            <Button onClick={handleGenerate} loading={generating} className="w-full">
-              <Sparkle size={14} weight="fill" /> Tạo caption AI
-            </Button>
           </div>
         </Card>
 
         {/* Result */}
         <Card>
           <CardHeader>
-            <CardTitle>Caption & Đăng bài</CardTitle>
+            <CardTitle>Draft khuyến mãi</CardTitle>
             {result && (
               <Button size="sm" variant="secondary" onClick={handleCopy}>
                 {copied ? <CheckCircle size={12} weight="fill" /> : <Copy size={12} />}
@@ -188,33 +164,15 @@ export function PromotionManager() {
                   <p className="text-xs" style={{ color: "var(--accent)" }}>{result.hashtags}</p>
                 </div>
               )}
-              <Input
-                label="URL hình ảnh (tùy chọn)"
-                placeholder="https://..."
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-              />
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>Lên lịch (tùy chọn)</label>
-                <input
-                  type="datetime-local"
-                  className="w-full px-3 py-2 text-sm rounded-lg border outline-none"
-                  style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
-                  value={scheduledAt}
-                  onChange={(e) => setScheduledAt(e.target.value)}
-                  min={new Date().toISOString().slice(0, 16)}
-                />
-              </div>
-              <div className="flex gap-2">
-                {scheduledAt && (
-                  <Button variant="secondary" onClick={() => handlePublish(true)} loading={publishing} className="flex-1">
-                    <CalendarBlank size={13} /> Lên lịch
-                  </Button>
-                )}
-                <Button onClick={() => handlePublish(false)} loading={publishing} className="flex-1">
-                  <PaperPlaneTilt size={13} weight="fill" /> Đăng ngay
+              {postId && resolvedPageId ? (
+                <Button
+                  onClick={() => router.push(`/creative/publishing?view=composer&scope=current&pageId=${encodeURIComponent(resolvedPageId)}&id=${encodeURIComponent(postId)}`)}
+                  className="w-full"
+                >
+                  <PaperPlaneTilt size={13} weight="fill" /> Review và phân phối
                 </Button>
-              </div>
+              ) : null}
+              <p className="text-xs leading-5 text-[var(--text-muted)]">Draft đã được lưu. Hình ảnh, review, lịch và kết quả từng kênh được quản lý tại Publishing.</p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-16 text-center">

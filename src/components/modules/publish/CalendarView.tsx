@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 
 interface CalendarPost {
   id: string;
@@ -22,19 +23,39 @@ function getDateKey(post: CalendarPost): string | null {
   return post.scheduledAt ?? post.publishedAt ?? null;
 }
 
-export function CalendarView() {
+export function CalendarView({
+  facebookPageId,
+  canonical = false,
+  initialMonth,
+}: {
+  facebookPageId?: string;
+  canonical?: boolean;
+  initialMonth?: string;
+} = {}) {
+  const pathname = usePathname();
+  const router = useRouter();
   const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth());
+  const parsedMonth = initialMonth?.match(/^(\d{4})-(0[1-9]|1[0-2])$/);
+  const initialYearValue = parsedMonth ? Number(parsedMonth[1]) : today.getFullYear();
+  const initialMonthValue = parsedMonth ? Number(parsedMonth[2]) - 1 : today.getMonth();
+  const [legacyYear, setLegacyYear] = useState(initialYearValue);
+  const [legacyMonth, setLegacyMonth] = useState(initialMonthValue);
+  const year = canonical ? initialYearValue : legacyYear;
+  const month = canonical ? initialMonthValue : legacyMonth;
   const [posts, setPosts] = useState<CalendarPost[]>([]);
 
   const loadPosts = useCallback(async () => {
+    const query = (status: string) => {
+      const params = new URLSearchParams({ status });
+      if (facebookPageId) params.set("facebookPageId", facebookPageId);
+      return `/api/content/list?${params.toString()}`;
+    };
     const [r1, r2] = await Promise.all([
-      fetch("/api/content/list?status=scheduled").then((r) => r.json()),
-      fetch("/api/content/list?status=published").then((r) => r.json()),
+      fetch(query("scheduled")).then((r) => r.json()),
+      fetch(query("published")).then((r) => r.json()),
     ]);
     setPosts([...(r1.data ?? []), ...(r2.data ?? [])]);
-  }, []);
+  }, [facebookPageId]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
@@ -54,13 +75,26 @@ export function CalendarView() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
 
-  function prevMonth() {
-    if (month === 0) { setMonth(11); setYear((y) => y - 1); }
-    else setMonth((m) => m - 1);
+  function setCalendarMonth(nextYear: number, nextMonth: number) {
+    if (!canonical) {
+      setLegacyYear(nextYear);
+      setLegacyMonth(nextMonth);
+      return;
+    }
+    const params = new URLSearchParams({ view: "calendar", scope: "current" });
+    if (facebookPageId) params.set("pageId", facebookPageId);
+    params.set("month", `${nextYear}-${String(nextMonth + 1).padStart(2, "0")}`);
+    router.push(`${pathname}?${params.toString()}`);
   }
+
+  function prevMonth() {
+    if (month === 0) setCalendarMonth(year - 1, 11);
+    else setCalendarMonth(year, month - 1);
+  }
+
   function nextMonth() {
-    if (month === 11) { setMonth(0); setYear((y) => y + 1); }
-    else setMonth((m) => m + 1);
+    if (month === 11) setCalendarMonth(year + 1, 0);
+    else setCalendarMonth(year, month + 1);
   }
 
   const cells: (number | null)[] = [
@@ -77,20 +111,22 @@ export function CalendarView() {
       >
         <button
           onClick={prevMonth}
-          className="p-1.5 rounded-lg hover:opacity-70"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:opacity-70"
           style={{ background: "var(--bg-subtle)" }}
+          aria-label="Tháng trước"
         >
-          <CaretLeft size={14} style={{ color: "var(--text-secondary)" }} />
+          <CaretLeft size={14} style={{ color: "var(--text-secondary)" }} aria-hidden="true" />
         </button>
         <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>
           {MONTHS[month]} {year}
         </p>
         <button
           onClick={nextMonth}
-          className="p-1.5 rounded-lg hover:opacity-70"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:opacity-70"
           style={{ background: "var(--bg-subtle)" }}
+          aria-label="Tháng sau"
         >
-          <CaretRight size={14} style={{ color: "var(--text-secondary)" }} />
+          <CaretRight size={14} style={{ color: "var(--text-secondary)" }} aria-hidden="true" />
         </button>
       </div>
 
@@ -137,7 +173,10 @@ export function CalendarView() {
                     {dayPosts.slice(0, 3).map((post) => (
                       <Link
                         key={post.id}
-                        href={`/publish?postId=${post.id}`}
+                        href={canonical
+                                ? `/creative/publishing?view=composer&scope=current${facebookPageId ? `&pageId=${encodeURIComponent(facebookPageId)}` : ""}&id=${encodeURIComponent(post.id)}`
+                                : `/publish?postId=${post.id}`
+                              }
                         className="block text-[9px] leading-tight px-1 py-0.5 rounded truncate hover:opacity-80 transition-opacity"
                         style={
                           post.status === "published"

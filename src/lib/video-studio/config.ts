@@ -2,10 +2,12 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { decryptVideoSecret } from "./secrets";
+import { resolveVideoExecutionPolicy, type VideoExecutionPolicy } from "./execution-policy";
 import { assertSafeProviderBaseUrl } from "./media-security";
 
 export interface VideoProviderConfig {
   mockMode: boolean;
+  executionPolicy: VideoExecutionPolicy;
   budgetUsd: number;
   runway: { apiKey?: string; baseUrl: string; model: string };
   elevenLabs: { apiKey?: string; baseUrl: string; model: string };
@@ -17,10 +19,31 @@ function cleanBaseUrl(value: string) {
 }
 
 export async function getVideoProviderConfig(): Promise<VideoProviderConfig> {
-  const settings = await prisma.settings.findFirst();
-  const mockMode = settings?.videoMockMode ?? process.env.VIDEO_MOCK_MODE !== "false";
+  const settings = await prisma.settings.findUnique({
+    where: { id: "1" },
+    select: {
+      runwayApiKey: true,
+      runwayBaseUrl: true,
+      runwayVideoModel: true,
+      elevenLabsApiKey: true,
+      elevenLabsBaseUrl: true,
+      elevenLabsVoiceModel: true,
+      syncLabsApiKey: true,
+      syncLabsBaseUrl: true,
+      syncLabsModel: true,
+      videoMockMode: true,
+      videoBudgetUsd: true,
+    },
+  });
+  const requestedMockMode = settings?.videoMockMode ?? process.env.VIDEO_MOCK_MODE !== "false";
+  const executionPolicy = resolveVideoExecutionPolicy({
+    requestedMockMode,
+    deploymentMode: process.env.VIDEO_EXECUTION_MODE,
+    emergencyStop: process.env.VIDEO_EMERGENCY_STOP,
+  });
   const config: VideoProviderConfig = {
-    mockMode,
+    mockMode: executionPolicy.mockMode,
+    executionPolicy,
     budgetUsd: settings?.videoBudgetUsd ?? Number(process.env.VIDEO_BUDGET_USD || 25),
     runway: {
       apiKey: decryptVideoSecret(settings?.runwayApiKey) || process.env.RUNWAY_API_KEY || process.env.RUNWAYML_API_SECRET,
@@ -38,7 +61,7 @@ export async function getVideoProviderConfig(): Promise<VideoProviderConfig> {
       model: settings?.syncLabsModel || process.env.SYNC_MODEL || "sync-3",
     },
   };
-  if (!mockMode) {
+  if (!executionPolicy.mockMode) {
     const [runway, elevenLabs, sync] = await Promise.all([
       assertSafeProviderBaseUrl("runway", config.runway.baseUrl),
       assertSafeProviderBaseUrl("elevenLabs", config.elevenLabs.baseUrl),

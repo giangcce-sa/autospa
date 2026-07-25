@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/db";
 import { generateChatCompletion } from "@/lib/openai";
-import { postToFacebook } from "@/lib/facebook";
-import { postToZalo } from "@/lib/zalo";
-import { sendMessage as sendTelegram } from "@/lib/telegram";
+import { businessDateKey } from "@/lib/today-policy";
 
 export interface SlotGap {
   date: string;       // YYYY-MM-DD
@@ -27,7 +25,11 @@ export interface FlashDeal {
 const DEFAULT_CAPACITY = 8;
 
 function dayLabel(date: Date): string {
-  return date.toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit" });
+  return date.toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
+}
+
+function businessDayAtNine(date: Date) {
+  return new Date(`${businessDateKey(date)}T09:00:00+07:00`);
 }
 
 // Find gaps: days in the next 48h with fill rate < 60%
@@ -46,25 +48,26 @@ export async function detectSlotGaps(): Promise<SlotGap[]> {
   const byDay: Record<string, number> = {};
   for (const a of appts) {
     if (!a.preferredAt) continue;
-    const d = new Date(a.preferredAt);
-    if (d < now || d > cutoff) continue;
-    const key = d.toISOString().slice(0, 10);
+    const appointment = new Date(a.preferredAt);
+    if (appointment < now || appointment > cutoff) continue;
+    const key = businessDateKey(appointment);
     byDay[key] = (byDay[key] ?? 0) + 1;
   }
 
   // Build slot map for next 2 days
   const gaps: SlotGap[] = [];
   for (let i = 0; i <= 2; i++) {
-    const d = new Date(now.getTime() + i * 86400000);
-    const key = d.toISOString().slice(0, 10);
+    const date = new Date(now.getTime() + i * 86400000);
+    const key = businessDateKey(date);
     const filled = byDay[key] ?? 0;
     const fillRate = filled / DEFAULT_CAPACITY;
-    const hoursUntil = Math.round((d.setHours(9, 0, 0, 0) - now.getTime()) / 3600000);
+    const slotTime = businessDayAtNine(date);
+    const hoursUntil = Math.round((slotTime.getTime() - now.getTime()) / 3600000);
 
-    if (fillRate < 0.6 && hoursUntil > 2) {
+    if (fillRate < 0.6 && hoursUntil > 2 && slotTime <= cutoff) {
       gaps.push({
         date: key,
-        label: dayLabel(d),
+        label: dayLabel(slotTime),
         hoursUntil: Math.max(0, hoursUntil),
         filledSlots: filled,
         estimatedCapacity: DEFAULT_CAPACITY,
@@ -133,32 +136,4 @@ export async function runFlashDealDetection(): Promise<{ gaps: SlotGap[]; deals:
   }
 
   return { gaps, deals };
-}
-
-// Post approved flash deal to all channels
-export async function postFlashDeal(caption: string): Promise<{ facebook: boolean; zalo: boolean; telegram: boolean }> {
-  const results = { facebook: false, zalo: false, telegram: false };
-
-  const pages = await prisma.facebookPage.findMany({ where: { isActive: true } });
-  for (const page of pages) {
-    try {
-      await postToFacebook(page.accessToken, page.fbPageId, caption);
-      results.facebook = true;
-    } catch { /* continue */ }
-  }
-
-  const settings = await prisma.settings.findFirst();
-  if (settings?.zaloOaId && settings?.zaloToken) {
-    try {
-      await postToZalo(caption);
-      results.zalo = true;
-    } catch { /* continue */ }
-  }
-
-  try {
-    await sendTelegram(`📣 *Flash Deal đã được đăng*\n\n${caption.slice(0, 300)}…`);
-    results.telegram = true;
-  } catch { /* continue */ }
-
-  return results;
 }

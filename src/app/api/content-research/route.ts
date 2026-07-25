@@ -1,47 +1,80 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { generateContentPlan, getResearchDrafts } from "@/lib/content-research";
+import { accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
 
-export async function GET() {
+const actionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("generate"),
+    facebookPageId: z.string().min(1),
+    daysAhead: z.coerce.number().int().min(1).max(30).default(7),
+    postsPerDay: z.coerce.number().int().min(1).max(3).default(1),
+  }),
+  z.object({
+    action: z.literal("schedule"),
+    facebookPageId: z.string().min(1),
+    postId: z.string().min(1),
+    scheduledAt: z.string().datetime(),
+  }),
+  z.object({
+    action: z.literal("discard"),
+    facebookPageId: z.string().min(1),
+    postId: z.string().min(1),
+  }),
+]);
+
+export async function GET(req: NextRequest) {
   try {
-    const drafts = await getResearchDrafts(30);
+    const facebookPageId = req.nextUrl.searchParams.get("facebookPageId");
+    const { page } = await requireExplicitPageAccess(facebookPageId);
+    const drafts = await getResearchDrafts(page!.id, 30);
     return NextResponse.json({ success: true, data: drafts });
-  } catch (e) {
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: error instanceof z.ZodError ? 400 : 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { action, daysAhead = 7, postsPerDay = 1, postId, scheduledAt } = body;
+    const input = actionSchema.parse(await req.json());
+    const { page } = await requireExplicitPageAccess(input.facebookPageId, { owner: true });
 
-    if (action === "generate") {
-      const result = await generateContentPlan(Number(daysAhead), Number(postsPerDay));
+    if (input.action === "generate") {
+      const result = await generateContentPlan(page!.id, input.daysAhead, input.postsPerDay);
       return NextResponse.json({ success: true, data: result });
     }
 
-    if (action === "schedule" && postId && scheduledAt) {
+    const post = await prisma.post.findUnique({
+      where: { id: input.postId },
+      select: { facebookPageId: true },
+    });
+    if (!post) return NextResponse.json({ error: "Không tìm thấy ý tưởng", success: false }, { status: 404 });
+    if (post.facebookPageId !== page!.id) {
+      return NextResponse.json({ error: "Ý tưởng không thuộc Facebook Page đang chọn", success: false }, { status: 403 });
+    }
+
+    if (input.action === "schedule") {
       await prisma.$transaction([
         prisma.post.update({
-          where: { id: postId },
-          data: { status: "scheduled", scheduledAt: new Date(scheduledAt) },
+          where: { id: input.postId },
+          data: { status: "scheduled", scheduledAt: new Date(input.scheduledAt) },
         }),
         prisma.contentGeneration.updateMany({
-          where: { postId },
+          where: { postId: input.postId, facebookPageId: page!.id },
           data: { userAccepted: true },
         }),
       ]);
       return NextResponse.json({ success: true });
     }
 
-    if (action === "discard" && postId) {
-      await prisma.post.delete({ where: { id: postId } });
-      return NextResponse.json({ success: true });
-    }
-
-    return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
-  } catch (e) {
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    await prisma.post.delete({ where: { id: input.postId } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: error instanceof z.ZodError ? 400 : 500 });
   }
 }

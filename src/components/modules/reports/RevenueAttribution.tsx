@@ -84,10 +84,9 @@ export function RevenueAttribution() {
 
   return (
     <div className="space-y-4">
-      {/* Time range selector */}
       <div className="flex items-center justify-between">
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Trong <strong style={{ color: "var(--text)" }}>{data.days} ngày</strong> qua
+          Toàn tài khoản · BookingRevenue · <strong style={{ color: "var(--text)" }}>{data.days} ngày</strong> qua
         </p>
         <Select value={String(days)} onChange={(e) => setDays(Number(e.target.value))} className="w-32">
           <option value="7">7 ngày</option>

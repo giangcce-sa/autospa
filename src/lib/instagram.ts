@@ -38,7 +38,8 @@ export async function postToInstagram(
   igAccountId: string,
   accessToken: string,
   caption: string,
-  imageUrl: string
+  imageUrl: string,
+  onCheckpoint?: (checkpoint: string) => Promise<void>,
 ): Promise<string> {
   const publicImageUrl = publishableImageUrl(imageUrl);
   // Step 1: Create media container
@@ -53,6 +54,7 @@ export async function postToInstagram(
   const containerData = await containerRes.json();
   if (containerData.error) throw new Error(`IG media create: ${containerData.error.message}`);
   const creationId: string = containerData.id;
+  await onCheckpoint?.(`container:${creationId}`);
 
   // Step 2: Publish
   const publishRes = await fetch(`${IG_API}/${igAccountId}/media_publish`, {
@@ -73,6 +75,7 @@ export async function postVideoToInstagram(
   accessToken: string,
   caption: string,
   videoUrl: string,
+  onCheckpoint?: (checkpoint: string) => Promise<void>,
 ): Promise<string> {
   const storageKey = storageKeyFromMediaUrl(videoUrl);
   const publicVideoUrl = storageKey ? signedMediaUrl(storageKey, 3600) : videoUrl;
@@ -87,6 +90,7 @@ export async function postVideoToInstagram(
   const containerData = await containerRes.json();
   if (containerData.error) throw new Error(`IG Reels create: ${containerData.error.message}`);
   const creationId: string = containerData.id;
+  await onCheckpoint?.(`container:${creationId}`);
   for (let attempt = 0; attempt < 24; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 5_000));
     const statusRes = await fetch(`${IG_API}/${creationId}?fields=status_code,status`, {

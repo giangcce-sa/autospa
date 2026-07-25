@@ -10,6 +10,7 @@ import { syncAdsLibrary } from "@/lib/intelligence/ads-library";
 import { syncGoogleTrends } from "@/lib/intelligence/google-trends";
 import { batchSendNps } from "@/lib/feedback";
 import { finishJobRun, logActivity, startJobRun } from "@/lib/activity-log";
+import { getCanonicalRouteHref } from "@/config/routes";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
@@ -98,7 +99,7 @@ export async function GET(req: NextRequest) {
     type: "job_run",
     title: status === "completed" ? "Daily automation completed" : "Daily automation needs review",
     detail: summary,
-    href: "/orchestrator",
+    href: getCanonicalRouteHref("orchestrator"),
     severity: status === "completed" ? "success" : "warning",
     source: "cron",
     metadata: results,

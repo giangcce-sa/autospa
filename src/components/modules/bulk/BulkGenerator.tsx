@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useActivePage } from "@/contexts/ActivePageContext";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -16,23 +17,39 @@ const months = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `Th�
 const years = [now.getFullYear(), now.getFullYear() + 1];
 
 export function BulkGenerator() {
+  const { selectedPageId } = useActivePage();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [form, setForm] = useState({ month: now.getMonth() + 1, year: now.getFullYear(), postsPerWeek: 3, tone: "friendly" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const load = () => fetch("/api/bulk").then((r) => r.json()).then((res) => res.data && setPlans(res.data));
-  useEffect(() => { load(); }, []);
+  const load = useCallback(() => {
+    if (!selectedPageId) {
+      setPlans([]);
+      return;
+    }
+    fetch(`/api/bulk?facebookPageId=${encodeURIComponent(selectedPageId)}`)
+      .then((response) => response.json())
+      .then((response) => {
+        if (response.data) setPlans(response.data);
+        else setError(response.error ?? "Không thể tải kế hoạch");
+      });
+  }, [selectedPageId]);
+  useEffect(() => { load(); }, [load]);
 
   const handleGenerate = async () => {
+    if (!selectedPageId) {
+      setError("Hãy chọn Facebook Page trước khi tạo kế hoạch");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const res = await fetch("/api/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, postTypes: ["service", "tip", "promotion"] }),
+        body: JSON.stringify({ ...form, postTypes: ["service", "tip", "promotion"], facebookPageId: selectedPageId }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
@@ -67,7 +84,7 @@ export function BulkGenerator() {
           </Select>
         </div>
         {error && <p className="text-xs mt-2 p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
-        <Button onClick={handleGenerate} loading={loading} className="mt-3 w-full">
+        <Button onClick={handleGenerate} loading={loading} disabled={!selectedPageId} className="mt-3 w-full">
           <Sparkle size={14} weight="fill" /> Tạo kế hoạch tháng {form.month}/{form.year}
         </Button>
       </Card>

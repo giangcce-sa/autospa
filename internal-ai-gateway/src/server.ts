@@ -1,7 +1,6 @@
 import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
-import swaggerUi from "@fastify/swagger-ui";
 import { env } from "./config/env.js";
 import { GatewayError, toGatewayError } from "./errors/gateway-error.js";
 import { logger } from "./observability/logger.js";
@@ -57,13 +56,6 @@ export async function buildServer() {
         }
       }
     }
-  });
-
-  await app.register(swaggerUi, {
-    routePrefix: "/docs",
-    uiConfig: { docExpansion: "list", deepLinking: true },
-    staticCSP: true,
-    transformSpecificationClone: true
   });
 
   await app.register(landingRoutes);

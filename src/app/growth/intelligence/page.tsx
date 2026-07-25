@@ -1,5 +1,5 @@
-import { WorkspacePage, type WorkspacePageProps } from "@/components/workspace/WorkspacePage";
+import { GrowthIntelligenceWorkspace, type GrowthIntelligenceWorkspaceProps } from "@/components/modules/growth/GrowthIntelligenceWorkspace";
 
-export default function Page({ searchParams }: WorkspacePageProps) {
-  return <WorkspacePage routeId="growth-intelligence" searchParams={searchParams} />;
+export default function Page({ searchParams }: GrowthIntelligenceWorkspaceProps) {
+  return <GrowthIntelligenceWorkspace searchParams={searchParams} />;
 }

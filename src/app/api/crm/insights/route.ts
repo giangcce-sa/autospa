@@ -1,15 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { computeAllCLV, updateCachedCLV } from "@/lib/clv-engine";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const action = new URL(req.url).searchParams.get("action");
-
-    if (action === "refresh") {
-      const count = await updateCachedCLV();
-      return NextResponse.json({ success: true, data: { updated: count } });
-    }
-
+    await requireUser();
     const all = await computeAllCLV();
 
     const summary = {
@@ -32,6 +27,20 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: { summary, customers: all } });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
+    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+  }
+}
+
+export async function POST() {
+  try {
+    await requireUser({ owner: true });
+    const count = await updateCachedCLV();
+    return NextResponse.json({ success: true, data: { updated: count } });
+  } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }

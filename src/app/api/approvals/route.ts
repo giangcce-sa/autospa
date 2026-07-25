@@ -12,12 +12,7 @@ export async function GET() {
       where: { status: "pending" },
       orderBy: { createdAt: "desc" },
     });
-    // Auto-expire timed-out ones
     const now = new Date();
-    const timedOut = approvals.filter((a) => a.timeoutAt < now);
-    for (const a of timedOut) {
-      await prisma.pendingApproval.update({ where: { id: a.id }, data: { status: "timed_out" } });
-    }
     const active = approvals.filter((a) => a.timeoutAt >= now);
     return NextResponse.json({ data: active, success: true });
   } catch (e) {

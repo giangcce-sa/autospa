@@ -16,7 +16,11 @@ const TABS = [
 
 type Tab = (typeof TABS)[number]["id"];
 
-export function ReportsPageClient() {
+function AccountReportPermission() {
+  return <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>Báo cáo doanh thu cấp tài khoản chỉ dành cho Owner.</p>;
+}
+
+export function ReportsPageClient({ canMutate = true }: { canMutate?: boolean }) {
   const [tab, setTab] = useState<Tab>("overview");
 
   return (
@@ -40,9 +44,9 @@ export function ReportsPageClient() {
       </div>
 
       {tab === "overview" && <ReportsDashboard />}
-      {tab === "analyst" && <AIAnalyst />}
-      {tab === "attribution" && <RevenueAttribution />}
-      {tab === "forecast" && <RevenueForecast />}
+      {tab === "analyst" && <AIAnalyst canMutate={canMutate} />}
+      {tab === "attribution" && (canMutate ? <RevenueAttribution /> : <AccountReportPermission />)}
+      {tab === "forecast" && (canMutate ? <RevenueForecast /> : <AccountReportPermission />)}
     </div>
   );
 }

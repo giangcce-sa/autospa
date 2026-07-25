@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import sharp, { type OverlayOptions as SharpOverlayOptions } from "sharp";
 import { prisma } from "./db";
 
 export interface OverlayOptions {
@@ -125,7 +125,7 @@ export async function applyOverlay(imageUrl: string, opts: OverlayOptions = {}):
     const W = metadata.width ?? 1024;
     const H = metadata.height ?? 1024;
 
-    const composites: sharp.OverlayOptions[] = [];
+    const composites: SharpOverlayOptions[] = [];
 
     // Caption overlay (bottom)
     if (opts.caption?.trim() && opts.template !== "none") {

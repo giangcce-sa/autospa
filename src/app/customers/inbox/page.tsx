@@ -1,5 +1,5 @@
-import { WorkspacePage, type WorkspacePageProps } from "@/components/workspace/WorkspacePage";
+import { CustomerInboxWorkspace, type CustomerInboxWorkspaceProps } from "@/components/modules/inbox/CustomerInboxWorkspace";
 
-export default function Page({ searchParams }: WorkspacePageProps) {
-  return <WorkspacePage routeId="customers-inbox" searchParams={searchParams} />;
+export default function Page({ searchParams }: CustomerInboxWorkspaceProps) {
+  return <CustomerInboxWorkspace searchParams={searchParams} />;
 }

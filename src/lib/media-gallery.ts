@@ -30,6 +30,12 @@ export function mediaStatusPresentation(status: string): MediaStatusPresentation
   return MEDIA_STATUS[status] ?? { label: status || "Không rõ", tone: "neutral" };
 }
 
+export function imageReviewStatus(userAccepted: boolean | null, generationStatus: string) {
+  if (userAccepted === true) return "approved";
+  if (userAccepted === false) return "rejected";
+  return generationStatus;
+}
+
 export function videoRevisionState(inputRevision: number, renderedRevision?: number | null, approvedRevision?: number | null) {
   return {
     renderFresh: renderedRevision != null && renderedRevision === inputRevision,

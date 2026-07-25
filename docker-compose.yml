@@ -1,7 +1,22 @@
 services:
+  migrate:
+    image: ${AUTOSPA_MIGRATOR_IMAGE:-autospa-migrator:local}
+    build:
+      context: .
+      target: migrator
+    env_file:
+      - .env
+    restart: "no"
+
   autospa:
-    build: .
+    image: ${AUTOSPA_IMAGE:-autospa:local}
+    build:
+      context: .
+      target: runner
     restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:
@@ -15,6 +30,12 @@ services:
       AUTH_TRUST_HOST: "true"
     expose:
       - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     volumes:
       - autospa_uploads:/app/public/uploads
       - autospa_media:/app/.data/media

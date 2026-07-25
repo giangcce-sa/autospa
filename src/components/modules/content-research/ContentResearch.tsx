@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useActivePage } from "@/contexts/ActivePageContext";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -10,7 +11,7 @@ import {
   ArrowsClockwise, Robot, Clock,
 } from "@phosphor-icons/react";
 
-interface DraftPost {
+export interface ResearchDraftData {
   id: string;
   caption: string;
   hashtags: string | null;
@@ -41,9 +42,21 @@ function extractTopic(notes: string | null): string {
   return notes.replace("AI-RESEARCH:", "").trim();
 }
 
-export function ContentResearch() {
-  const [drafts, setDrafts] = useState<DraftPost[]>([]);
-  const [loading, setLoading] = useState(true);
+export function ContentResearch({
+  facebookPageId: providedPageId,
+  canMutate = true,
+  mode = "research",
+  initialDrafts,
+}: {
+  facebookPageId?: string;
+  canMutate?: boolean;
+  mode?: "overview" | "research" | "backlog";
+  initialDrafts?: ResearchDraftData[];
+} = {}) {
+  const { selectedPageId } = useActivePage();
+  const facebookPageId = providedPageId ?? selectedPageId ?? undefined;
+  const [drafts, setDrafts] = useState<ResearchDraftData[]>(initialDrafts ?? []);
+  const [loading, setLoading] = useState(initialDrafts === undefined);
   const [generating, setGenerating] = useState(false);
   const [daysAhead, setDaysAhead] = useState("7");
   const [postsPerDay, setPostsPerDay] = useState("1");
@@ -53,13 +66,27 @@ export function ContentResearch() {
   const [result, setResult] = useState<{ created: number } | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/content-research");
+    if (!facebookPageId) {
+      setDrafts([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const params = new URLSearchParams({ facebookPageId });
+    const res = await fetch(`/api/content-research?${params.toString()}`);
     const json = await res.json();
     if (json.success) setDrafts(json.data);
     setLoading(false);
-  }, []);
+  }, [facebookPageId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (initialDrafts !== undefined) {
+      setDrafts(initialDrafts);
+      setLoading(false);
+      return;
+    }
+    load();
+  }, [initialDrafts, load]);
 
   const generate = async () => {
     setGenerating(true);
@@ -68,7 +95,7 @@ export function ContentResearch() {
       const res = await fetch("/api/content-research", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "generate", daysAhead: Number(daysAhead), postsPerDay: Number(postsPerDay) }),
+        body: JSON.stringify({ action: "generate", daysAhead: Number(daysAhead), postsPerDay: Number(postsPerDay), facebookPageId }),
       });
       const json = await res.json();
       if (json.success) {
@@ -87,7 +114,7 @@ export function ContentResearch() {
     await fetch("/api/content-research", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "schedule", postId, scheduledAt: new Date(at).toISOString() }),
+      body: JSON.stringify({ action: "schedule", postId, scheduledAt: new Date(at).toISOString(), facebookPageId }),
     });
     await load();
     setActionId(null);
@@ -99,7 +126,7 @@ export function ContentResearch() {
     await fetch("/api/content-research", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "discard", postId }),
+      body: JSON.stringify({ action: "discard", postId, facebookPageId }),
     });
     await load();
     setActionId(null);
@@ -107,60 +134,61 @@ export function ContentResearch() {
 
   return (
     <div className="space-y-5">
-      {/* Generate panel */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Tạo kế hoạch nội dung AI</CardTitle>
-          <Robot size={16} style={{ color: "var(--accent)" }} />
-        </CardHeader>
-        <div className="px-5 pb-5 space-y-4">
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            AI phân tích dịch vụ spa, bài đăng hiệu quả, ngày đặc biệt sắp tới → tự động tạo caption và lên lịch đề xuất.
-          </p>
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="w-36">
-              <Input
-                label="Số ngày tới"
-                type="number"
-                min="1"
-                max="30"
-                value={daysAhead}
-                onChange={(e) => setDaysAhead(e.target.value)}
-              />
-            </div>
-            <div className="w-36">
-              <Input
-                label="Bài/ngày"
-                type="number"
-                min="1"
-                max="3"
-                value={postsPerDay}
-                onChange={(e) => setPostsPerDay(e.target.value)}
-              />
-            </div>
-            <Button onClick={generate} loading={generating}>
-              <Sparkle size={14} weight="fill" />
-              {generating ? "Đang tạo..." : `Tạo ${Number(daysAhead) * Number(postsPerDay)} bài`}
-            </Button>
-          </div>
-          {result && (
-            <div className="rounded-lg px-4 py-2.5 text-sm font-medium"
-              style={{ background: "color-mix(in srgb, var(--accent) 10%, transparent)", color: "var(--accent)" }}>
-              Đã tạo {result.created} bài nháp — xem bên dưới để duyệt và lên lịch.
-            </div>
-          )}
+      {mode === "overview" && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Card><p className="text-xs text-[var(--text-muted)]">Ý tưởng đang chờ</p><p className="mt-1 text-2xl font-bold text-[var(--text)]">{drafts.length}</p></Card>
+          <Card><p className="text-xs text-[var(--text-muted)]">Đã có lịch đề xuất</p><p className="mt-1 text-2xl font-bold text-[var(--text)]">{drafts.filter((draft) => draft.scheduledAt).length}</p></Card>
+          <Card><p className="text-xs text-[var(--text-muted)]">Loại nội dung</p><p className="mt-1 text-2xl font-bold text-[var(--text)]">{new Set(drafts.map((draft) => draft.postType)).size}</p></Card>
         </div>
-      </Card>
+      )}
+
+      {/* Generate panel */}
+      {mode === "research" && (canMutate ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Tạo kế hoạch nội dung AI</CardTitle>
+            <Robot size={16} style={{ color: "var(--accent)" }} />
+          </CardHeader>
+          <div className="px-5 pb-5 space-y-4">
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              AI phân tích dịch vụ spa, bài đăng hiệu quả, ngày đặc biệt sắp tới → tự động tạo caption và lên lịch đề xuất.
+            </p>
+            <div className="flex flex-wrap gap-4 items-end">
+              <div className="w-36">
+                <Input label="Số ngày tới" type="number" min="1" max="30" value={daysAhead} onChange={(e) => setDaysAhead(e.target.value)} />
+              </div>
+              <div className="w-36">
+                <Input label="Bài/ngày" type="number" min="1" max="3" value={postsPerDay} onChange={(e) => setPostsPerDay(e.target.value)} />
+              </div>
+              <Button onClick={generate} loading={generating} disabled={!facebookPageId}>
+                <Sparkle size={14} weight="fill" />
+                {generating ? "Đang tạo..." : `Tạo ${Number(daysAhead) * Number(postsPerDay)} bài`}
+              </Button>
+            </div>
+            {result && (
+              <div className="rounded-lg px-4 py-2.5 text-sm font-medium" style={{ background: "color-mix(in srgb, var(--accent) 10%, transparent)", color: "var(--accent)" }}>
+                Đã tạo {result.created} bài nháp — xem bên dưới để duyệt và lên lịch.
+              </div>
+            )}
+          </div>
+        </Card>
+      ) : (
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4 text-sm text-[var(--text-secondary)]">
+          Bạn có thể xem ý tưởng của Page này nhưng chỉ owner mới được tạo, lên lịch hoặc loại bỏ ý tưởng.
+        </section>
+      ))}
 
       {/* Draft list */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-            Bài nháp AI ({drafts.length})
+            {mode === "backlog" ? "Kho ý tưởng" : mode === "overview" ? "Ý tưởng ưu tiên" : "Bài nháp AI"} ({drafts.length})
           </h2>
-          <Button size="sm" variant="secondary" onClick={load}>
-            <ArrowsClockwise size={13} />
-          </Button>
+          {initialDrafts === undefined && (
+            <Button size="sm" variant="secondary" onClick={load} aria-label="Làm mới ý tưởng">
+              <ArrowsClockwise size={13} />
+            </Button>
+          )}
         </div>
 
         {loading ? (
@@ -192,9 +220,11 @@ export function ContentResearch() {
                       </Badge>
                     )}
                   </div>
-                  <Button size="sm" variant="danger" onClick={() => discard(draft.id)} loading={actionId === draft.id + "discard"}>
-                    <Trash size={13} />
-                  </Button>
+                  {canMutate && (
+                    <Button size="sm" variant="danger" onClick={() => discard(draft.id)} loading={actionId === draft.id + "discard"}>
+                      <Trash size={13} />
+                    </Button>
+                  )}
                 </div>
 
                 {/* Topic */}
@@ -215,7 +245,7 @@ export function ContentResearch() {
                 )}
 
                 {/* Schedule action */}
-                {schedulingId === draft.id ? (
+                {canMutate && (schedulingId === draft.id ? (
                   <div className="flex gap-2 items-center pt-1">
                     <input
                       type="datetime-local"
@@ -244,7 +274,7 @@ export function ContentResearch() {
                   >
                     <CalendarBlank size={13} /> Lên lịch đăng
                   </Button>
-                )}
+                ))}
               </div>
             </Card>
           ))

@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getLinkedIgAccount, fetchIgMedia } from "@/lib/instagram";
+import { accessErrorResponse, getAuthorizedPageIds, requireExplicitPageAccess, requireUser } from "@/lib/page-access";
 
 // GET: list IG accounts linked to FB pages, or fetch IG media
 export async function GET(req: NextRequest) {
   try {
+    const user = await requireUser();
     const { searchParams } = new URL(req.url);
     const action = searchParams.get("action");
 
     if (action === "media") {
       const facebookPageId = searchParams.get("facebookPageId");
-      const page = facebookPageId
-        ? await prisma.facebookPage.findUnique({ where: { id: facebookPageId } })
-        : await prisma.facebookPage.findFirst({ where: { isActive: true, igAccountId: { not: null } } });
+      await requireExplicitPageAccess(facebookPageId);
+      const page = await prisma.facebookPage.findUnique({ where: { id: facebookPageId! } });
 
       if (!page?.igAccountId) {
         return NextResponse.json({ success: false, message: "Chưa kết nối Instagram" }, { status: 400 });
@@ -22,12 +23,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, data: media });
     }
 
-    // Default: list all FB pages with their IG status
+    const authorizedPageIds = await getAuthorizedPageIds(user);
     const pages = await prisma.facebookPage.findMany({
+      where: authorizedPageIds === null ? {} : { isActive: true, id: { in: authorizedPageIds } },
       select: { id: true, pageName: true, fbPageId: true, igAccountId: true, igUsername: true, isActive: true },
     });
     return NextResponse.json({ success: true, data: pages });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }
@@ -35,10 +39,12 @@ export async function GET(req: NextRequest) {
 // POST: connect (discover) or disconnect Instagram account
 export async function POST(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const body = await req.json();
     const { action, facebookPageId } = body;
 
     if (action === "connect") {
+      await requireExplicitPageAccess(facebookPageId, { owner: true });
       const page = await prisma.facebookPage.findUnique({ where: { id: facebookPageId } });
       if (!page) return NextResponse.json({ success: false, message: "Không tìm thấy Facebook Page" }, { status: 404 });
 
@@ -56,6 +62,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "disconnect") {
+      await requireExplicitPageAccess(facebookPageId, { owner: true });
       await prisma.facebookPage.update({
         where: { id: facebookPageId },
         data: { igAccountId: null, igUsername: null },
@@ -65,6 +72,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: false, message: "Action không hợp lệ" }, { status: 400 });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }

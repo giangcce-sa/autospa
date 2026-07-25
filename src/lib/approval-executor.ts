@@ -61,11 +61,7 @@ export async function executeApproval(id: string, decision: Decision) {
         facebookPageId: payload.facebookPageId ? String(payload.facebookPageId) : undefined,
       });
     } else if (approval.type === "flash_deal") {
-      const { postFlashDeal } = await import("@/lib/flash-deal-engine");
-      const posted = await postFlashDeal(String(payload.caption ?? ""));
-      if (!posted.facebook && !posted.zalo && !posted.telegram) {
-        throw new Error("Không đăng được Flash Deal lên kênh nào");
-      }
+      throw new Error("Flash Deal approval cũ không còn thực thi trực tiếp; hãy persist Post draft theo Page và dùng canonical Publishing");
     }
 
     const operations = [

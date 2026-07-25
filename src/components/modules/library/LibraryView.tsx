@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { MediaThumbnail } from "@/components/media/MediaThumbnail";
 import { StatusBadge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
 import { Archive, Trash, CalendarBlank, PaperPlaneTilt } from "@phosphor-icons/react";
 import { formatDateTime, truncate } from "@/lib/utils";
 
@@ -32,51 +33,128 @@ const tabs = [
   { label: "Đã đăng", value: "published" },
 ];
 
-export function LibraryView() {
+export function LibraryView({
+  facebookPageId,
+  canonical = false,
+  canMutate = true,
+  initialStatus,
+  initialQuery,
+  canonicalView = "library",
+}: {
+  facebookPageId?: string;
+  canonical?: boolean;
+  canMutate?: boolean;
+  initialStatus?: string;
+  initialQuery?: string;
+  canonicalView?: string;
+} = {}) {
+  const pathname = usePathname();
   const router = useRouter();
+  const canonicalStatus = tabs.some((tab) => tab.value === initialStatus) ? initialStatus ?? "" : "";
+  const [localStatus, setLocalStatus] = useState("");
+  const [localQuery, setLocalQuery] = useState("");
+  const [searchInput, setSearchInput] = useState(initialQuery ?? "");
+  const activeTab = canonical ? canonicalStatus : localStatus;
+  const query = canonical ? initialQuery ?? "" : localQuery;
   const [posts, setPosts] = useState<Post[]>([]);
-  const [activeTab, setActiveTab] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const load = (status = "") => {
+  const load = useCallback(() => {
+    const controller = new AbortController();
     setLoading(true);
-    fetch(`/api/content/list${status ? `?status=${status}` : ""}`)
+    const params = new URLSearchParams();
+    if (activeTab) params.set("status", activeTab);
+    if (query) params.set("q", query);
+    if (facebookPageId) params.set("facebookPageId", facebookPageId);
+    fetch(`/api/content/list${params.size ? `?${params.toString()}` : ""}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((res) => res.data && setPosts(res.data))
-      .finally(() => setLoading(false));
+      .catch((error) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) throw error;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [activeTab, facebookPageId, query]);
+
+  useEffect(() => load(), [load]);
+  useEffect(() => {
+    if (canonical) setSearchInput(initialQuery ?? "");
+  }, [canonical, initialQuery]);
+
+  const updateFilters = (status: string, nextQuery: string) => {
+    if (!canonical) return;
+    const params = new URLSearchParams({ view: canonicalView, scope: "current" });
+    if (facebookPageId) params.set("pageId", facebookPageId);
+    if (status) params.set("status", status);
+    if (nextQuery.trim()) params.set("q", nextQuery.trim());
+    router.push(`${pathname}?${params.toString()}`);
   };
 
-  useEffect(() => { load(); }, []);
+  const handleTabChange = (status: string) => {
+    if (canonical) updateFilters(status, query);
+    else setLocalStatus(status);
+  };
 
-  const handleTabChange = (val: string) => { setActiveTab(val); load(val); };
+  const handleSearch = () => {
+    if (canonical) updateFilters(activeTab, searchInput);
+    else setLocalQuery(searchInput.trim());
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Xóa bài viết này?")) return;
     await fetch("/api/content/list", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
-    load(activeTab);
+    load();
   };
 
   const handleReuse = (id: string) => {
+    if (canonical) {
+      const params = new URLSearchParams({ view: "composer", scope: "current", id });
+      if (facebookPageId) params.set("pageId", facebookPageId);
+      router.push(`/creative/publishing?${params.toString()}`);
+      return;
+    }
     router.push(`/publish?postId=${id}`);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: "var(--bg-subtle)" }}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => handleTabChange(tab.value)}
-            className="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
-            style={{
-              background: activeTab === tab.value ? "var(--bg-card)" : "transparent",
-              color: activeTab === tab.value ? "var(--text)" : "var(--text-muted)",
-              boxShadow: activeTab === tab.value ? "var(--shadow-sm)" : "none",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex gap-1 rounded-lg p-1" style={{ background: "var(--bg-subtle)" }}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => handleTabChange(tab.value)}
+              className="min-h-11 rounded-md px-3 text-xs font-medium transition-all"
+              aria-pressed={activeTab === tab.value}
+              style={{
+                background: activeTab === tab.value ? "var(--bg-card)" : "transparent",
+                color: activeTab === tab.value ? "var(--text)" : "var(--text-muted)",
+                boxShadow: activeTab === tab.value ? "var(--shadow-sm)" : "none",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <form
+          className="flex w-full gap-2 sm:w-auto"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleSearch();
+          }}
+        >
+          <Input
+            type="search"
+            aria-label="Tìm nội dung"
+            placeholder="Tìm caption, hashtag..."
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            className="sm:w-64"
+          />
+          <Button type="submit" variant="secondary">Tìm</Button>
+        </form>
       </div>
 
       {loading ? (
@@ -122,9 +200,11 @@ export function LibraryView() {
                   <Button size="sm" variant="secondary" onClick={() => handleReuse(post.id)} title="Dùng lại bài này">
                     <PaperPlaneTilt size={12} weight="fill" /> Dùng lại
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(post.id)} style={{ color: "var(--rose)" }} aria-label="Xóa bài viết">
-                    <Trash size={13} aria-hidden="true" />
-                  </Button>
+                  {canMutate && (
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(post.id)} style={{ color: "var(--rose)" }} aria-label="Xóa bài viết">
+                      <Trash size={13} aria-hidden="true" />
+                    </Button>
+                  )}
                 </div>
                 </div>
               </div>

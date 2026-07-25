@@ -1,44 +1,46 @@
 import { prisma } from "@/lib/db";
 import { runOrchestrator } from "@/lib/orchestrator";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { parseOrchestratorActions, parseOrchestratorPriorities, parseOrchestratorSignals } from "@/lib/ai-runtime-types";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const latest = await prisma.orchestratorRun.findFirst({
-      orderBy: { runAt: "desc" },
-    });
-
-    if (!latest) {
-      // Run now if no history
-      const plan = await runOrchestrator();
-      return NextResponse.json({ data: { plan, fresh: true }, success: true });
-    }
+    await requireUser();
+    const latest = await prisma.orchestratorRun.findFirst({ orderBy: { runAt: "desc" } });
 
     return NextResponse.json({
-      data: {
+      data: latest ? {
         plan: {
-          signals: JSON.parse(latest.signals),
-          priorities: JSON.parse(latest.priorities),
-          actions: JSON.parse(latest.actions),
+          signals: parseOrchestratorSignals(latest.signals),
+          priorities: parseOrchestratorPriorities(latest.priorities),
+          actions: parseOrchestratorActions(latest.actions),
           mode: latest.mode,
         },
         runAt: latest.runAt,
         fresh: false,
+      } : {
+        plan: null,
+        runAt: null,
+        fresh: false,
       },
       success: true,
     });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: "Không thể đọc trạng thái điều phối", success: false }, { status: 500 });
   }
 }
 
 export async function POST() {
   try {
+    await requireUser({ owner: true });
     const plan = await runOrchestrator();
     return NextResponse.json({ data: plan, success: true });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: "Không thể chạy orchestrator", success: false }, { status: 500 });
   }
 }

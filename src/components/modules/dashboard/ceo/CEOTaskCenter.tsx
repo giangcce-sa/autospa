@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getCanonicalRouteHref } from "@/config/routes";
 import { ArrowRight, Circle, CheckCircle } from "@phosphor-icons/react";
 
 interface Task {
@@ -54,7 +55,7 @@ export function CEOTaskCenter() {
           );
         }
 
-        list.push({ id: "run:orchestrator", label: "Chạy Orchestrator phân tích hệ thống", href: "/orchestrator", priority: "medium" });
+        list.push({ id: "run:orchestrator", label: "Chạy Orchestrator phân tích hệ thống", href: getCanonicalRouteHref("orchestrator"), priority: "medium" });
         setTasks(list.slice(0, 6));
     }).catch(() => setTasks([])).finally(() => setLoading(false));
   }, []);
@@ -108,7 +109,7 @@ export function CEOTaskCenter() {
           </div>
         );
       })}
-      <Link href="/orchestrator" className="flex items-center justify-center gap-1 pt-1 text-[10px] transition-opacity hover:opacity-70" style={{ color: "var(--text-muted)" }}>
+      <Link href={getCanonicalRouteHref("orchestrator")} className="flex items-center justify-center gap-1 pt-1 text-[10px] transition-opacity hover:opacity-70" style={{ color: "var(--text-muted)" }}>
         Xem tất cả trong Orchestrator <ArrowRight size={9} />
       </Link>
     </div>

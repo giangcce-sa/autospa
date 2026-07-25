@@ -81,8 +81,9 @@ export async function getTikTokUser(accessToken: string, openId: string): Promis
   const data = await res.json();
   if (data.error?.code !== "ok") throw new Error(`TikTok user: ${data.error?.message}`);
   const u = data.data?.user;
+  if (!u?.open_id || u.open_id !== openId) throw new Error("TikTok user: Open ID không khớp với access token");
   return {
-    openId: u.open_id ?? openId,
+    openId: u.open_id,
     displayName: u.display_name ?? "",
     avatarUrl: u.avatar_url ?? "",
     followerCount: u.follower_count ?? 0,

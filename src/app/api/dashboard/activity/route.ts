@@ -1,4 +1,6 @@
+import { getCanonicalRouteHref } from "@/config/routes";
 import { prisma } from "@/lib/db";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 import { NextResponse } from "next/server";
 
 interface ActivityItem {
@@ -13,7 +15,10 @@ interface ActivityItem {
 
 export async function GET() {
   try {
+    await requireUser({ owner: true });
+    const since = new Date(Date.now() - 24 * 3600 * 1000);
     const logs = await prisma.activityLog.findMany({
+      where: { createdAt: { gte: since } },
       orderBy: { createdAt: "desc" },
       take: 12,
     });
@@ -32,8 +37,6 @@ export async function GET() {
         success: true,
       });
     }
-
-    const since = new Date(Date.now() - 24 * 3600 * 1000);
 
     const [recentPosts, recentLeads, recentWorkflows, recentAlerts, recentRevenue] = await Promise.all([
       prisma.post.findMany({
@@ -98,7 +101,7 @@ export async function GET() {
         type: "workflow_run",
         title: `Workflow: ${w.name}`,
         detail: w.trigger,
-        href: "/orchestrator",
+        href: getCanonicalRouteHref("orchestrator"),
         timestamp: w.startedAt.toISOString(),
         severity: w.status === "failed" ? "danger" : w.status === "completed" ? "success" : "warning",
       });
@@ -109,7 +112,7 @@ export async function GET() {
         type: "alert",
         title: `Cảnh báo: ${a.type}`,
         detail: a.signal,
-        href: "/orchestrator",
+        href: getCanonicalRouteHref("orchestrator"),
         timestamp: a.detectedAt.toISOString(),
         severity: a.severity === "critical" ? "danger" : "warning",
       });
@@ -130,6 +133,8 @@ export async function GET() {
 
     return NextResponse.json({ data: items.slice(0, 12), success: true });
   } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return access;
     const msg = err instanceof Error ? err.message : "Lỗi";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }

@@ -102,39 +102,43 @@ model Settings {
 }
 
 model FacebookPage {
-  id                      String    @id @default(cuid())
-  fbPageId                String    @unique
-  pageName                String
-  accessToken             String
-  isActive                Boolean   @default(true)
-  adAccountId             String?
-  adsReadinessStatus      String    @default("unchecked")
-  adsReadinessError       String?
-  adsReadinessCheckedAt   DateTime?
-  adsTokenExpiresAt       DateTime?
-  adsDataAccessExpiresAt  DateTime?
-  adsPermissions          String    @default("[]")
-  adsMissingPermissions   String    @default("[]")
-  adAccountStatus         Int?
-  adAccountDisableReason  Int?
-  adAccountCurrency       String?
-  adAccountTimezone       String?
+  id                     String    @id @default(cuid())
+  fbPageId               String    @unique
+  pageName               String
+  accessToken            String
+  isActive               Boolean   @default(true)
+  adAccountId            String?
+  adsReadinessStatus     String    @default("unchecked")
+  adsReadinessError      String?
+  adsReadinessCheckedAt  DateTime?
+  adsTokenExpiresAt      DateTime?
+  adsDataAccessExpiresAt DateTime?
+  adsPermissions         String    @default("[]")
+  adsMissingPermissions  String    @default("[]")
+  adAccountStatus        Int?
+  adAccountDisableReason Int?
+  adAccountCurrency      String?
+  adAccountTimezone      String?
   // Linked Instagram Business account
-  igAccountId String? // Instagram Business Account ID (from Graph API)
-  igUsername  String?
-  createdAt   DateTime @default(now())
+  igAccountId            String? // Instagram Business Account ID (from Graph API)
+  igUsername             String?
+  createdAt              DateTime  @default(now())
 
-  posts         Post[]
-  adsOperations AdsCreateOperation[]
-  comments      PostComment[]
-  inboxMessages InboxMessage[]
-  brandKit      BrandKit?
-  styleProfile  StyleProfile?
-  visualProfile VisualProfile?
-  styleSamples  StyleSample[]
-  services      Service[]
-  staffVisuals  StaffVisualProfile[]
-  pageAccess    UserPageAccess[]
+  posts             Post[]
+  bulkPlans         BulkPlan[]
+  adsOperations     AdsCreateOperation[]
+  publishOperations PublishOperation[]
+  comments          PostComment[]
+  commentRules      CommentRule[]
+  inboxMessages     InboxMessage[]
+  brandKit          BrandKit?
+  styleProfile      StyleProfile?
+  humanVoiceProfile HumanVoiceProfile?
+  visualProfile     VisualProfile?
+  styleSamples      StyleSample[]
+  services          Service[]
+  staffVisuals      StaffVisualProfile[]
+  pageAccess        UserPageAccess[]
 }
 
 model TikTokAccount {
@@ -211,16 +215,17 @@ model StyleProfile {
 }
 
 model HumanVoiceProfile {
-  id             String   @id @default(cuid())
-  facebookPageId String?  @unique
+  id             String        @id @default(cuid())
+  facebookPageId String?       @unique
+  facebookPage   FacebookPage? @relation(fields: [facebookPageId], references: [id], onDelete: Restrict)
   rules          String
-  preferredWords String   @default("[]")
-  avoidedWords   String   @default("[]")
-  approvedEdits  Int      @default(0)
-  confidence     Float    @default(0)
-  autoApply      Boolean  @default(false)
-  updatedAt      DateTime @updatedAt
-  createdAt      DateTime @default(now())
+  preferredWords String        @default("[]")
+  avoidedWords   String        @default("[]")
+  approvedEdits  Int           @default(0)
+  confidence     Float         @default(0)
+  autoApply      Boolean       @default(false)
+  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime      @default(now())
 }
 
 model VisualProfile {
@@ -283,74 +288,125 @@ model StaffVisualSample {
 }
 
 model Post {
-  id               String              @id @default(cuid())
-  caption          String
-  hashtags         String?
-  imageUrl         String?
-  imagePrompt      String?
-  platform         String              @default("facebook")
-  postType         String              @default("service")
-  tone             String              @default("friendly")
-  status           String              @default("draft")
-  scheduledAt      DateTime?
-  publishedAt      DateTime?
-  fbPostId         String?
-  fbAdId           String?
-  fbCampaignId     String?
-  igPostId         String? // Instagram media id
-  tiktokVideoId    String? // TikTok video id
-  qualityScore     Int?
-  qualityNotes     String?
-  abGroupId        String?
-  serviceId        String?
-  bulkPlanId       String?
-  facebookPageId   String?
-  service          Service?            @relation(fields: [serviceId], references: [id])
-  bulkPlan         BulkPlan?           @relation(fields: [bulkPlanId], references: [id])
-  facebookPage     FacebookPage?       @relation(fields: [facebookPageId], references: [id])
-  analytics        PostAnalytics?
-  review           ContentReview?
-  comments         PostComment[]
-  generations      ContentGeneration[]
-  imageGenerations ImageGeneration[]
-  adsOperations    AdsCreateOperation[]
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                String               @id @default(cuid())
+  caption           String
+  hashtags          String?
+  imageUrl          String?
+  imagePrompt       String?
+  platform          String               @default("facebook")
+  postType          String               @default("service")
+  tone              String               @default("friendly")
+  status            String               @default("draft")
+  scheduledAt       DateTime?
+  publishedAt       DateTime?
+  fbPostId          String?
+  fbAdId            String?
+  fbCampaignId      String?
+  igPostId          String? // Instagram media id
+  tiktokVideoId     String? // TikTok video id
+  qualityScore      Int?
+  qualityNotes      String?
+  abGroupId         String?
+  serviceId         String?
+  bulkPlanId        String?
+  facebookPageId    String?
+  service           Service?             @relation(fields: [serviceId], references: [id])
+  bulkPlan          BulkPlan?            @relation(fields: [bulkPlanId], references: [id])
+  facebookPage      FacebookPage?        @relation(fields: [facebookPageId], references: [id])
+  analytics         PostAnalytics?
+  review            ContentReview?
+  comments          PostComment[]
+  generations       ContentGeneration[]
+  imageGenerations  ImageGeneration[]
+  adsOperations     AdsCreateOperation[]
+  publishOperations PublishOperation[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 }
 
 model AdsCreateOperation {
-  id                 String       @id @default(cuid())
-  idempotencyKey     String       @unique
-  requestHash        String
-  postId             String
-  post               Post         @relation(fields: [postId], references: [id], onDelete: Restrict)
-  facebookPageId     String
-  facebookPage       FacebookPage @relation(fields: [facebookPageId], references: [id], onDelete: Restrict)
-  fbPageId           String
-  adAccountId        String
-  currency           String
-  actorId            String
-  input              String
-  status             String       @default("pending")
-  currentStep        String       @default("campaign")
-  campaignId         String?
-  adSetId            String?
-  imageHash          String?
-  creativeId         String?
-  adId               String?
-  attempt            Int          @default(0)
-  leaseOwner         String?
-  leaseUntil         DateTime?
-  error              String?
-  completedAt        DateTime?
-  reconciledAt       DateTime?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  id             String       @id @default(cuid())
+  idempotencyKey String       @unique
+  requestHash    String
+  postId         String
+  post           Post         @relation(fields: [postId], references: [id], onDelete: Restrict)
+  facebookPageId String
+  facebookPage   FacebookPage @relation(fields: [facebookPageId], references: [id], onDelete: Restrict)
+  fbPageId       String
+  adAccountId    String
+  currency       String
+  actorId        String
+  input          String
+  status         String       @default("pending")
+  currentStep    String       @default("campaign")
+  campaignId     String?
+  adSetId        String?
+  imageHash      String?
+  creativeId     String?
+  adId           String?
+  attempt        Int          @default(0)
+  leaseOwner     String?
+  leaseUntil     DateTime?
+  error          String?
+  completedAt    DateTime?
+  reconciledAt   DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@index([status, updatedAt])
   @@index([facebookPageId, createdAt])
   @@index([adAccountId, createdAt])
   @@index([postId, createdAt])
+}
+
+model PublishOperation {
+  id                  String                  @id @default(cuid())
+  idempotencyKey      String                  @unique
+  requestHash         String
+  postId              String
+  post                Post                    @relation(fields: [postId], references: [id], onDelete: Restrict)
+  facebookPageId      String?
+  facebookPage        FacebookPage?           @relation(fields: [facebookPageId], references: [id], onDelete: Restrict)
+  source              String
+  revision            Int?
+  actorId             String?
+  payload             String
+  status              String                  @default("pending")
+  attempt             Int                     @default(0)
+  leaseOwner          String?
+  leaseUntil          DateTime?
+  error               String?
+  completedAt         DateTime?
+  reconciliationAt    DateTime?
+  reconciliationNotes String?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  channelAttempts     PublishChannelAttempt[]
+
+  @@unique([postId, requestHash])
+  @@index([status, leaseUntil])
+  @@index([postId, createdAt])
+  @@index([facebookPageId, createdAt])
+}
+
+model PublishChannelAttempt {
+  id                 String           @id @default(cuid())
+  operationId        String
+  operation          PublishOperation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  channel            String
+  attempt            Int
+  status             String           @default("pending")
+  providerCheckpoint String?
+  externalId         String?
+  error              String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([operationId, channel, attempt])
+  @@index([operationId, channel, status])
+  @@index([status, updatedAt])
 }
 
 model ContentGeneration {
@@ -454,14 +510,18 @@ model ImageFeedback {
 }
 
 model BulkPlan {
-  id        String   @id @default(cuid())
-  name      String
-  month     Int
-  year      Int
-  status    String   @default("draft")
-  posts     Post[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String        @id @default(cuid())
+  name           String
+  month          Int
+  year           Int
+  status         String        @default("draft")
+  facebookPageId String?
+  facebookPage   FacebookPage? @relation(fields: [facebookPageId], references: [id], onDelete: Restrict)
+  posts          Post[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([facebookPageId, createdAt])
 }
 
 model ContentReview {
@@ -516,11 +576,15 @@ model PostComment {
 }
 
 model CommentRule {
-  id        String   @id @default(cuid())
-  trigger   String
-  reply     String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id             String        @id @default(cuid())
+  facebookPageId String?
+  facebookPage   FacebookPage? @relation(fields: [facebookPageId], references: [id], onDelete: Restrict)
+  trigger        String
+  reply          String
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+
+  @@index([facebookPageId, createdAt])
 }
 
 model MessageRule {
@@ -859,11 +923,14 @@ model LeadConversation {
   senderId         String
   facebookPageId   String?
   step             Int      @default(0)
+  version          Int      @default(0)
   collectedName    String?
   collectedService String?
   isComplete       Boolean  @default(false)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
+  @@index([facebookPageId, senderId, isComplete])
 }
 
 model PendingApproval {

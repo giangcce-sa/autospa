@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -30,7 +31,8 @@ const QUICK_TOPICS = [
   "Có nên mở thêm dịch vụ nail bên cạnh facial không?",
 ];
 
-export function CouncilView() {
+export function CouncilView({ canMutate }: { canMutate: boolean }) {
+  const router = useRouter();
   const [topic, setTopic] = useState("");
   const [context, setContext] = useState("");
   const [mode, setMode] = useState<"full" | "quick">("full");
@@ -52,6 +54,7 @@ export function CouncilView() {
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setResult(data.data);
+      router.refresh();
     } finally { setLoading(false); }
   };
 
@@ -77,14 +80,17 @@ export function CouncilView() {
             </div>
           </div>
           <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.92)" }}>
-            Đặt câu hỏi chiến lược — Claude đề xuất, GPT phản biện, một AI tổng hợp quyết định cuối.
-            Bạn sẽ thấy toàn bộ tranh luận → hiểu tại sao có kết luận đó.
+            Đặt câu hỏi chiến lược — Claude đề xuất, GPT phản biện và một AI tạo bản tổng hợp để owner xem xét.
+            Transcript và bản tổng hợp được lưu như một CEODecision độc lập, không phải hành động đã thực thi.
           </p>
         </div>
       </div>
 
-      {/* Form */}
-      <Card>
+      {!canMutate ? (
+        <Card>
+          <p className="text-sm text-[var(--text-muted)]">Viewer chỉ có thể đọc các kết quả Council đã lưu. Chỉ owner được gọi AI provider và tạo CEODecision mới.</p>
+        </Card>
+      ) : <Card>
         <CardHeader>
           <CardTitle>Đặt câu hỏi cho Council</CardTitle>
           <div className="flex gap-1 p-1 rounded-lg" style={{ background: "var(--bg-subtle)" }}>
@@ -148,7 +154,7 @@ export function CouncilView() {
             <Sparkle size={14} weight="fill" /> Bắt đầu bàn luận
           </Button>
         </div>
-      </Card>
+      </Card>}
 
       {/* Loading hint */}
       {loading && (

@@ -7,7 +7,5 @@ endpoint="${1:?Usage: run-autospa-cron.sh /api/cron/ads-optimize}"
 
 curl --fail --silent --show-error \
   --max-time 900 \
-  --retry 2 \
-  --retry-all-errors \
   -H "Authorization: Bearer ${CRON_SECRET}" \
   "${AUTOSPA_BASE_URL%/}${endpoint}"

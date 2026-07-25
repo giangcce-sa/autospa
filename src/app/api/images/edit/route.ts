@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const stored = await persistImageSource(edited, `generated/${facebookPageId ?? "global"}`);
     const version = await prisma.imageGeneration.create({
       data: {
-        postId: source.postId,
+        postId: null,
         facebookPageId: source.facebookPageId,
         serviceId: source.serviceId,
         promptVersion: source.promptVersion,
@@ -81,9 +81,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (source.postId && body.applyToPost === true) {
-      await prisma.post.update({ where: { id: source.postId }, data: { imageUrl: version.imageUrl } });
-    }
     return NextResponse.json({
       success: true,
       data: {

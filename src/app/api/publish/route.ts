@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/db";
-import { postToFacebook } from "@/lib/facebook";
-import { postToInstagram } from "@/lib/instagram";
-import { postPhotoToTikTok } from "@/lib/tiktok";
 import { reviewContent } from "@/lib/reviewer";
-import { AccessError, accessErrorResponse, requirePageAccess } from "@/lib/page-access";
-import { getPublishStatus, resolvePostPageId } from "@/lib/page-scope-policy";
+import { AccessError, accessErrorResponse, requirePageAccess, requireUser } from "@/lib/page-access";
+import { resolvePostPageId } from "@/lib/page-scope-policy";
+import {
+  executePublishOperation,
+  latestPublishChannelAttempts,
+  PublishConflictError,
+} from "@/lib/publishing/service";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -12,10 +14,51 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const postId = searchParams.get("postId");
     if (!postId) return NextResponse.json({ error: "Thiếu postId", success: false }, { status: 400 });
-    const post = await prisma.post.findUnique({ where: { id: postId }, include: { service: { select: { name: true } } } });
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        caption: true,
+        hashtags: true,
+        imageUrl: true,
+        facebookPageId: true,
+        postType: true,
+        tone: true,
+        platform: true,
+        status: true,
+        scheduledAt: true,
+        createdAt: true,
+        service: { select: { name: true } },
+        publishOperations: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            error: true,
+            completedAt: true,
+            reconciliationAt: true,
+            channelAttempts: {
+              orderBy: [{ channel: "asc" }, { attempt: "desc" }],
+              select: {
+                channel: true,
+                status: true,
+                externalId: true,
+                error: true,
+                completedAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
     if (!post) return NextResponse.json({ error: "Không tìm thấy bài", success: false }, { status: 404 });
     await requirePageAccess(post.facebookPageId);
-    return NextResponse.json({ data: post, success: true });
+    const publishOperations = post.publishOperations.map((operation) => ({
+      ...operation,
+      channelAttempts: latestPublishChannelAttempts(operation.channelAttempts),
+    }));
+    return NextResponse.json({ data: { ...post, publishOperations }, success: true });
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
@@ -25,21 +68,26 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireUser({ owner: true });
     const body = await req.json();
     const {
       postId, action, scheduledAt, caption, hashtags, imageUrl,
       platform, tone, postType, facebookPageId, force,
       // Multi-platform targets
-      publishToInstagram, publishToTikTok,
+      publishToInstagram, publishToTikTok, idempotencyKey,
     } = body;
 
-    if (action === "schedule" || action === "draft") {
+
+    if (action === "update" || action === "schedule" || action === "draft") {
       const post = postId ? await prisma.post.findUnique({ where: { id: postId } }) : null;
       if (postId && !post) return NextResponse.json({ error: "Không tìm thấy bài", success: false }, { status: 404 });
       const resolvedPageId = resolvePostPageId(post?.facebookPageId, facebookPageId);
       if (resolvedPageId === null) throw new AccessError("Bài viết thuộc Facebook Page khác", 403);
       if (!resolvedPageId) return NextResponse.json({ error: "Hãy chọn Facebook Page", success: false }, { status: 400 });
       await requirePageAccess(resolvedPageId);
+      if (action === "update" && !post) {
+        return NextResponse.json({ error: "Cập nhật yêu cầu bài viết đã lưu", success: false }, { status: 400 });
+      }
       const resolvedPostType = action === "draft"
         ? postType ?? post?.postType ?? "service"
         : post?.postType ?? postType ?? "service";
@@ -48,17 +96,27 @@ export async function POST(req: NextRequest) {
       }
 
       if (post) {
-        const updated = await prisma.post.update({
-          where: { id: post.id },
-          data: {
-            status: action === "schedule" ? "scheduled" : "draft",
-            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-            ...(caption !== undefined && { caption }),
-            ...(hashtags !== undefined && { hashtags }),
-            ...(imageUrl !== undefined && { imageUrl }),
-            ...(postType !== undefined && { postType: resolvedPostType }),
-            ...(post.facebookPageId ? {} : { facebookPageId: resolvedPageId }),
-          },
+        const updated = await prisma.$transaction(async (tx) => {
+          const result = await tx.post.update({
+            where: { id: post.id },
+            data: {
+              ...(action === "update"
+                ? {}
+                : {
+                    status: action === "schedule" ? "scheduled" : "draft",
+                    scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+                  }),
+              ...(caption !== undefined && { caption }),
+              ...(hashtags !== undefined && { hashtags }),
+              ...(imageUrl !== undefined && { imageUrl }),
+              ...(postType !== undefined && { postType: resolvedPostType }),
+              ...(post.facebookPageId ? {} : { facebookPageId: resolvedPageId }),
+            },
+          });
+          const reviewInputChanged = (caption !== undefined && caption !== post.caption)
+            || (hashtags !== undefined && hashtags !== post.hashtags);
+          if (reviewInputChanged) await tx.contentReview.deleteMany({ where: { postId: post.id } });
+          return result;
         });
         return NextResponse.json({ data: updated, success: true });
       }
@@ -132,78 +190,51 @@ export async function POST(req: NextRequest) {
         facebookPageId: resolvedPageId,
       }).catch(() => null);
       if (review?.status === "fail" && !force) {
-        return NextResponse.json({ error: "REVIEW_BLOCKED", review, success: false }, { status: 422 });
+        return NextResponse.json({
+          data: { id: reviewPostId },
+          error: "REVIEW_BLOCKED",
+          review,
+          success: false,
+        }, { status: 422 });
       }
 
-      const results: Record<string, string | null> = { facebook: null, instagram: null, tiktok: null };
-      try {
-        results.facebook = await postToFacebook(text, finalImageUrl ?? undefined, resolvedPageId);
-      } catch (e) {
-        results.facebook = `error:${e instanceof Error ? e.message : String(e)}`;
+      if (typeof idempotencyKey !== "string" || !idempotencyKey.trim()) {
+        return NextResponse.json({ error: "Thiếu idempotency key", success: false }, { status: 400 });
       }
-
-      if (publishToInstagram) {
-        if (!finalImageUrl) {
-          results.instagram = "error:Instagram yêu cầu hình ảnh";
-        } else {
-          try {
-            const fbPage = await prisma.facebookPage.findUnique({ where: { id: resolvedPageId } });
-            if (fbPage?.igAccountId) {
-              results.instagram = await postToInstagram(fbPage.igAccountId, fbPage.accessToken, text, finalImageUrl);
-            } else {
-              results.instagram = "error:Chưa kết nối Instagram";
-            }
-          } catch (e) {
-            results.instagram = `error:${e instanceof Error ? e.message : String(e)}`;
-          }
-        }
-      }
-
-      if (publishToTikTok) {
-        if (!finalImageUrl) {
-          results.tiktok = "error:TikTok yêu cầu hình ảnh";
-        } else {
-          try {
-            const tiktokAccount = await prisma.tikTokAccount.findFirst({ where: { isActive: true } });
-            if (tiktokAccount) {
-              const { publishId } = await postPhotoToTikTok(tiktokAccount.accessToken, tiktokAccount.openId, text, [finalImageUrl]);
-              results.tiktok = publishId;
-            } else {
-              results.tiktok = "error:Chưa kết nối TikTok";
-            }
-          } catch (e) {
-            results.tiktok = `error:${e instanceof Error ? e.message : String(e)}`;
-          }
-        }
-      }
-
-      const requestedChannels = ["facebook", ...(publishToInstagram ? ["instagram"] : []), ...(publishToTikTok ? ["tiktok"] : [])];
-      const status = getPublishStatus(results, requestedChannels);
-      const facebookError = results.facebook?.startsWith("error:")
-        ? results.facebook.slice("error:".length).trim()
-        : null;
-      const fbPostId = facebookError ? undefined : results.facebook ?? undefined;
-      const igPostId = results.instagram?.startsWith("error:") ? undefined : results.instagram ?? undefined;
-      const tiktokVideoId = results.tiktok?.startsWith("error:") ? undefined : results.tiktok ?? undefined;
-      const updated = await prisma.post.update({
-        where: { id: reviewPostId },
-        data: {
-          status,
-          publishedAt: fbPostId ? new Date() : null,
-          fbPostId,
-          ...(igPostId && { igPostId }),
-          ...(tiktokVideoId && { tiktokVideoId }),
-        },
+      const requestedChannels = [
+        "facebook" as const,
+        ...(publishToInstagram ? ["instagram" as const] : []),
+        ...(publishToTikTok ? ["tiktok" as const] : []),
+      ];
+      const operation = await executePublishOperation({
+        idempotencyKey: idempotencyKey.trim(),
+        postId: reviewPostId,
+        facebookPageId: resolvedPageId,
+        source: "manual",
+        actorId: user.id ?? null,
+        caption: finalCaption,
+        hashtags: finalHashtags,
+        imageUrl: finalImageUrl,
+        channels: requestedChannels,
       });
+      const updated = await prisma.post.findUniqueOrThrow({ where: { id: reviewPostId } });
+      const results = Object.fromEntries(
+        operation.channelAttempts.map((attempt) => [
+          attempt.channel,
+          attempt.externalId ?? `${attempt.status}:${attempt.error ?? ""}`,
+        ]),
+      );
+      const success = ["completed", "partial"].includes(operation.status);
 
       return NextResponse.json(
         {
           data: updated,
+          operation,
           results,
-          success: status !== "publish_failed",
-          ...(facebookError && { error: facebookError }),
+          success,
+          ...(operation.error && { error: operation.error }),
         },
-        { status: status === "publish_failed" ? 502 : 200 },
+        { status: operation.status === "failed" ? 502 : operation.status === "needs_reconciliation" ? 409 : 200 },
       );
     }
 
@@ -212,6 +243,6 @@ export async function POST(req: NextRequest) {
     const access = accessErrorResponse(err);
     if (access) return access;
     const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return NextResponse.json({ error: msg, success: false }, { status: err instanceof PublishConflictError ? err.status : 500 });
   }
 }

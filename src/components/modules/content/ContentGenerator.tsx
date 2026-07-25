@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -27,9 +27,8 @@ interface ContentResult {
 
 interface Props {
   facebookPageId?: string;
-  onSaved?: (postId: string, caption: string, hashtags: string) => void;
-  onGoToImage?: () => void;
-  onGoToPublish?: (postId?: string) => void;
+  onGoToImage?: (postId: string) => void;
+  onGoToPublish?: (postId: string) => void;
 }
 
 const postTypes = [
@@ -45,7 +44,7 @@ const tones = [
   { value: "luxury", label: "Sang trọng" },
 ];
 
-export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToPublish }: Props) {
+export function ContentGenerator({ facebookPageId, onGoToImage, onGoToPublish }: Props) {
   const [services, setServices] = useState<Service[]>([]);
   const [stories, setStories] = useState<Story[]>([]);
   const [styleSampleCount, setStyleSampleCount] = useState(0);
@@ -68,8 +67,18 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
   const [repurposing, setRepurposing] = useState(false);
   const [abGroup, setAbGroup] = useState<{ abGroupId: string; captionA: string; captionB: string } | null>(null);
   const [creatingAb, setCreatingAb] = useState(false);
+  const generationController = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    generationController.current?.abort();
+    setResult(null);
+    setEditedCaption("");
+    setEditedHashtags("");
+    setSaved(false);
+    setError("");
+    setRepurposed(null);
+    setAbGroup(null);
+
     const url = facebookPageId ? `/api/services?facebookPageId=${facebookPageId}` : "/api/services";
     fetch(url).then((r) => r.json()).then((res) => res.data && setServices(res.data.filter((s: Service & { active: boolean }) => s.active)));
 
@@ -84,7 +93,10 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
     });
   }, [facebookPageId]);
 
-  const handleGenerate = async (saveToLibrary = false) => {
+  const handleGenerate = async () => {
+    generationController.current?.abort();
+    const controller = new AbortController();
+    generationController.current = controller;
     setLoading(true);
     setError("");
     setSaved(false);
@@ -92,44 +104,38 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
       const res = await fetch("/api/content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, saveToLibrary, facebookPageId, includeStory, storyId: selectedStoryId || undefined }),
+        body: JSON.stringify({ ...form, facebookPageId, includeStory, storyId: selectedStoryId || undefined }),
+        signal: controller.signal,
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setResult(data.data);
       setEditedCaption(data.data.caption);
       setEditedHashtags(data.data.hashtags);
-      if (saveToLibrary) {
-        setSaved(true);
-        if (data.data.postId && onSaved) onSaved(data.data.postId, data.data.caption, data.data.hashtags);
-      }
       return data.data as ContentResult;
-    } finally { setLoading(false); }
+    } catch (generateError) {
+      if (generateError instanceof DOMException && generateError.name === "AbortError") return;
+      setError("Không tạo được nội dung");
+    } finally {
+      if (generationController.current === controller) {
+        generationController.current = null;
+        setLoading(false);
+      }
+    }
   };
 
   const handleSaveAndSend = async (target: "image" | "publish") => {
+    if (!result?.generationId) return;
     setSaving(true);
     setError("");
     try {
-      let postId = result?.postId;
-      if (!postId) {
-        const res = await fetch("/api/content", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, saveToLibrary: true, facebookPageId, includeStory, storyId: selectedStoryId || undefined }),
-        });
-        const data = await res.json();
-        if (!res.ok) { setError(data.error); return; }
-        setResult(data.data);
-        setEditedCaption(data.data.caption);
-        setEditedHashtags(data.data.hashtags);
-        setSaved(true);
-        postId = data.data.postId;
-        if (postId && onSaved) onSaved(postId, data.data.caption, data.data.hashtags);
-      }
-      if (result?.generationId && !await saveFeedback()) return;
-      if (target === "image" && onGoToImage) onGoToImage();
-      if (target === "publish" && onGoToPublish) onGoToPublish(postId);
+      const feedback = await saveFeedback(undefined, true);
+      if (!feedback?.postId) return;
+
+      const postId = feedback.postId as string;
+      setSaved(true);
+      if (target === "image") onGoToImage?.(postId);
+      if (target === "publish") onGoToPublish?.(postId);
     } finally { setSaving(false); }
   };
 
@@ -179,7 +185,7 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
     } finally { setRepurposing(false); }
   };
 
-  const saveFeedback = async (acceptedVoice?: boolean) => {
+  const saveFeedback = async (acceptedVoice?: boolean, persistPost = false) => {
     if (!result?.generationId) return null;
     const res = await fetch("/api/content/feedback", {
       method: "POST",
@@ -189,6 +195,7 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
         caption: editedCaption,
         hashtags: editedHashtags,
         acceptedVoice,
+        persistPost,
       }),
     });
     const data = await res.json();
@@ -198,6 +205,7 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
     }
     setResult((current) => current ? {
       ...current,
+      postId: data.data.postId,
       caption: editedCaption,
       hashtags: editedHashtags,
       humanScore: data.data.humanScore,
@@ -369,7 +377,7 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
           </div>
 
           {error && <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
-          <Button onClick={() => handleGenerate(true)} loading={loading} className="w-full">
+          <Button onClick={() => handleGenerate()} loading={loading} className="w-full">
             <Sparkle size={14} weight="fill" /> Tạo nội dung
           </Button>
         </div>
@@ -428,7 +436,12 @@ export function ContentGenerator({ facebookPageId, onSaved, onGoToImage, onGoToP
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     Voice Profile: {result.voiceProfile.approvedEdits} bản · {Math.round(result.voiceProfile.confidence * 100)}% tin cậy
                   </p>
-                  <Button size="sm" variant="secondary" onClick={toggleVoiceProfile}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={toggleVoiceProfile}
+                    disabled={!result.voiceProfile.autoApply && result.voiceProfile.approvedEdits < 3}
+                  >
                     {result.voiceProfile.autoApply ? "Tắt áp dụng" : "Bật áp dụng"}
                   </Button>
                 </div>

@@ -1,5 +1,7 @@
+import { getCanonicalRouteHref } from "@/config/routes";
 import { prisma } from "./db";
 import { runDailyStandup } from "./daily-standup";
+import { businessDateKey } from "./today-policy";
 
 export interface BriefAction {
   label: string;
@@ -13,19 +15,15 @@ const AGENT_HREF: Record<string, string> = {
   ads: "/facebook-ads",
   sales: "/sale",
   intelligence: "/competitors",
-  all: "/orchestrator",
+  all: getCanonicalRouteHref("orchestrator"),
 };
 
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
+export async function getMorningBrief(now = new Date()) {
+  return prisma.morningBrief.findUnique({ where: { date: businessDateKey(now) } });
 }
 
-/**
- * Multi-agent Daily Standup brief.
- * Idempotent: returns existing if generated today.
- */
 export async function generateMorningBrief() {
-  const dateStr = todayKey();
+  const dateStr = businessDateKey();
   const existing = await prisma.morningBrief.findUnique({ where: { date: dateStr } });
   if (existing) return existing;
 
@@ -35,7 +33,7 @@ export async function generateMorningBrief() {
   // Convert assignments → BriefAction (for compat with old MorningBriefCard)
   const actions: BriefAction[] = standup.assignments.map((a) => ({
     label: a.task,
-    href: AGENT_HREF[a.agent] ?? "/orchestrator",
+    href: AGENT_HREF[a.agent] ?? getCanonicalRouteHref("orchestrator"),
     priority: a.priority,
     reason: `[${a.agent.toUpperCase()}]`,
   }));

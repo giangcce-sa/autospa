@@ -15,7 +15,7 @@ interface Competitor {
   fbPageId: string;
   name: string;
   notes: string | null;
-  accessToken: string | null;
+  hasDedicatedToken: boolean;
   isActive: boolean;
   lastFetchAt: string | null;
   _count: { posts: number };
@@ -120,7 +120,7 @@ export function CompetitorView() {
       fbPageId: c.fbPageId,
       name: c.name,
       notes: c.notes ?? "",
-      accessToken: c.accessToken ?? "",
+      accessToken: "",
     });
     setError("");
     setShowForm(true);
@@ -139,8 +139,10 @@ export function CompetitorView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: editing ? "update" : "create",
-          ...(editing ? { id: editing.id } : {}),
-          ...form,
+          ...(editing ? { id: editing.id } : { fbPageId: form.fbPageId }),
+          name: form.name,
+          notes: form.notes,
+          ...(form.accessToken.trim() ? { accessToken: form.accessToken } : {}),
         }),
       });
       const data = await res.json();
@@ -330,7 +332,7 @@ export function CompetitorView() {
             />
             <Input
               label="Access Token riêng (tùy chọn)"
-              placeholder="Để trống → dùng token của FB Page mình"
+              placeholder={editing && editing.hasDedicatedToken ? "Đã cấu hình — để trống để giữ nguyên" : "Để trống → dùng token của FB Page mình"}
               value={form.accessToken}
               onChange={(e) => setForm({ ...form, accessToken: e.target.value })}
             />

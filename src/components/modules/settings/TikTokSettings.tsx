@@ -16,7 +16,7 @@ function TikTokIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-interface TikTokAccount {
+export interface TikTokAccount {
   id: string;
   openId: string;
   displayName: string;
@@ -25,9 +25,9 @@ interface TikTokAccount {
   expiresAt: string | null;
 }
 
-export function TikTokSettings() {
-  const [accounts, setAccounts] = useState<TikTokAccount[]>([]);
-  const [loading, setLoading] = useState(true);
+export function TikTokSettings({ initialAccounts }: { initialAccounts?: TikTokAccount[] }) {
+  const [accounts, setAccounts] = useState<TikTokAccount[]>(initialAccounts ?? []);
+  const [loading, setLoading] = useState(initialAccounts === undefined);
   const [authUrl, setAuthUrl] = useState("");
   const [showManual, setShowManual] = useState(false);
   const [manual, setManual] = useState({ accessToken: "", openId: "", displayName: "" });
@@ -49,9 +49,9 @@ export function TikTokSettings() {
   };
 
   useEffect(() => {
-    load();
-    loadAuthUrl();
-  }, []);
+    if (initialAccounts === undefined) void load();
+    void loadAuthUrl();
+  }, [initialAccounts]);
 
   const manualConnect = async () => {
     if (!manual.accessToken || !manual.openId) { setMsg("Cần nhập Access Token và Open ID"); return; }
@@ -75,6 +75,7 @@ export function TikTokSettings() {
   };
 
   const disconnect = async (id: string) => {
+    if (!window.confirm("Ngắt và xóa tài khoản TikTok này khỏi AutoSpa?")) return;
     await fetch("/api/tiktok", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -133,14 +134,16 @@ export function TikTokSettings() {
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
+                    type="button"
                     onClick={() => toggle(acc.id, !acc.isActive)}
-                    className="text-[11px] px-2 py-0.5 rounded-full border transition-colors"
+                    aria-pressed={acc.isActive}
+                    className="min-h-11 rounded-full border px-3 text-[11px] transition-colors"
                     style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
                   >
                     {acc.isActive ? "Tắt" : "Bật"}
                   </button>
-                  <button onClick={() => disconnect(acc.id)} style={{ color: "var(--danger)" }}>
-                    <Trash size={13} />
+                  <button type="button" aria-label={`Xóa tài khoản TikTok ${acc.displayName}`} onClick={() => disconnect(acc.id)} className="flex min-h-11 min-w-11 items-center justify-center" style={{ color: "var(--danger)" }}>
+                    <Trash size={13} aria-hidden="true" />
                   </button>
                 </div>
               </div>
@@ -152,10 +155,8 @@ export function TikTokSettings() {
       {/* Connect buttons */}
       <div className="flex gap-2 flex-wrap">
         {authUrl && (
-          <a href={authUrl} target="_blank" rel="noopener noreferrer">
-            <Button size="sm">
-              <LinkSimple size={13} /> Kết nối qua OAuth
-            </Button>
+          <a href={authUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-2 rounded-md bg-[var(--accent)] px-3 text-xs font-semibold text-[var(--accent-foreground)] shadow-[0_6px_16px_rgba(47,111,84,0.16)] hover:bg-[var(--accent-hover)]">
+            <LinkSimple size={13} aria-hidden="true" /> Kết nối qua OAuth
           </a>
         )}
         <Button variant="secondary" size="sm" onClick={() => setShowManual((v) => !v)}>

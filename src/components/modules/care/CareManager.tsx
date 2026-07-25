@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Heart, Sparkle, CheckCircle, Gift, CalendarCheck, ChatCircleText, Megaphone } from "@phosphor-icons/react";
+import type { CareMessageData } from "@/lib/customer-workspaces";
+import { businessMonthDay } from "@/lib/today-policy";
 
-interface CareMsg { id: string; type: string; content: string; status: string; createdAt: string; customer?: { name: string; phone?: string | null } | null; }
+type CareMsg = CareMessageData;
 interface Stats { pending: number; sent: number; total: number; }
-interface Customer { id: string; name: string; phone?: string | null; }
+interface Customer { id: string; name: string; phone?: string | null; birthday?: string | null; segment?: string; }
 
 const typeLabels: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   birthday: { label: "Sinh nhật", icon: Gift, color: "var(--amber)" },
@@ -18,10 +21,23 @@ const typeLabels: Record<string, { label: string; icon: React.ElementType; color
   promo: { label: "Khuyến mãi", icon: Megaphone, color: "var(--rose)" },
 };
 
-export function CareManager() {
-  const [messages, setMessages] = useState<CareMsg[]>([]);
-  const [stats, setStats] = useState<Stats>({ pending: 0, sent: 0, total: 0 });
-  const [customers, setCustomers] = useState<Customer[]>([]);
+export function CareManager({
+  initialMessages,
+  initialStats,
+  initialCustomers,
+  canMutate = true,
+  canonical = false,
+}: {
+  initialMessages?: CareMsg[];
+  initialStats?: Stats;
+  initialCustomers?: Customer[];
+  canMutate?: boolean;
+  canonical?: boolean;
+} = {}) {
+  const router = useRouter();
+  const [messages, setMessages] = useState<CareMsg[]>(initialMessages ?? []);
+  const [stats, setStats] = useState<Stats>(initialStats ?? { pending: 0, sent: 0, total: 0 });
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers ?? []);
   const [form, setForm] = useState({ type: "birthday", customerId: "", customerName: "", service: "" });
   const [generating, setGenerating] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -31,7 +47,22 @@ export function CareManager() {
     if (res.data) { setMessages(res.data.messages); setStats(res.data.stats); setCustomers(res.data.customers); }
   });
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!initialMessages) load();
+  }, [initialMessages]);
+
+  useEffect(() => {
+    if (initialMessages) {
+      setMessages(initialMessages);
+      if (initialStats) setStats(initialStats);
+      if (initialCustomers) setCustomers(initialCustomers);
+    }
+  }, [initialCustomers, initialMessages, initialStats]);
+
+  const refreshData = () => {
+    if (canonical) router.refresh();
+    else load();
+  };
 
   const generate = async () => {
     setGenerating(true);
@@ -43,14 +74,14 @@ export function CareManager() {
         body: JSON.stringify({ action: "generate", ...form, customerName: selectedCustomer?.name || form.customerName }),
       });
       const data = await res.json();
-      if (data.data) { setPreview({ id: data.data.id, content: data.data.content }); load(); }
+      if (data.data) { setPreview({ id: data.data.id, content: data.data.content }); refreshData(); }
     } finally { setGenerating(false); }
   };
 
   const markSent = async (id: string) => {
     await fetch("/api/care", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark-sent", id }) });
     if (preview?.id === id) setPreview(null);
-    load();
+    refreshData();
   };
 
   const bulkBirthday = async () => {
@@ -59,7 +90,7 @@ export function CareManager() {
       const res = await fetch("/api/care", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "bulk-birthday" }) });
       const data = await res.json();
       alert(`Đã tạo ${data.data?.count ?? 0} tin nhắn sinh nhật hôm nay!`);
-      load();
+      refreshData();
     } finally { setBulkLoading(false); }
   };
 
@@ -68,9 +99,10 @@ export function CareManager() {
       <div className="grid grid-cols-3 gap-3">
         <Card><p className="text-2xl font-bold" style={{ color: "var(--text)" }}>{stats.total}</p><p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Tổng tin nhắn</p></Card>
         <Card><p className="text-2xl font-bold" style={{ color: "var(--amber)" }}>{stats.pending}</p><p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Chờ gửi</p></Card>
-        <Card><p className="text-2xl font-bold" style={{ color: "var(--accent)" }}>{stats.sent}</p><p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Đã gửi</p></Card>
+        <Card><p className="text-2xl font-bold" style={{ color: "var(--accent)" }}>{stats.sent}</p><p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Đã ghi nhận gửi</p></Card>
       </div>
 
+      {canMutate ? (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -123,11 +155,7 @@ export function CareManager() {
           </CardHeader>
           <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>Tự động tạo tin nhắn sinh nhật cho các khách có sinh nhật hôm nay (DD/MM khớp).</p>
           <div className="space-y-1 max-h-40 overflow-y-auto">
-            {customers.filter((c: Customer & { birthday?: string | null }) => {
-              const today = new Date();
-              const md = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}`;
-              return c.birthday?.includes(md);
-            }).map((c) => (
+            {customers.filter((c) => c.birthday?.includes(businessMonthDay())).map((c) => (
               <div key={c.id} className="text-xs py-1 flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
                 <Gift size={11} style={{ color: "var(--amber)" }} weight="fill" />
                 {c.name} — {c.phone || "Chưa có SĐT"}
@@ -136,6 +164,11 @@ export function CareManager() {
           </div>
         </Card>
       </div>
+      ) : (
+        <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-4 text-sm text-[var(--text-secondary)]">
+          Bạn có quyền xem các draft chăm sóc ở cấp tài khoản nhưng không có quyền tạo hoặc thay đổi trạng thái.
+        </p>
+      )}
 
       <Card>
         <CardHeader><CardTitle>Lịch sử tin nhắn</CardTitle></CardHeader>
@@ -154,12 +187,12 @@ export function CareManager() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-xs font-medium" style={{ color: "var(--text)" }}>{m.customer?.name || "Không có khách"}</span>
-                      <Badge variant={m.status === "sent" ? "success" : "warning"}>{m.status === "sent" ? "Đã gửi" : "Chờ gửi"}</Badge>
+                      <Badge variant={m.status === "sent" ? "success" : "warning"}>{m.status === "sent" ? "Đã ghi nhận gửi" : "Chờ gửi"}</Badge>
                     </div>
                     <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{m.content}</p>
                   </div>
-                  {m.status === "pending" && (
-                    <Button size="sm" variant="secondary" onClick={() => markSent(m.id)}>Đã gửi</Button>
+                  {canMutate && m.status === "pending" && (
+                    <Button size="sm" variant="secondary" onClick={() => markSent(m.id)}>Ghi nhận đã gửi</Button>
                   )}
                 </div>
               );

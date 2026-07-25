@@ -93,6 +93,21 @@ describe("internal ai gateway", () => {
     );
   });
 
+  it("does not reactivate revoked environment seed keys on restart", async () => {
+    const { getDb } = await import("../db/client.js");
+    const { seedDatabase } = await import("../db/seed.js");
+    const db = getDb();
+    db.prepare("UPDATE api_keys SET status = 'revoked', revoked_at = ? WHERE id = ?")
+      .run("2026-07-25T00:00:00.000Z", "key_n8n_env");
+
+    seedDatabase(db);
+
+    expect(db.prepare("SELECT status, revoked_at FROM api_keys WHERE id = ?").get("key_n8n_env")).toEqual({
+      status: "revoked",
+      revoked_at: "2026-07-25T00:00:00.000Z"
+    });
+  });
+
   it("records schema migration markers", async () => {
     const { getDb } = await import("../db/client.js");
     const row = getDb()

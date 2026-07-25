@@ -108,7 +108,7 @@ async function handleComment(
   if (negW.some((w) => lower.includes(w))) sentiment = "negative";
   else if (posW.some((w) => lower.includes(w))) sentiment = "positive";
 
-  const rules = await prisma.commentRule.findMany({ where: { isActive: true } });
+  const rules = await prisma.commentRule.findMany({ where: { facebookPageId, isActive: true } });
   const matchedRule = rules.find((r: { trigger: string; reply: string }) => lower.includes(r.trigger.toLowerCase()));
   const autoReply = matchedRule?.reply ?? null;
   const comment = await prisma.postComment.create({

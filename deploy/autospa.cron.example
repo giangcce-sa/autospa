@@ -4,5 +4,19 @@
 #
 # Then install this entry with: crontab deploy/autospa.cron.example
 SHELL=/bin/sh
+*/15 * * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/auto-publish >> /var/log/autospa-cron.log 2>&1
+*/15 * * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/realtime-monitor >> /var/log/autospa-cron.log 2>&1
 0 */4 * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/ads-optimize >> /var/log/autospa-cron.log 2>&1
+7 * * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/ads-reconcile >> /var/log/autospa-cron.log 2>&1
+17 * * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/publish-reconcile >> /var/log/autospa-cron.log 2>&1
+0 13 * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/daily-report >> /var/log/autospa-cron.log 2>&1
+0 3 * * 0 . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/backup-reminder >> /var/log/autospa-cron.log 2>&1
 0 * * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/weekly-report >> /var/log/autospa-cron.log 2>&1
+30 3 * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/image-cleanup >> /var/log/autospa-cron.log 2>&1
+*/2 * * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/video-jobs >> /var/log/autospa-cron.log 2>&1
+45 3 * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/video-cleanup >> /var/log/autospa-cron.log 2>&1
+15 */6 * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/video-performance >> /var/log/autospa-cron.log 2>&1
+0 3 * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/crm-insights >> /var/log/autospa-cron.log 2>&1
+0 6 * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/flash-deal >> /var/log/autospa-cron.log 2>&1
+0 2 * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/learning >> /var/log/autospa-cron.log 2>&1
+0 8 * * * . /etc/autospa-cron.env && /opt/autospa/scripts/run-autospa-cron.sh /api/cron/google-reviews >> /var/log/autospa-cron.log 2>&1

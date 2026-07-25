@@ -1,9 +1,19 @@
 import { prisma } from "@/lib/db";
-import { logActivity } from "@/lib/activity-log";
 import { accessErrorResponse, requireUser } from "@/lib/page-access";
 import { assertSafeAiProviderUrl, ProviderUrlError, sameProviderOrigin } from "@/lib/provider-url-security";
 import { getSecretReplacement, maskSecret, resolveSecretInput } from "@/lib/settings-secrets";
+import { SpaUrlError } from "@/lib/spa-url-security";
+import { parseAutomationSettingsPatch } from "@/lib/settings/automation-policy";
+import { assertAdsThresholdOrder, parseAdsSettingsPatch, toAdsOptimizationSettings } from "@/lib/settings/ads-policy";
+import { prepareConnectionSettingsPatch, testConnectionSettings } from "@/lib/settings/connections";
+import { parseConnectionSettingsPatch } from "@/lib/settings/connections-policy";
+import { parseDataSettingsPatch } from "@/lib/settings/data-policy";
+import { parseImageSettingsPatch, parseProviderSettingsPatch } from "@/lib/settings/providers-policy";
+import { parseZaloSettingsPatch } from "@/lib/settings/channels-policy";
+import { testZaloSettings } from "@/lib/settings/channels";
+import { persistSettingsPatch, type SettingsScalarPatch } from "@/lib/settings/persistence";
 import { NextRequest, NextResponse } from "next/server";
+import { ZodError } from "zod";
 
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 const GATEWAY_CLAUDE_MODEL = "spa-assistant";
@@ -15,14 +25,6 @@ function normalizeBaseUrl(url: string) {
 
 function isAnthropicBaseUrl(url: string) {
   return new URL(url).hostname.toLowerCase() === "api.anthropic.com";
-}
-
-function boundedNumber(value: unknown, min: number, max: number, field: string) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < min || number > max) {
-    throw new RangeError(`${field} phải nằm trong khoảng ${min}-${max}`);
-  }
-  return number;
 }
 
 function safeSettings(settings: NonNullable<Awaited<ReturnType<typeof prisma.settings.findFirst>>>) {
@@ -68,6 +70,14 @@ export async function POST(req: NextRequest) {
 
     if (action === "test") {
       const { service, apiKey, baseUrl } = body;
+      if (service === "spa") {
+        const result = await testConnectionSettings({
+          spaApiUrl: body.spaApiUrl,
+          spaApiKey: apiKey,
+        });
+        return NextResponse.json(result, { status: result.success ? 200 : 502 });
+      }
+
       // Use value passed from form; fall back to DB only if form field is masked/empty
       const settings = await prisma.settings.findFirst();
 
@@ -134,47 +144,35 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      if (service === "spa") {
-        const { testSpaConnection } = await import("@/lib/spa-client");
-        const result = await testSpaConnection();
-        return NextResponse.json(result);
-      }
-
       if (service === "zalo") {
-        const token = resolveSecretInput(apiKey, settings?.zaloToken);
-        if (!token) return NextResponse.json({ success: false, message: "Chưa có Zalo Token — nhập rồi test" });
-        try {
-          const res = await fetch("https://openapi.zalo.me/v2.0/oa/getoa", {
-            headers: { access_token: token },
-          });
-          const data = await res.json();
-          if (data.error === 0) return NextResponse.json({ success: true, message: `Kết nối thành công! OA: ${data.data?.name || "OK"}` });
-          return NextResponse.json({ success: false, message: data.message || "Token không hợp lệ" });
-        } catch (e) {
-          return NextResponse.json({ success: false, message: "Không thể kết nối: " + String(e) });
-        }
+        const result = await testZaloSettings({ zaloToken: apiKey });
+        return NextResponse.json(result, { status: result.success ? 200 : 502 });
       }
 
       return NextResponse.json({ success: false, message: "Service không hợp lệ" });
     }
 
-    const { claudeApiKey, claudeBaseUrl, openaiApiKey, openaiBaseUrl, imageModel, zaloToken, zaloOaId, draftRetentionDays, publishedRetentionDays, autoReplyComments, autoReplyMessages } = body;
-    const updateData: Record<string, string | number | boolean | null> = {};
+    const { claudeApiKey, claudeBaseUrl, openaiApiKey, openaiBaseUrl } = body;
+    const updateData: SettingsScalarPatch = {};
+    const providerPatch = parseProviderSettingsPatch(body);
+    const imagePatch = parseImageSettingsPatch(body);
+    const connectionPatch = parseConnectionSettingsPatch(body);
+    const zaloPatch = parseZaloSettingsPatch(body);
     const claudeKeyReplacement = getSecretReplacement(claudeApiKey);
     const openaiKeyReplacement = getSecretReplacement(openaiApiKey);
-    const secretReplacements = {
-      claudeApiKey: claudeKeyReplacement,
-      openaiApiKey: openaiKeyReplacement,
-      zaloToken: getSecretReplacement(zaloToken),
-      spaApiKey: getSecretReplacement(body.spaApiKey),
-      spaWebhookSecret: getSecretReplacement(body.spaWebhookSecret),
-      webhookVerifyToken: getSecretReplacement(body.webhookVerifyToken),
-    };
-    for (const [field, value] of Object.entries(secretReplacements)) {
+    const secretReplacements = [
+      ["claudeApiKey", claudeKeyReplacement],
+      ["openaiApiKey", openaiKeyReplacement],
+      ["webhookVerifyToken", getSecretReplacement(body.webhookVerifyToken)],
+    ] as const;
+    for (const [field, value] of secretReplacements) {
       if (value !== undefined) updateData[field] = value;
     }
 
+    Object.assign(updateData, providerPatch, imagePatch);
+    Object.assign(updateData, zaloPatch);
     const currentSettings = await prisma.settings.findFirst();
+    Object.assign(updateData, await prepareConnectionSettingsPatch(connectionPatch, currentSettings));
     if (claudeBaseUrl) {
       const safeUrl = await assertSafeAiProviderUrl(claudeBaseUrl, "claude");
       if (currentSettings?.claudeApiKey && !claudeKeyReplacement && !sameProviderOrigin(safeUrl, currentSettings.claudeBaseUrl)) {
@@ -189,55 +187,17 @@ export async function POST(req: NextRequest) {
       }
       updateData.openaiBaseUrl = safeUrl;
     }
-    if (imageModel) updateData.imageModel = imageModel;
-    if (body.openaiChatModel) updateData.openaiChatModel = body.openaiChatModel;
-    if (zaloOaId !== undefined) updateData.zaloOaId = zaloOaId;
-    if (draftRetentionDays !== undefined) updateData.draftRetentionDays = Number(draftRetentionDays);
-    if (publishedRetentionDays !== undefined) updateData.publishedRetentionDays = Number(publishedRetentionDays);
-    if (body.webhookMode) updateData.webhookMode = body.webhookMode;
-    if (autoReplyComments !== undefined) updateData.autoReplyComments = Boolean(autoReplyComments);
-    if (autoReplyMessages !== undefined) updateData.autoReplyMessages = Boolean(autoReplyMessages);
-    // Autonomous marketing fields
-    if (body.spaApiUrl !== undefined) updateData.spaApiUrl = body.spaApiUrl || null;
-    if (body.leadHandoffMode) updateData.leadHandoffMode = body.leadHandoffMode;
-    if (body.leadHandoffLink !== undefined) updateData.leadHandoffLink = body.leadHandoffLink || null;
-    if (body.automationLevel) {
-      if (!["supervised", "semi", "full"].includes(body.automationLevel)) {
-        return NextResponse.json({ error: "Chế độ tự động không hợp lệ", success: false }, { status: 400 });
-      }
-      updateData.automationLevel = body.automationLevel;
-    }
-    if (body.zaloApprovalRecipient !== undefined) updateData.zaloApprovalRecipient = body.zaloApprovalRecipient || null;
-    if (body.adsOptimizePauseCtr !== undefined) updateData.adsOptimizePauseCtr = boundedNumber(body.adsOptimizePauseCtr, 0.1, 10, "Pause CTR");
-    if (body.adsOptimizeScaleCtr !== undefined) updateData.adsOptimizeScaleCtr = boundedNumber(body.adsOptimizeScaleCtr, 0.2, 20, "Scale CTR");
-    if (body.adsOptimizeFreqLimit !== undefined) updateData.adsOptimizeFreqLimit = boundedNumber(body.adsOptimizeFreqLimit, 1, 10, "Frequency");
-    if (body.adsOptimizeScalePct !== undefined) updateData.adsOptimizeScalePct = boundedNumber(body.adsOptimizeScalePct, 5, 50, "Phần trăm scale");
-    if (body.adsOptimizeMinSpend !== undefined) updateData.adsOptimizeMinSpend = boundedNumber(body.adsOptimizeMinSpend, 50_000, 100_000_000, "Chi tiêu tối thiểu");
-    if (body.adsOptimizeMaxBudget !== undefined) updateData.adsOptimizeMaxBudget = boundedNumber(body.adsOptimizeMaxBudget, 100_000, 1_000_000_000, "Trần ngân sách");
-    if (body.adsOptimizeCooldownHrs !== undefined) updateData.adsOptimizeCooldownHrs = boundedNumber(body.adsOptimizeCooldownHrs, 4, 168, "Cooldown");
-    if (body.adsOptimizeMinRoas !== undefined) updateData.adsOptimizeMinRoas = boundedNumber(body.adsOptimizeMinRoas, 0.5, 20, "ROAS tối thiểu");
-    if (
-      Number(updateData.adsOptimizePauseCtr ?? body.adsOptimizePauseCtr ?? 0.5)
-      >= Number(updateData.adsOptimizeScaleCtr ?? body.adsOptimizeScaleCtr ?? 2)
-    ) {
-      return NextResponse.json({ error: "Ngưỡng pause phải thấp hơn ngưỡng scale", success: false }, { status: 400 });
-    }
+    Object.assign(updateData, parseAutomationSettingsPatch(body));
+    Object.assign(updateData, parseDataSettingsPatch(body));
+    const adsPatch = parseAdsSettingsPatch(body);
+    Object.assign(updateData, adsPatch);
+    assertAdsThresholdOrder(toAdsOptimizationSettings({ ...currentSettings, ...adsPatch }));
 
-    const settings = await prisma.settings.upsert({
-      where: { id: "1" },
-      update: updateData,
-      create: { id: "1", ...updateData },
-    });
-
-    await logActivity({
-      type: "settings_change",
-      title: "Đã cập nhật cấu hình hệ thống",
-      detail: `Thay đổi ${Object.keys(updateData).length} trường cấu hình`,
+    const settings = await persistSettingsPatch(updateData, {
+      userId: user.id ?? user.email ?? "owner",
       href: "/settings",
-      severity: "info",
       source: "settings_api",
-      metadata: { userId: user.id, fields: Object.keys(updateData).filter((key) => !key.toLowerCase().includes("key") && !key.toLowerCase().includes("secret") && !key.toLowerCase().includes("token")) },
-    }).catch(() => null);
+    });
 
     return NextResponse.json({
       data: safeSettings(settings),
@@ -247,6 +207,6 @@ export async function POST(req: NextRequest) {
     const access = accessErrorResponse(e);
     if (access) return access;
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: msg, success: false }, { status: e instanceof RangeError || e instanceof ProviderUrlError ? 400 : 500 });
+    return NextResponse.json({ error: msg, success: false }, { status: e instanceof RangeError || e instanceof ProviderUrlError || e instanceof SpaUrlError || e instanceof ZodError ? 400 : 500 });
   }
 }

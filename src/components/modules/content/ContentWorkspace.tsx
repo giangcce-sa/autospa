@@ -58,22 +58,26 @@ export function ContentWorkspace({
     setTab(view);
   };
 
-  const handleSaved = (id: string) => {
-    setPostId(id);
-    navigate(tab, id);
-  };
-
   const handleImageSet = (url: string) => {
     setImageUrl(url);
   };
 
-  const handleGoToPublish = (id?: string) => {
+  const handlePostIdChange = (id?: string) => {
+    setPostId(id);
+    const params = new URLSearchParams();
+    params.set("view", "publish");
+    if (id) params.set("postId", id);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const handleGoToPublish = (id = postId) => {
     if (id) setPostId(id);
     navigate("publish", id);
   };
 
-  const handleGoToImage = () => {
-    navigate("image");
+  const handleGoToImage = (id: string) => {
+    setPostId(id);
+    navigate("image", id);
   };
 
   return (
@@ -108,7 +112,6 @@ export function ContentWorkspace({
       <div style={{ display: tab === "content" ? undefined : "none" }}>
         <ContentGenerator
           facebookPageId={selectedPageId || undefined}
-          onSaved={handleSaved}
           onGoToImage={handleGoToImage}
           onGoToPublish={handleGoToPublish}
         />
@@ -125,6 +128,7 @@ export function ContentWorkspace({
         <PublishManager
           initialPostId={postId}
           initialImageUrl={imageUrl}
+          onPostIdChange={handlePostIdChange}
         />
       </div>
     </div>

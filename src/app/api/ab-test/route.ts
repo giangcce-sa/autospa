@@ -4,15 +4,18 @@ import { councilDebate } from "@/lib/ai-council";
 import { reviewContent } from "@/lib/reviewer";
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
+import { accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const abGroupId = searchParams.get("abGroupId");
+    const facebookPageId = searchParams.get("facebookPageId");
+    const { page } = await requireExplicitPageAccess(facebookPageId);
 
     if (abGroupId) {
       const posts = await prisma.post.findMany({
-        where: { abGroupId },
+        where: { abGroupId, facebookPageId: page!.id },
         include: { analytics: true },
         orderBy: { createdAt: "asc" },
       });
@@ -21,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     // List all A/B groups (distinct abGroupId)
     const groups = await prisma.post.findMany({
-      where: { abGroupId: { not: null } },
+      where: { abGroupId: { not: null }, facebookPageId: page!.id },
       distinct: ["abGroupId"],
       select: { abGroupId: true, createdAt: true },
       orderBy: { createdAt: "desc" },
@@ -32,7 +35,7 @@ export async function GET(req: NextRequest) {
     const result = await Promise.all(
       groups.map(async (g) => {
         const posts = await prisma.post.findMany({
-          where: { abGroupId: g.abGroupId! },
+          where: { abGroupId: g.abGroupId!, facebookPageId: page!.id },
           include: { analytics: true },
           orderBy: { createdAt: "asc" },
         });
@@ -41,7 +44,9 @@ export async function GET(req: NextRequest) {
     );
 
     return NextResponse.json({ data: result, success: true });
-  } catch {
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
     return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
   }
 }
@@ -50,7 +55,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { action, facebookPageId: rawPageId } = body;
-    const facebookPageId = rawPageId || null;
+    const { page } = await requireExplicitPageAccess(rawPageId, { owner: true });
+    const facebookPageId = page!.id;
 
     if (action === "create") {
       const { caption, serviceId, platform, tone } = body as {
@@ -112,7 +118,7 @@ export async function POST(req: NextRequest) {
       // 2 AI bàn luận về 2 variant — predict/explain winner
       const { abGroupId } = body as { abGroupId: string };
       const posts = await prisma.post.findMany({
-        where: { abGroupId },
+        where: { abGroupId, facebookPageId },
         include: { analytics: true },
         orderBy: { createdAt: "asc" },
       });
@@ -155,19 +161,30 @@ Analytics: ${statsB}`;
 
     if (action === "declare-winner") {
       const { winnerId, abGroupId } = body as { winnerId: string; abGroupId: string };
-      await prisma.post.updateMany({
-        where: { abGroupId, id: { not: winnerId } },
-        data: { qualityNotes: "A/B Test — Thua" },
+      const winner = await prisma.post.findFirst({
+        where: { id: winnerId, abGroupId, facebookPageId },
+        select: { id: true },
       });
-      await prisma.post.update({
-        where: { id: winnerId },
-        data: { qualityNotes: "A/B Test — Thắng" },
-      });
+      if (!winner) {
+        return NextResponse.json({ error: "Phiên bản thắng không thuộc A/B test và Facebook Page này", success: false }, { status: 403 });
+      }
+      await prisma.$transaction([
+        prisma.post.updateMany({
+          where: { abGroupId, facebookPageId, id: { not: winnerId } },
+          data: { qualityNotes: "A/B Test — Thua" },
+        }),
+        prisma.post.update({
+          where: { id: winnerId },
+          data: { qualityNotes: "A/B Test — Thắng" },
+        }),
+      ]);
       return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return access;
     const msg = err instanceof Error ? err.message : "Lỗi không xác định";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }

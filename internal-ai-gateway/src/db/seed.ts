@@ -29,13 +29,8 @@ function insertEnvKey(
 
   const prefix = parseApiKeyPrefix(input.rawKey) ?? input.id.replaceAll("_", "-");
   db.prepare(`
-    INSERT INTO api_keys (id, user_id, client_id, name, key_prefix, key_hash, status, created_at)
+    INSERT OR IGNORE INTO api_keys (id, user_id, client_id, name, key_prefix, key_hash, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 'active', ?)
-    ON CONFLICT(id) DO UPDATE SET
-      key_prefix = excluded.key_prefix,
-      key_hash = excluded.key_hash,
-      status = 'active',
-      revoked_at = NULL
   `).run(input.id, input.userId, input.clientId, input.name, prefix, hashApiKey(input.rawKey), now());
 }
 

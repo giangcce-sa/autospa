@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getCanonicalRouteHref } from "@/config/routes";
 import {
   PaperPlaneTilt, Users, TreeStructure, Bell, CurrencyCircleDollar,
   ArrowRight, Pulse, WarningCircle,
@@ -75,7 +76,7 @@ export function ActivityFeed() {
           <Pulse size={14} style={{ color: "var(--accent)" }} weight="fill" />
           <CardTitle>Hoạt động gần đây (24h)</CardTitle>
         </div>
-        <Link href="/orchestrator" className="text-[11px] flex items-center gap-0.5 transition-opacity hover:opacity-80" style={{ color: "var(--text-muted)" }}>
+        <Link href={getCanonicalRouteHref("orchestrator")} className="text-[11px] flex items-center gap-0.5 transition-opacity hover:opacity-80" style={{ color: "var(--text-muted)" }}>
           Xem chi tiết <ArrowRight size={10} />
         </Link>
       </CardHeader>

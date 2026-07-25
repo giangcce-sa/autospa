@@ -73,111 +73,126 @@ async function ceoSynthesize(workflow: WorkflowName, trigger: string, steps: Wor
   return council.synthesis;
 }
 
-export async function runRevenueDropWorkflow(trigger: string): Promise<WorkflowResult> {
-  const run = await prisma.workflowRun.create({
-    data: {
-      name: "revenue_drop",
-      trigger,
-      context: trigger,
-      steps: JSON.stringify([]),
-    },
+async function persistWorkflowSteps(runId: string, steps: WorkflowStep[]) {
+  await prisma.workflowRun.update({
+    where: { id: runId },
+    data: { steps: JSON.stringify(steps) },
   });
+}
 
+async function addWorkflowStep<T>(
+  runId: string,
+  steps: WorkflowStep[],
+  agent: string,
+  label: string,
+  fn: () => Promise<T>,
+  formatter: (result: T) => string,
+) {
+  const step = await runStep(agent, label, fn, formatter);
+  steps.push(step);
+  await persistWorkflowSteps(runId, steps);
+  return step;
+}
+
+async function executeWorkflow(
+  name: WorkflowName,
+  trigger: string,
+  executeStages: (runId: string, steps: WorkflowStep[]) => Promise<void>,
+): Promise<WorkflowResult> {
+  const run = await prisma.workflowRun.create({
+    data: { name, trigger, context: trigger, steps: JSON.stringify([]) },
+  });
   const steps: WorkflowStep[] = [];
 
-  // Step 1: Analytics deep-dive
-  steps.push(await runStep("analytics", "Phân tích chi tiết doanh thu 7 ngày",
-    () => generateAnalyticsReport("7d"),
-    (r) => `${r.summary}\nHighlights: ${r.highlights.join("; ")}\nAnomalies: ${r.anomalies.join("; ")}`
-  ));
+  try {
+    await executeStages(run.id, steps);
+    if (steps.some((step) => step.status === "failed")) {
+      const plan = "Workflow dừng vì một hoặc nhiều stage thất bại.";
+      await prisma.workflowRun.update({
+        where: { id: run.id },
+        data: { steps: JSON.stringify(steps), plan, status: "failed", completedAt: new Date() },
+      });
+      return { id: run.id, name, trigger, steps, plan, status: "failed" };
+    }
 
-  // Step 2: Content analyze
-  steps.push(await runStep("content", "Đánh giá performance content gần đây",
-    () => generateContentReport(),
-    (r) => `${r.summary}\nTop: ${r.topPerformers.join("; ")}\nBottom: ${r.underperformers.join("; ")}\nRec: ${r.recommendations.join("; ")}`
-  ));
+    const council = await addWorkflowStep(
+      run.id,
+      steps,
+      "council",
+      "Tổng hợp kế hoạch hành động",
+      () => ceoSynthesize(name, trigger, steps),
+      (plan) => plan,
+    );
+    const status = council.status === "completed" ? "completed" : "failed";
+    const plan = council.output;
+    await prisma.workflowRun.update({
+      where: { id: run.id },
+      data: { steps: JSON.stringify(steps), plan, status, completedAt: new Date() },
+    });
+    return { id: run.id, name, trigger, steps, plan, status };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!steps.some((step) => step.status === "failed" && step.output === message)) {
+      steps.push({ agent: "workflow", label: "Hoàn tất workflow", output: message, status: "failed", durationMs: 0 });
+    }
+    await prisma.workflowRun.update({
+      where: { id: run.id },
+      data: { steps: JSON.stringify(steps), status: "failed", completedAt: new Date() },
+    }).catch(() => null);
+    throw error;
+  }
+}
 
-  // Step 3: Ads check
-  steps.push(await runStep("ads", "Kiểm tra campaign hiện tại",
-    () => generateAdsReport(),
-    (r) => `${r.summary}\nAlerts: ${r.alerts.join("; ")}\nRec: ${r.recommendations.join("; ")}`
-  ));
-
-  // Step 4: Intelligence — đối thủ có gì
-  steps.push(await runStep("intelligence", "Đối thủ có hoạt động bất thường?",
-    () => generateIntelligenceReport(),
-    (r) => `${r.summary}\nTrends: ${r.trends.join("; ")}\nAlerts: ${r.competitorAlerts.join("; ")}`
-  ));
-
-  // Step 5: CEO synthesize
-  const plan = await ceoSynthesize("revenue_drop", trigger, steps);
-
-  await prisma.workflowRun.update({
-    where: { id: run.id },
-    data: {
-      steps: JSON.stringify(steps),
-      plan,
-      status: "completed",
-      completedAt: new Date(),
-    },
+export async function runRevenueDropWorkflow(trigger: string): Promise<WorkflowResult> {
+  return executeWorkflow("revenue_drop", trigger, async (runId, steps) => {
+    await addWorkflowStep(runId, steps, "analytics", "Phân tích chi tiết doanh thu 7 ngày",
+      () => generateAnalyticsReport("7d"),
+      (r) => `${r.summary}\nHighlights: ${r.highlights.join("; ")}\nAnomalies: ${r.anomalies.join("; ")}`
+    );
+    await addWorkflowStep(runId, steps, "content", "Đánh giá performance content gần đây",
+      () => generateContentReport(),
+      (r) => `${r.summary}\nTop: ${r.topPerformers.join("; ")}\nBottom: ${r.underperformers.join("; ")}\nRec: ${r.recommendations.join("; ")}`
+    );
+    await addWorkflowStep(runId, steps, "ads", "Kiểm tra campaign hiện tại",
+      () => generateAdsReport(),
+      (r) => `${r.summary}\nAlerts: ${r.alerts.join("; ")}\nRec: ${r.recommendations.join("; ")}`
+    );
+    await addWorkflowStep(runId, steps, "intelligence", "Đối thủ có hoạt động bất thường?",
+      () => generateIntelligenceReport(),
+      (r) => `${r.summary}\nTrends: ${r.trends.join("; ")}\nAlerts: ${r.competitorAlerts.join("; ")}`
+    );
   });
-
-  return { id: run.id, name: "revenue_drop", trigger, steps, plan, status: "completed" };
 }
 
 export async function runCompetitorSurgeWorkflow(trigger: string): Promise<WorkflowResult> {
-  const competitorCtx = await getCompetitorContext();
-  const run = await prisma.workflowRun.create({
-    data: { name: "competitor_surge", trigger, context: `${trigger}\n${competitorCtx.insight}`, steps: JSON.stringify([]) },
+  return executeWorkflow("competitor_surge", trigger, async (runId, steps) => {
+    const competitorCtx = await getCompetitorContext();
+    await prisma.workflowRun.update({
+      where: { id: runId },
+      data: { context: `${trigger}\n${competitorCtx.insight}` },
+    });
+    await addWorkflowStep(runId, steps, "intelligence", "Deep dive bài viral đối thủ",
+      () => generateIntelligenceReport(),
+      (r) => `${r.summary}\nMemory: ${competitorCtx.insight || "chưa có"}\nAlerts: ${r.competitorAlerts.join("; ")}\nRec: ${[...competitorCtx.recommendations, ...r.recommendations].slice(0, 5).join("; ")}`
+    );
+    await addWorkflowStep(runId, steps, "content", "Phân tích content mình tuần qua",
+      () => generateContentReport(),
+      (r) => `${r.summary}\nRec: ${r.recommendations.join("; ")}`
+    );
   });
-
-  const steps: WorkflowStep[] = [];
-
-  steps.push(await runStep("intelligence", "Deep dive bài viral đối thủ",
-    () => generateIntelligenceReport(),
-    (r) => `${r.summary}\nMemory: ${competitorCtx.insight || "chưa có"}\nAlerts: ${r.competitorAlerts.join("; ")}\nRec: ${[...competitorCtx.recommendations, ...r.recommendations].slice(0, 5).join("; ")}`
-  ));
-
-  steps.push(await runStep("content", "Phân tích content mình tuần qua",
-    () => generateContentReport(),
-    (r) => `${r.summary}\nRec: ${r.recommendations.join("; ")}`
-  ));
-
-  const plan = await ceoSynthesize("competitor_surge", trigger, steps);
-
-  await prisma.workflowRun.update({
-    where: { id: run.id },
-    data: { steps: JSON.stringify(steps), plan, status: "completed", completedAt: new Date() },
-  });
-
-  return { id: run.id, name: "competitor_surge", trigger, steps, plan, status: "completed" };
 }
 
 export async function runEngagementDropWorkflow(trigger: string): Promise<WorkflowResult> {
-  const run = await prisma.workflowRun.create({
-    data: { name: "engagement_drop", trigger, context: trigger, steps: JSON.stringify([]) },
+  return executeWorkflow("engagement_drop", trigger, async (runId, steps) => {
+    await addWorkflowStep(runId, steps, "content", "Phân tích sentiment + topic mix",
+      () => generateContentReport(),
+      (r) => `${r.summary}\nTop: ${r.topPerformers.join("; ")}\nBottom: ${r.underperformers.join("; ")}\nRec: ${r.recommendations.join("; ")}`
+    );
+    await addWorkflowStep(runId, steps, "intelligence", "Đối thủ có trend mới?",
+      () => generateIntelligenceReport(),
+      (r) => `${r.summary}\nTrends: ${r.trends.join("; ")}`
+    );
   });
-
-  const steps: WorkflowStep[] = [];
-
-  steps.push(await runStep("content", "Phân tích sentiment + topic mix",
-    () => generateContentReport(),
-    (r) => `${r.summary}\nTop: ${r.topPerformers.join("; ")}\nBottom: ${r.underperformers.join("; ")}\nRec: ${r.recommendations.join("; ")}`
-  ));
-
-  steps.push(await runStep("intelligence", "Đối thủ có trend mới?",
-    () => generateIntelligenceReport(),
-    (r) => `${r.summary}\nTrends: ${r.trends.join("; ")}`
-  ));
-
-  const plan = await ceoSynthesize("engagement_drop", trigger, steps);
-
-  await prisma.workflowRun.update({
-    where: { id: run.id },
-    data: { steps: JSON.stringify(steps), plan, status: "completed", completedAt: new Date() },
-  });
-
-  return { id: run.id, name: "engagement_drop", trigger, steps, plan, status: "completed" };
 }
 
 export async function triggerWorkflow(name: WorkflowName, trigger: string): Promise<WorkflowResult> {

@@ -1,5 +1,5 @@
-import { WorkspacePage, type WorkspacePageProps } from "@/components/workspace/WorkspacePage";
+import { GrowthAdsWorkspace, type GrowthAdsWorkspaceProps } from "@/components/modules/growth/GrowthAdsWorkspace";
 
-export default function Page({ searchParams }: WorkspacePageProps) {
-  return <WorkspacePage routeId="growth-ads" searchParams={searchParams} />;
+export default function Page({ searchParams }: GrowthAdsWorkspaceProps) {
+  return <GrowthAdsWorkspace searchParams={searchParams} />;
 }

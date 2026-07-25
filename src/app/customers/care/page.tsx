@@ -1,5 +1,5 @@
-import { WorkspacePage, type WorkspacePageProps } from "@/components/workspace/WorkspacePage";
+import { CustomerWorkspace, type CustomerWorkspaceProps } from "@/components/modules/customers/CustomerWorkspaces";
 
-export default function Page({ searchParams }: WorkspacePageProps) {
-  return <WorkspacePage routeId="customers-care" searchParams={searchParams} />;
+export default function Page({ searchParams }: Omit<CustomerWorkspaceProps, "routeId">) {
+  return <CustomerWorkspace routeId="customers-care" searchParams={searchParams} />;
 }

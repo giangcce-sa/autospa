@@ -6,22 +6,9 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requireUser();
     const authorizedPageIds = await getAuthorizedPageIds(user);
-    // Auto-cleanup expired posts based on retention settings
-    const settings = await prisma.settings.findFirst();
-    if (settings) {
-      const now = new Date();
-      if (settings.draftRetentionDays > 0) {
-        const cutoff = new Date(now.getTime() - settings.draftRetentionDays * 86400000);
-        await prisma.post.deleteMany({ where: { status: "draft", createdAt: { lt: cutoff } } });
-      }
-      if (settings.publishedRetentionDays > 0) {
-        const cutoff = new Date(now.getTime() - settings.publishedRetentionDays * 86400000);
-        await prisma.post.deleteMany({ where: { status: "published", publishedAt: { lt: cutoff } } });
-      }
-    }
-
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
+    const query = searchParams.get("q")?.trim();
     const facebookPageId = searchParams.get("facebookPageId");
     if (facebookPageId) await requirePageAccess(facebookPageId);
 
@@ -33,6 +20,14 @@ export async function GET(req: NextRequest) {
             ? { facebookPageId: { in: authorizedPageIds } }
             : {}),
         ...(status ? { status } : {}),
+        ...(query
+          ? {
+              OR: [
+                { caption: { contains: query, mode: "insensitive" } },
+                { hashtags: { contains: query, mode: "insensitive" } },
+              ],
+            }
+          : {}),
       },
       include: { service: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
@@ -52,7 +47,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "Thiếu id", success: false }, { status: 400 });
     const post = await prisma.post.findUnique({ where: { id }, select: { facebookPageId: true } });
     if (!post) return NextResponse.json({ error: "Không tìm thấy bài", success: false }, { status: 404 });
-    await requirePageAccess(post.facebookPageId);
+    await requirePageAccess(post.facebookPageId, { owner: true });
     await prisma.post.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {

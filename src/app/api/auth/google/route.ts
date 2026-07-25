@@ -10,25 +10,32 @@ function appUrl(path: string) {
   return new URL(path, baseUrl);
 }
 
+function redirectAndClearState(path: string) {
+  const res = NextResponse.redirect(appUrl(path));
+  clearOAuthStateCookie(res, GOOGLE_OAUTH_STATE_COOKIE);
+  return res;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
   const error = searchParams.get("error");
   const state = searchParams.get("state");
 
+  if (!isValidOAuthState(req, GOOGLE_OAUTH_STATE_COOKIE, state)) {
+    return redirectAndClearState("/settings?google=error&reason=invalid_state");
+  }
+
   if (error || !code) {
-    return NextResponse.redirect(appUrl(`/settings?google=error&reason=${error ?? "no_code"}`));
+    return redirectAndClearState(`/settings?google=error&reason=${encodeURIComponent(error ?? "no_code")}`);
   }
 
   const session = await auth();
   if (!session?.user) {
-    return NextResponse.redirect(appUrl("/login?from=/settings"));
+    return redirectAndClearState("/login?from=/settings");
   }
-
-  if (!isValidOAuthState(req, GOOGLE_OAUTH_STATE_COOKIE, state)) {
-    const res = NextResponse.redirect(appUrl("/settings?google=error&reason=invalid_state"));
-    clearOAuthStateCookie(res, GOOGLE_OAUTH_STATE_COOKIE);
-    return res;
+  if ((session.user as { role?: string }).role !== "owner") {
+    return redirectAndClearState("/settings?google=error&reason=forbidden");
   }
 
   try {
@@ -78,13 +85,9 @@ export async function GET(req: NextRequest) {
     });
 
     const name = encodeURIComponent(locationName ?? tokens.email);
-    const res = NextResponse.redirect(appUrl(`/settings?google=connected&name=${name}`));
-    clearOAuthStateCookie(res, GOOGLE_OAUTH_STATE_COOKIE);
-    return res;
+    return redirectAndClearState(`/settings?google=connected&name=${name}`);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    const res = NextResponse.redirect(appUrl(`/settings?google=error&reason=${encodeURIComponent(msg)}`));
-    clearOAuthStateCookie(res, GOOGLE_OAUTH_STATE_COOKIE);
-    return res;
+    return redirectAndClearState(`/settings?google=error&reason=${encodeURIComponent(msg)}`);
   }
 }

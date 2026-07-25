@@ -1,66 +1,68 @@
+import { isOutcomeStatus, isOverridableOutcomeStatus } from "@/lib/ai-runtime-types";
 import { prisma } from "@/lib/db";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { businessDateKey } from "@/lib/today-policy";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { action, id, status, notes } = body;
-
-    if (action === "override-outcome") {
-      if (!id || !status) {
-        return NextResponse.json({ error: "Thiếu id hoặc status", success: false }, { status: 400 });
-      }
-      if (!["success", "fail", "neutral"].includes(status)) {
-        return NextResponse.json({ error: "Status không hợp lệ", success: false }, { status: 400 });
-      }
-
-      const existing = await prisma.cEODecision.findUnique({ where: { id } });
-      if (!existing) return NextResponse.json({ error: "Not found", success: false }, { status: 404 });
-
-      const prevNotes = existing.outcomeNotes ?? "";
-      const overrideNote = `[Admin override ${new Date().toLocaleDateString("vi-VN")}]: ${notes ?? "(không có lý do)"}`;
-      const newNotes = prevNotes
-        ? `${prevNotes}\n\n${overrideNote}`
-        : overrideNote;
-
-      const updated = await prisma.cEODecision.update({
-        where: { id },
-        data: {
-          outcomeStatus: status,
-          outcomeNotes: newNotes,
-        },
-      });
-      return NextResponse.json({ data: updated, success: true });
+    await requireUser({ owner: true });
+    const body = await req.json() as { action?: unknown; id?: unknown; status?: unknown; notes?: unknown };
+    if (body.action !== "override-outcome") {
+      return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
     }
 
-    return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    const id = typeof body.id === "string" ? body.id.trim() : "";
+    const status = isOverridableOutcomeStatus(body.status) ? body.status : null;
+    const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 2000) : "";
+    if (!id || !status || !notes) {
+      return NextResponse.json({ error: "Cần id, outcome và lý do override", success: false }, { status: 400 });
+    }
+
+    const existing = await prisma.cEODecision.findUnique({ where: { id } });
+    if (!existing) return NextResponse.json({ error: "Không tìm thấy quyết định", success: false }, { status: 404 });
+
+    const overrideNote = `[Owner override ${businessDateKey()}]: ${notes}`;
+    const updated = await prisma.cEODecision.update({
+      where: { id },
+      data: {
+        outcomeStatus: status,
+        outcomeNotes: existing.outcomeNotes ? `${existing.outcomeNotes}\n\n${overrideNote}` : overrideNote,
+      },
+    });
+    return NextResponse.json({ data: updated, success: true });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: "Không thể cập nhật outcome", success: false }, { status: 500 });
   }
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const status = searchParams.get("status");
+    await requireUser();
+    const requestedStatus = new URL(req.url).searchParams.get("status");
+    const status = isOutcomeStatus(requestedStatus) ? requestedStatus : null;
+    if (requestedStatus && !status) {
+      return NextResponse.json({ error: "Status không hợp lệ", success: false }, { status: 400 });
+    }
 
-    const decisions = await prisma.cEODecision.findMany({
-      where: status ? { outcomeStatus: status } : undefined,
-      orderBy: { date: "desc" },
-      take: 50,
-    });
+    const [decisions, total, success, fail, pending] = await Promise.all([
+      prisma.cEODecision.findMany({
+        where: status ? { outcomeStatus: status } : undefined,
+        orderBy: { date: "desc" },
+        take: 50,
+      }),
+      prisma.cEODecision.count(),
+      prisma.cEODecision.count({ where: { outcomeStatus: "success" } }),
+      prisma.cEODecision.count({ where: { outcomeStatus: "fail" } }),
+      prisma.cEODecision.count({ where: { outcomeStatus: "pending" } }),
+    ]);
 
-    const counts = {
-      total: await prisma.cEODecision.count(),
-      success: await prisma.cEODecision.count({ where: { outcomeStatus: "success" } }),
-      fail: await prisma.cEODecision.count({ where: { outcomeStatus: "fail" } }),
-      pending: await prisma.cEODecision.count({ where: { outcomeStatus: "pending" } }),
-    };
-
-    return NextResponse.json({ data: { decisions, counts }, success: true });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return NextResponse.json({ data: { decisions, counts: { total, success, fail, pending } }, success: true });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: "Không thể đọc bộ nhớ quyết định", success: false }, { status: 500 });
   }
 }

@@ -1,95 +1,31 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { getAutomationOperationsData } from "@/lib/automation-operations";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 
 export async function GET() {
   try {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    const [approvals, adLogs, spaSync, leadConvs, nurtureLeads, adsJobs, settings, configuredAdsPages] = await Promise.all([
-      prisma.pendingApproval.findMany({
-        where: { status: "pending" },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.adOptimizationLog.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      }),
-      prisma.spaSync.findFirst({ where: { id: "1" } }),
-      prisma.leadConversation.findMany({
-        where: { isComplete: false },
-        include: { lead: { select: { name: true, phone: true } } },
-        orderBy: { updatedAt: "desc" },
-        take: 20,
-      }),
-      prisma.lead.findMany({
-        where: { handoffAt: null, nurtureStep: { lt: 3 }, channelId: { not: null } },
-        select: { id: true, name: true, service: true, channelType: true, nurtureStep: true, nurtureSentAt: true, createdAt: true },
-        orderBy: { nurtureSentAt: "asc" },
-        take: 20,
-      }),
-      prisma.jobRun.findMany({
-        where: { name: "ads_optimize" },
-        orderBy: { startedAt: "desc" },
-        take: 10,
-      }),
-      prisma.settings.findFirst({
-        select: {
-          automationLevel: true,
-          adsOptimizePauseCtr: true,
-          adsOptimizeScaleCtr: true,
-          adsOptimizeMaxBudget: true,
-          adsOptimizeCooldownHrs: true,
-          adsOptimizeMinRoas: true,
-          zaloApprovalRecipient: true,
-        },
-      }),
-      prisma.facebookPage.count({ where: { isActive: true, adAccountId: { not: null } } }),
-    ]);
-
-    // Auto-expire timed-out approvals
-    const timedOut = approvals.filter((a) => a.timeoutAt < now);
-    if (timedOut.length > 0) {
-      await prisma.pendingApproval.updateMany({
-        where: { id: { in: timedOut.map((a) => a.id) } },
-        data: { status: "timed_out" },
-      });
-    }
-
-    const activeApprovals = approvals.filter((a) => a.timeoutAt >= now);
-    const adLogsToday = adLogs.filter((l) => l.createdAt >= today);
-
-    // Which nurture leads are due today?
-    const nurtureDue = nurtureLeads.filter((l) => {
-      const delay = [1, 3, 7][l.nurtureStep] ?? 7;
-      const threshold = new Date(now.getTime() - delay * 24 * 60 * 60 * 1000);
-      return (l.nurtureSentAt ?? l.createdAt) <= threshold;
-    });
-
+    await requireUser({ owner: true });
+    const data = await getAutomationOperationsData();
     return NextResponse.json({
       success: true,
       data: {
-        approvals: activeApprovals,
-        adLogs,
-        adLogsCountToday: adLogsToday.length,
-        spaSync,
-        leadConversations: leadConvs,
-        nurtureLeads,
-        nurtureDueCount: nurtureDue.length,
-        adsJobs,
+        ...data,
+        spaSync: data.spa.sync,
         adsReadiness: {
-          automationLevel: settings?.automationLevel ?? "supervised",
-          pauseCtr: settings?.adsOptimizePauseCtr ?? 0.5,
-          scaleCtr: settings?.adsOptimizeScaleCtr ?? 2,
-          maxBudget: settings?.adsOptimizeMaxBudget ?? 0,
-          cooldownHours: settings?.adsOptimizeCooldownHrs ?? 24,
-          minRoas: settings?.adsOptimizeMinRoas ?? 1.5,
-          configuredAdsPages,
-          hasApprovalRecipient: Boolean(settings?.zaloApprovalRecipient),
+          automationLevel: data.ads.policy.effectiveAutomationLevel,
+          pauseCtr: data.ads.policy.pauseCtr,
+          scaleCtr: data.ads.policy.scaleCtr,
+          maxBudget: data.ads.policy.maxBudget,
+          cooldownHours: data.ads.policy.cooldownHours,
+          minRoas: data.ads.policy.minRoas,
+          configuredAdsPages: data.ads.configuredPageCount,
+          hasApprovalRecipient: data.ads.policy.hasApprovalRecipient,
         },
       },
     });
-  } catch (e) {
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: 500 });
   }
 }

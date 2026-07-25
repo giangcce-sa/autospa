@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { HubPage } from "@/components/modules/hubs/HubPage";
+import { SystemOverview } from "@/components/modules/hubs/SystemOverview";
+import { getSystemOverview } from "@/lib/system-overview";
 
 export const metadata: Metadata = {
   title: "Hệ thống",
-  description: "Cấu hình thương hiệu, kết nối và công cụ vận hành AutoSpa.",
+  description: "Readiness cấu hình, thương hiệu, dữ liệu và AI của AutoSpa.",
 };
 
-export default function SystemPage() {
-  return <HubPage sectionId="system" systemMode />;
+export default async function SystemPage() {
+  return <SystemOverview data={await getSystemOverview()} />;
 }

@@ -93,7 +93,7 @@ async function gatherSignals(): Promise<SignalSnapshot> {
       orderBy: { likes: "desc" },
       take: 3,
     }),
-    computeForecast({ horizonDays: 7, scenario: "baseline", save: false }).catch(() => ({ total: 0, days: [] })),
+    computeForecast({ horizonDays: 7, scenario: "baseline", save: false, useCouncil: false }).catch(() => ({ total: 0, days: [] })),
     prisma.cEODecision.count({ where: { outcomeStatus: "fail", date: { gte: new Date(now.getTime() - 30 * day) } } }),
   ]);
 
@@ -291,10 +291,10 @@ async function decideActions(priorities: AgentPriority[], automationLevel: strin
       try {
         const result = await triggerWorkflow(wf.name, wf.trigger);
         actions.push({
-          agent: "ads_creative" as AgentKey,    // tag as orchestrator-driven
+          agent: "ads_creative" as AgentKey,
           action: `Chained workflow ${wf.name} (${result.steps.length} steps): ${result.plan.slice(0, 200)}`,
-          status: "executed",
-          result: { workflowId: result.id, name: wf.name },
+          status: result.status === "completed" ? "executed" : "skipped",
+          result: { workflowId: result.id, name: wf.name, status: result.status },
         });
       } catch (e) {
         actions.push({ agent: "ads_creative" as AgentKey, action: `Workflow ${wf.name}`, status: "skipped", result: String(e) });

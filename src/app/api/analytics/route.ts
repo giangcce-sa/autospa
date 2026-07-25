@@ -1,223 +1,194 @@
-import { prisma } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { getIntelligencePerformance } from "@/lib/growth-intelligence";
+import {
+  AccessError,
+  accessErrorResponse,
+  getAuthorizedPageIds,
+  requireExplicitPageAccess,
+  requireUser,
+} from "@/lib/page-access";
+import { businessDateKey, businessHour } from "@/lib/today-policy";
 
-type Analytics = { likes: number; comments: number; shares: number };
-type PostWithAnalytics = { id: string; caption: string; analytics: Analytics | null };
+async function resolveAnalyticsScope(req: NextRequest, owner = false) {
+  const user = await requireUser({ owner });
+  const requestedPageId = new URL(req.url).searchParams.get("facebookPageId");
+  if (requestedPageId) {
+    await requireExplicitPageAccess(requestedPageId, { owner });
+    return { pageIds: [requestedPageId], scope: "current" as const };
+  }
+
+  const authorizedPageIds = await getAuthorizedPageIds(user);
+  const pageIds = authorizedPageIds ?? (await prisma.facebookPage.findMany({ select: { id: true } })).map((page) => page.id);
+  return { pageIds, scope: "all" as const };
+}
 
 export async function GET(req: NextRequest) {
-  const action = new URL(req.url).searchParams.get("action");
+  try {
+    const action = new URL(req.url).searchParams.get("action");
+    const { pageIds, scope } = await resolveAnalyticsScope(req);
+    const pageFilter = { facebookPageId: { in: pageIds } };
 
-  if (action === "trend") {
-    try {
+    if (action === "trend") {
       const days = 30;
-      const since = new Date(Date.now() - days * 86400000);
+      const since = new Date(Date.now() - days * 86_400_000);
       const posts = await prisma.post.findMany({
-        where: { status: "published", publishedAt: { gte: since } },
-        include: { analytics: true },
+        where: { ...pageFilter, status: "published", publishedAt: { gte: since } },
+        select: { publishedAt: true, analytics: { select: { likes: true, comments: true, shares: true, reach: true } } },
         orderBy: { publishedAt: "asc" },
       });
-
-      const byDay: Record<string, { engagement: number; reach: number; posts: number }> = {};
-      for (let i = 0; i < days; i++) {
-        const d = new Date(Date.now() - (days - 1 - i) * 86400000);
-        const key = d.toISOString().slice(0, 10);
-        byDay[key] = { engagement: 0, reach: 0, posts: 0 };
+      const byDay: Record<string, { engagement: number; reach: number; posts: number; measured: number }> = {};
+      for (let index = 0; index < days; index++) {
+        byDay[businessDateKey(new Date(Date.now() - (days - 1 - index) * 86_400_000))] = { engagement: 0, reach: 0, posts: 0, measured: 0 };
       }
       for (const post of posts) {
         if (!post.publishedAt) continue;
-        const key = new Date(post.publishedAt).toISOString().slice(0, 10);
-        if (!byDay[key]) continue;
-        byDay[key].posts++;
+        const day = byDay[businessDateKey(post.publishedAt)];
+        if (!day) continue;
+        day.posts += 1;
         if (post.analytics) {
-          byDay[key].engagement += (post.analytics.likes ?? 0) + (post.analytics.comments ?? 0) * 2 + (post.analytics.shares ?? 0) * 3;
-          byDay[key].reach += post.analytics.reach ?? 0;
+          day.measured += 1;
+          day.engagement += post.analytics.likes + post.analytics.comments * 2 + post.analytics.shares * 3;
+          day.reach += post.analytics.reach;
         }
       }
-
-      const trend = Object.entries(byDay).map(([date, v]) => ({
+      const trend = Object.entries(byDay).map(([date, value]) => ({
         date,
-        label: new Date(date).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
-        engagement: v.engagement,
-        reach: v.reach,
-        posts: v.posts,
-        ctr: v.reach > 0 ? Math.round((v.engagement / v.reach) * 100) : 0,
+        label: new Date(`${date}T00:00:00+07:00`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" }),
+        engagement: value.measured ? value.engagement : null,
+        reach: value.measured ? value.reach : null,
+        posts: value.posts,
+        measured: value.measured,
+        engagementRate: value.reach > 0 ? Math.round((value.engagement / value.reach) * 10_000) / 100 : null,
       }));
-
-      return NextResponse.json({ data: { trend }, success: true });
-    } catch {
-      return NextResponse.json({ error: "Lỗi khi tính trend", success: false }, { status: 500 });
+      return NextResponse.json({ data: { trend, provenance: { scope, source: "Post + PostAnalytics", window: "30 ngày", asOf: new Date().toISOString() } }, success: true });
     }
-  }
 
-  if (action === "leads") {
-    try {
-      const [total, cold, warm, hot, closed] = await Promise.all([
-        prisma.lead.count(),
-        prisma.lead.count({ where: { stage: "cold" } }),
-        prisma.lead.count({ where: { stage: "warm" } }),
-        prisma.lead.count({ where: { stage: "hot" } }),
-        prisma.lead.count({ where: { stage: "closed" } }),
-      ]);
-      const bySource = await prisma.lead.groupBy({ by: ["source"], _count: { id: true } });
-      const convRate = total > 0 ? Math.round((closed / total) * 100) : 0;
-      return NextResponse.json({
-        data: { total, cold, warm, hot, closed, convRate, bySource: bySource.map(r => ({ source: r.source, count: r._count.id })) },
-        success: true,
-      });
-    } catch {
-      return NextResponse.json({ error: "Lỗi khi tải lead stats", success: false }, { status: 500 });
+    if (action === "leads") {
+      throw new AccessError("Lead chưa có Page ownership nhất quán; không thể ghép vào analytics theo Page", 409);
     }
-  }
 
-  if (action === "best-times") {
-    try {
+    if (action === "best-times") {
       const posts = await prisma.post.findMany({
-        where: { status: "published", publishedAt: { not: null } },
-        include: { analytics: true },
+        where: { ...pageFilter, status: "published", publishedAt: { not: null }, analytics: { isNot: null } },
+        select: { publishedAt: true, analytics: { select: { likes: true, comments: true, shares: true } } },
+        orderBy: { publishedAt: "desc" },
         take: 100,
       });
-
-      // Group by hour of day, accumulate engagement
       const byHour: Record<number, { count: number; engagement: number }> = {};
       for (const post of posts) {
         if (!post.publishedAt || !post.analytics) continue;
-        const h = new Date(post.publishedAt).getHours();
-        const eng = (post.analytics.likes ?? 0) + (post.analytics.comments ?? 0) * 2 + (post.analytics.shares ?? 0) * 3;
-        if (!byHour[h]) byHour[h] = { count: 0, engagement: 0 };
-        byHour[h].count++;
-        byHour[h].engagement += eng;
+        const hour = businessHour(post.publishedAt);
+        const engagement = post.analytics.likes + post.analytics.comments * 2 + post.analytics.shares * 3;
+        byHour[hour] ??= { count: 0, engagement: 0 };
+        byHour[hour].count += 1;
+        byHour[hour].engagement += engagement;
       }
-
-      const ranked = Object.entries(byHour)
-        .map(([h, v]) => ({ hour: Number(h), avgEngagement: v.count ? Math.round(v.engagement / v.count) : 0, posts: v.count }))
+      const topHours = Object.entries(byHour)
+        .map(([hour, value]) => ({ hour: Number(hour), avgEngagement: Math.round(value.engagement / value.count), posts: value.count }))
         .sort((a, b) => b.avgEngagement - a.avgEngagement)
         .slice(0, 5);
-
-      const hasData = ranked.length > 0;
       return NextResponse.json({
         data: {
-          topHours: ranked,
-          suggestion: hasData ? ranked[0].hour : null,
-          message: hasData
-            ? `Bài đăng lúc ${ranked[0].hour}:00 thường có engagement cao nhất (trung bình ${ranked[0].avgEngagement} điểm)`
-            : "Chưa đủ dữ liệu — cần ít nhất 5 bài đã đăng có analytics",
+          topHours,
+          suggestion: topHours[0]?.hour ?? null,
+          message: topHours.length >= 1
+            ? `Trong dữ liệu hiện có, ${topHours[0].hour}:00 có engagement trung bình cao nhất; cần xét số mẫu trước khi quyết định.`
+            : "Chưa có Post đã published kèm analytics trong phạm vi.",
+          provenance: { scope, source: "Post.publishedAt + PostAnalytics", window: "100 Post measured gần nhất", asOf: new Date().toISOString(), timeZone: "Asia/Ho_Chi_Minh" },
         },
         success: true,
       });
-    } catch {
-      return NextResponse.json({ error: "Lỗi khi phân tích", success: false }, { status: 500 });
     }
-  }
 
-  if (action === "platform-breakdown") {
-    try {
+    if (action === "platform-breakdown") {
       const posts = await prisma.post.findMany({
-        where: { status: "published", analytics: { isNot: null } },
-        include: { analytics: true },
+        where: { ...pageFilter, status: "published", analytics: { isNot: null } },
+        select: {
+          caption: true,
+          igPostId: true,
+          tiktokVideoId: true,
+          analytics: true,
+        },
         orderBy: { publishedAt: "desc" },
         take: 500,
       });
-
-      const platforms: Record<string, { reach: number; engagement: number; count: number; topEng: number; topCaption: string }> = {};
-
+      const platforms: Record<string, { reach: number; engagement: number; count: number; topEngagement: number; topCaption: string }> = {};
+      const add = (platform: string, reach: number, engagement: number, caption: string) => {
+        const current = platforms[platform] ?? { reach: 0, engagement: 0, count: 0, topEngagement: 0, topCaption: "" };
+        current.reach += reach;
+        current.engagement += engagement;
+        current.count += 1;
+        if (engagement > current.topEngagement) {
+          current.topEngagement = engagement;
+          current.topCaption = caption;
+        }
+        platforms[platform] = current;
+      };
       for (const post of posts) {
-        const a = post.analytics!;
-        const fbEng = a.likes + a.comments * 2 + a.shares * 3;
-
-        // Facebook
-        const fb = platforms["facebook"] ?? { reach: 0, engagement: 0, count: 0, topEng: 0, topCaption: "" };
-        fb.reach += a.reach;
-        fb.engagement += fbEng;
-        fb.count += 1;
-        if (fbEng > fb.topEng) { fb.topEng = fbEng; fb.topCaption = post.caption; }
-        platforms["facebook"] = fb;
-
-        // Instagram
-        if (post.igPostId && (a.igLikes + a.igComments + a.igSaved) > 0) {
-          const igEng = a.igLikes + a.igComments * 2 + a.igSaved * 1.5;
-          const ig = platforms["instagram"] ?? { reach: 0, engagement: 0, count: 0, topEng: 0, topCaption: "" };
-          ig.reach += a.igReach;
-          ig.engagement += igEng;
-          ig.count += 1;
-          if (igEng > ig.topEng) { ig.topEng = igEng; ig.topCaption = post.caption; }
-          platforms["instagram"] = ig;
-        }
-
-        // TikTok
-        if (post.tiktokVideoId && a.tiktokViews > 0) {
-          const ttEng = a.tiktokLikes + a.tiktokComments * 2 + a.tiktokShares * 3;
-          const tt = platforms["tiktok"] ?? { reach: 0, engagement: 0, count: 0, topEng: 0, topCaption: "" };
-          tt.reach += a.tiktokViews;
-          tt.engagement += ttEng;
-          tt.count += 1;
-          if (ttEng > tt.topEng) { tt.topEng = ttEng; tt.topCaption = post.caption; }
-          platforms["tiktok"] = tt;
-        }
+        if (!post.analytics) continue;
+        add("facebook", post.analytics.reach, post.analytics.likes + post.analytics.comments * 2 + post.analytics.shares * 3, post.caption);
+        if (post.igPostId) add("instagram", post.analytics.igReach, post.analytics.igLikes + post.analytics.igComments * 2 + post.analytics.igSaved * 1.5, post.caption);
+        if (post.tiktokVideoId) add("tiktok", post.analytics.tiktokViews, post.analytics.tiktokLikes + post.analytics.tiktokComments * 2 + post.analytics.tiktokShares * 3, post.caption);
       }
-
-      const breakdown = Object.entries(platforms).map(([platform, d]) => ({
+      const breakdown = Object.entries(platforms).map(([platform, value]) => ({
         platform,
-        postCount: d.count,
-        totalReach: d.reach,
-        totalEngagement: Math.round(d.engagement),
-        avgEngagement: d.count > 0 ? Math.round(d.engagement / d.count) : 0,
-        topPost: d.topEng > 0 ? { caption: d.topCaption, engagement: Math.round(d.topEng) } : null,
+        postCount: value.count,
+        totalReach: value.reach,
+        totalEngagement: Math.round(value.engagement),
+        avgEngagement: value.count ? Math.round(value.engagement / value.count) : null,
+        topPost: value.topEngagement ? { caption: value.topCaption, engagement: Math.round(value.topEngagement) } : null,
       }));
-
-      return NextResponse.json({ success: true, data: breakdown });
-    } catch {
-      return NextResponse.json({ error: "Lỗi platform breakdown", success: false }, { status: 500 });
+      return NextResponse.json({ data: breakdown, provenance: { scope, source: "Post channel IDs + PostAnalytics", window: "500 Post measured gần nhất", asOf: new Date().toISOString() }, success: true });
     }
-  }
 
-  try {
-    const [posts, analytics] = await Promise.all([
-      prisma.post.findMany({
-        where: { OR: [{ status: "published" }, { analytics: { isNot: null } }] },
-        include: { analytics: true },
-        orderBy: { createdAt: "desc" },
-        take: 30,
-      }),
-      prisma.postAnalytics.findMany({ orderBy: { fetchedAt: "desc" } }),
-    ]);
-
-    const totalReach = analytics.reduce((s: number, a: { reach: number }) => s + a.reach, 0);
-    const totalLikes = analytics.reduce((s: number, a: { likes: number }) => s + a.likes, 0);
-    const totalComments = analytics.reduce((s: number, a: { comments: number }) => s + a.comments, 0);
-    const totalShares = analytics.reduce((s: number, a: { shares: number }) => s + a.shares, 0);
-    const avgEngagement = analytics.length
-      ? Math.round(((totalLikes + totalComments + totalShares) / Math.max(totalReach, 1)) * 100)
-      : 0;
-
-    const topPosts = (posts as PostWithAnalytics[])
-      .filter((p) => p.analytics)
-      .sort((a, b) => {
-        const scoreA = (a.analytics?.likes ?? 0) + (a.analytics?.comments ?? 0) * 2 + (a.analytics?.shares ?? 0) * 3;
-        const scoreB = (b.analytics?.likes ?? 0) + (b.analytics?.comments ?? 0) * 2 + (b.analytics?.shares ?? 0) * 3;
-        return scoreB - scoreA;
-      })
-      .slice(0, 5);
-
+    const performance = await getIntelligencePerformance(pageIds, scope);
     return NextResponse.json({
-      data: { posts, totalReach, totalLikes, totalComments, totalShares, avgEngagement, topPosts },
+      data: {
+        posts: performance.recentPosts,
+        topPosts: performance.topPosts,
+        totalReach: performance.totals.reach,
+        totalLikes: performance.totals.likes,
+        totalComments: performance.totals.comments,
+        totalShares: performance.totals.shares,
+        avgEngagement: performance.totals.engagementRate,
+        provenance: performance.provenance,
+      },
       success: true,
     });
-  } catch {
-    return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const { postId, reach, likes, comments, shares, clicks } = await req.json();
+    if (typeof postId !== "string" || !postId.trim()) throw new AccessError("Thiếu Post ID", 400);
+    const metrics = { reach, likes, comments, shares, clicks };
+    for (const [name, value] of Object.entries(metrics)) {
+      if (value != null && (!Number.isSafeInteger(value) || value < 0)) {
+        throw new AccessError(`${name} phải là số nguyên không âm`, 400);
+      }
+    }
+
+    const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true, facebookPageId: true } });
+    if (!post) throw new AccessError("Không tìm thấy Post", 404);
+    if (!post.facebookPageId) throw new AccessError("Post chưa có Facebook Page ownership", 409);
+    await requireExplicitPageAccess(post.facebookPageId, { owner: true });
+
     const analytics = await prisma.postAnalytics.upsert({
-      where: { postId },
-      create: { postId, reach: reach ?? 0, likes: likes ?? 0, comments: comments ?? 0, shares: shares ?? 0, clicks: clicks ?? 0 },
+      where: { postId: post.id },
+      create: { postId: post.id, reach: reach ?? 0, likes: likes ?? 0, comments: comments ?? 0, shares: shares ?? 0, clicks: clicks ?? 0 },
       update: { reach: reach ?? 0, likes: likes ?? 0, comments: comments ?? 0, shares: shares ?? 0, clicks: clicks ?? 0, fetchedAt: new Date() },
+      select: { postId: true, reach: true, likes: true, comments: true, shares: true, clicks: true, fetchedAt: true },
     });
-    return NextResponse.json({ data: analytics, success: true });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return NextResponse.json({ data: { ...analytics, fetchedAt: analytics.fetchedAt.toISOString() }, success: true });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: 500 });
   }
 }

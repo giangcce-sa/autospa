@@ -51,6 +51,7 @@ export interface WorkspaceView {
   description: string;
   scope?: RouteScope;
   targetPath?: string;
+  ownerOnly?: boolean;
 }
 
 export interface AppRoute {
@@ -59,6 +60,7 @@ export interface AppRoute {
   kind?: RouteKind;
   workspaceId?: string;
   canonicalPath?: string;
+  canonicalView?: string;
   defaultView?: string;
   views?: readonly WorkspaceView[];
   aliasTarget?: string;
@@ -83,6 +85,34 @@ export interface AppSection {
   href: string;
   icon: RouteIconKey;
 }
+
+export const ACTIVE_LEGACY_REDIRECTS = [
+  {
+    id: "council",
+    source: "/council",
+    destination: "/system/ai-rooms?view=council&scope=account",
+  },
+  {
+    id: "ceo-memory",
+    source: "/ceo-memory",
+    destination: "/system/ai-rooms?view=memory&scope=account",
+  },
+  {
+    id: "brain",
+    source: "/brain",
+    destination: "/system/ai-rooms?view=brain&scope=account",
+  },
+  {
+    id: "orchestrator",
+    source: "/orchestrator",
+    destination: "/system/ai-rooms?view=orchestrator&scope=account",
+  },
+  {
+    id: "automation",
+    source: "/automation",
+    destination: "/system/ai-rooms?view=operations&scope=account",
+  },
+] as const;
 
 const LEGACY_CANONICAL_PATHS: Readonly<Record<string, string>> = {
   "content-research": "/creative/ideas",
@@ -109,8 +139,8 @@ const LEGACY_CANONICAL_PATHS: Readonly<Record<string, string>> = {
   listening: "/growth/intelligence",
   "tiktok-ig": "/growth/intelligence",
   council: "/system/ai-rooms",
-  brain: "/system/ai-rooms",
   "ceo-memory": "/system/ai-rooms",
+  brain: "/system/ai-rooms",
   orchestrator: "/system/ai-rooms",
   automation: "/system/ai-rooms",
   brand: "/system/brand-assets",
@@ -171,11 +201,11 @@ const ROUTE_DEFINITIONS: readonly AppRoute[] = [
 
   { id: "customers", path: "/customers", kind: "section", label: "Khách hàng", description: "Hội thoại, khách tiềm năng và lịch hẹn trong một quy trình.", icon: "crm", section: "customers", scope: "current_or_all", visibility: "simple" },
   { id: "customers-inbox", path: "/customers/inbox", kind: "workspace", workspaceId: "inbox", defaultView: "queue", views: [
-    { id: "queue", label: "Hàng đợi", description: "Hội thoại đang chờ phản hồi.", targetPath: "/inbox" },
-    { id: "conversation", label: "Hội thoại", description: "Tin nhắn và ngữ cảnh khách hàng.", targetPath: "/inbox" },
-    { id: "appointments", label: "Lịch hẹn", description: "Yêu cầu đặt lịch từ hội thoại.", targetPath: "/appointments" },
-    { id: "rules", label: "Quy tắc", description: "Trạng thái các quy tắc trả lời.", targetPath: "/inbox" },
-  ], label: "Hộp thư", description: "Xử lý hội thoại, gợi ý trả lời và handoff lịch hẹn.", icon: "inbox", section: "customers", scope: "current_page", visibility: "simple", hub: "primary", command: true },
+    { id: "queue", label: "Hàng đợi", description: "Tin nhắn đã đồng bộ theo Facebook Page." },
+    { id: "conversation", label: "Chi tiết tin nhắn", description: "Một tin nhắn và reply được lưu cho bản ghi." },
+    { id: "appointments", label: "Lịch hẹn", description: "Trạng thái ownership của yêu cầu đặt lịch." },
+    { id: "rules", label: "Quy tắc", description: "Quy tắc trả lời ở cấp tài khoản.", scope: "account" },
+  ], label: "Hộp thư", description: "Xem tin nhắn theo Page, soạn reply và kiểm soát handoff trung thực với dữ liệu hiện có.", icon: "inbox", section: "customers", scope: "current_page", visibility: "simple", hub: "primary", command: true },
   { id: "customers-crm", path: "/customers/crm", kind: "workspace", workspaceId: "crm", defaultView: "overview", views: [
     { id: "overview", label: "Tổng quan", description: "Tình trạng dữ liệu và khách hàng cần chú ý." },
     { id: "customers", label: "Khách hàng", description: "Danh sách, tìm kiếm và lọc hồ sơ.", targetPath: "/crm" },
@@ -211,17 +241,17 @@ const ROUTE_DEFINITIONS: readonly AppRoute[] = [
     { id: "operations", label: "Vận hành", description: "Checkpoint, retry và recovery.", targetPath: "/facebook-ads" },
   ], label: "Ads Manager", description: "Tạo và vận hành quảng cáo Facebook với các safety gate bắt buộc.", icon: "facebook-ads", section: "growth", scope: "current_page", visibility: "simple", hub: "primary", command: true },
   { id: "growth-promotions", path: "/growth/promotions", kind: "workspace", workspaceId: "promotions", defaultView: "overview", views: [
-    { id: "overview", label: "Tổng quan", description: "Ưu đãi, công suất và kết quả gần đây." },
-    { id: "offers", label: "Ưu đãi", description: "Tạo và quản lý chương trình khuyến mãi.", targetPath: "/promotions" },
-    { id: "capacity", label: "Công suất", description: "Lấp lịch trống theo công suất.", targetPath: "/flash-deal" },
-    { id: "results", label: "Kết quả", description: "Theo dõi hiệu quả ưu đãi.", targetPath: "/promotions" },
+    { id: "overview", label: "Tổng quan", description: "Ưu đãi, công suất và kết quả gần đây.", scope: "account" },
+    { id: "offers", label: "Ưu đãi", description: "Tạo draft khuyến mãi theo Facebook Page.", scope: "current_page", targetPath: "/promotions" },
+    { id: "capacity", label: "Công suất", description: "Ước tính lịch trống từ yêu cầu đặt lịch.", scope: "account", targetPath: "/flash-deal" },
+    { id: "results", label: "Kết quả", description: "Theo dõi Post khuyến mãi theo Facebook Page.", scope: "current_page", targetPath: "/promotions" },
   ], label: "Khuyến mãi", description: "Tạo ưu đãi theo mục tiêu, công suất và biên lợi nhuận.", icon: "promotions", section: "growth", scope: "account", visibility: "simple", hub: "primary", command: true },
   { id: "growth-intelligence", path: "/growth/intelligence", kind: "workspace", workspaceId: "intelligence", defaultView: "overview", views: [
     { id: "overview", label: "Tổng quan", description: "KPI, freshness và tín hiệu tăng trưởng." },
     { id: "reports", label: "Báo cáo", description: "Doanh thu và hiệu quả theo kênh.", targetPath: "/reports" },
     { id: "performance", label: "Hiệu quả", description: "Phân tích nội dung và chiến dịch.", targetPath: "/analytics" },
-    { id: "competitors", label: "Đối thủ", description: "Tín hiệu cạnh tranh và xu hướng.", targetPath: "/competitors" },
-    { id: "listening", label: "Lắng nghe", description: "Cảnh báo và tín hiệu thị trường.", targetPath: "/listening" },
+    { id: "competitors", label: "Đối thủ", description: "Tín hiệu cạnh tranh cấp tài khoản.", scope: "account", targetPath: "/competitors" },
+    { id: "listening", label: "Lắng nghe", description: "Cảnh báo thị trường cấp tài khoản.", scope: "account", targetPath: "/listening" },
   ], label: "Phân tích tăng trưởng", description: "Báo cáo, attribution và tín hiệu thị trường trong một nơi.", icon: "reports", section: "growth", scope: "current_or_all", visibility: "simple", hub: "primary", command: true },
   { id: "reports", path: "/reports", label: "Báo cáo", description: "Doanh thu, khách tiềm năng và hiệu quả theo kênh.", icon: "reports", section: "growth", scope: "current_or_all", visibility: "simple", searchAliases: ["report"], hub: "primary", command: true },
   { id: "facebook-ads", path: "/facebook-ads", label: "Quảng cáo Facebook", description: "Theo dõi và quản lý chiến dịch có kiểm soát.", icon: "facebook-ads", section: "growth", scope: "current_page", visibility: "simple", searchAliases: ["ads manager", "Meta Ads"], hub: "primary", command: true },
@@ -237,11 +267,12 @@ const ROUTE_DEFINITIONS: readonly AppRoute[] = [
   { id: "system", path: "/system", kind: "section", label: "Hệ thống", description: "Kết nối, thương hiệu, dữ liệu và tự động hóa.", icon: "settings", section: "system", scope: "account", visibility: "simple" },
   { id: "system-ai-rooms", path: "/system/ai-rooms", kind: "workspace", workspaceId: "ai-rooms", defaultView: "overview", views: [
     { id: "overview", label: "Tổng quan", description: "Phiên họp, approval và follow-up gần đây." },
-    { id: "council", label: "Phòng tư vấn", description: "Thảo luận và phản biện nhiều vai trò AI.", targetPath: "/council" },
-    { id: "brain", label: "Kỹ năng", description: "Kỹ năng và kiến thức hệ thống sử dụng.", targetPath: "/brain" },
-    { id: "memory", label: "Quyết định", description: "Quyết định và outcome đã lưu.", targetPath: "/ceo-memory" },
-    { id: "orchestrator", label: "Điều phối", description: "Workflow health và execution status.", targetPath: "/orchestrator" },
-    { id: "approvals", label: "Phê duyệt", description: "Automation đề xuất đang chờ owner.", targetPath: "/automation" },
+    { id: "council", label: "Phòng tư vấn", description: "Thảo luận và phản biện nhiều vai trò AI." },
+    { id: "brain", label: "Kỹ năng", description: "Kỹ năng và kiến thức hệ thống sử dụng." },
+    { id: "memory", label: "Quyết định", description: "Quyết định và outcome đã lưu." },
+    { id: "orchestrator", label: "Điều phối", description: "Workflow health và execution status." },
+    { id: "approvals", label: "Phê duyệt", description: "Automation đề xuất đang chờ owner." },
+    { id: "operations", label: "Vận hành", description: "Ads, Spa và automation runtime cấp tài khoản.", ownerOnly: true },
   ], label: "Phòng họp AI", description: "Tư vấn, phản biện, phê duyệt và lưu quyết định có provenance.", icon: "council", section: "system", scope: "account", visibility: "advanced", hub: "primary", premium: true, command: true },
   { id: "system-brand-assets", path: "/system/brand-assets", kind: "workspace", workspaceId: "brand-assets", defaultView: "overview", views: [
     { id: "overview", label: "Tổng quan", description: "Readiness thương hiệu và tài nguyên.", scope: "account" },
@@ -255,17 +286,22 @@ const ROUTE_DEFINITIONS: readonly AppRoute[] = [
   ], label: "Thương hiệu & Tài nguyên", description: "Một nơi quản lý brand, dịch vụ, consent và style.", icon: "brand-kit", section: "system", scope: "account", visibility: "simple", hub: "primary", command: true },
   { id: "system-settings", path: "/system/settings", kind: "workspace", workspaceId: "settings", defaultView: "overview", views: [
     { id: "overview", label: "Tổng quan", description: "Trạng thái kết nối và blocker cấu hình." },
-    { id: "connections", label: "Kết nối", description: "AI provider và phần mềm spa.", targetPath: "/settings" },
-    { id: "channels", label: "Kênh", description: "Facebook, Instagram, TikTok và Zalo.", targetPath: "/settings" },
-    { id: "automation", label: "Tự động hóa", description: "Quy tắc và mức độ tự động.", targetPath: "/settings" },
-    { id: "data", label: "Dữ liệu", description: "Retention và backup.", targetPath: "/settings" },
+    { id: "connections", label: "Kết nối", description: "Phần mềm spa và tích hợp nền." },
+    { id: "channels", label: "Kênh", description: "Facebook, Instagram, TikTok, Zalo, Google và Telegram." },
+    { id: "providers", label: "AI Providers", description: "Claude, OpenAI và AI Gateway." },
+    { id: "images", label: "Hình ảnh", description: "Model ảnh và trạng thái lưu trữ media." },
+    { id: "video", label: "Video", description: "Provider, mock/live, budget và concurrency." },
+    { id: "ads", label: "Quảng cáo", description: "Safety policy, readiness và ngưỡng tối ưu." },
+    { id: "automation", label: "Tự động hóa", description: "Quy tắc và mức độ tự động." },
+    { id: "data", label: "Dữ liệu", description: "Retention và backup." },
+    { id: "security", label: "Bảo mật", description: "Secret status, quyền truy cập và audit." },
   ], label: "Cài đặt & Kết nối", description: "Kết nối provider, kênh và cấu hình vận hành an toàn.", icon: "settings", section: "system", scope: "account", visibility: "simple", hub: "primary", ownerOnly: true, command: true },
   { id: "settings", path: "/settings", label: "Cài đặt", description: "Kết nối dịch vụ, mạng xã hội và quy tắc vận hành.", icon: "settings", section: "system", scope: "account", visibility: "simple", searchAliases: ["API key", "kết nối"], hub: "primary", command: true },
   { id: "brand", path: "/brand", label: "Thương hiệu", description: "Thông tin spa, giọng nói và kiến thức nền.", icon: "brand", section: "system", scope: "account", visibility: "simple", searchAliases: ["brand"], hub: "primary", command: true },
   { id: "brand-kit", path: "/brand-kit", label: "Bộ nhận diện", description: "Logo, màu sắc và quy chuẩn hình ảnh.", icon: "brand-kit", section: "system", scope: "current_page", visibility: "simple", searchAliases: ["logo", "màu sắc"], hub: "primary", command: true },
-  { id: "brain", path: "/brain", label: "Bộ não AutoSpa", description: "Quản lý kỹ năng và dữ liệu hệ thống đã học.", icon: "brain", section: "system", scope: "account", visibility: "advanced", searchAliases: ["AI", "skill", "kỹ năng"], hub: "primary", premium: true, command: true },
-  { id: "automation", path: "/automation", label: "Tự động hóa", description: "Duyệt công việc và chọn mức độ tự động.", icon: "automation", section: "system", scope: "account", visibility: "advanced", searchAliases: ["workflow"], hub: "tool", command: true },
-  { id: "orchestrator", path: "/orchestrator", label: "Trung tâm điều phối", description: "Theo dõi các công việc AutoSpa đang thực hiện.", icon: "orchestrator", section: "system", scope: "account", visibility: "advanced", searchAliases: ["agent", "điều phối"], hub: "tool", premium: true, command: true },
+  { id: "brain", path: "/brain", canonicalPath: "/system/ai-rooms", canonicalView: "brain", label: "Bộ não AutoSpa", description: "Quản lý kỹ năng và dữ liệu hệ thống đã học.", icon: "brain", section: "system", scope: "account", visibility: "advanced", searchAliases: ["AI", "skill", "kỹ năng"], hub: "primary", premium: true, command: true },
+  { id: "automation", path: "/automation", canonicalPath: "/system/ai-rooms", canonicalView: "operations", label: "Tự động hóa", description: "Duyệt công việc và chọn mức độ tự động.", icon: "automation", section: "system", scope: "account", visibility: "advanced", searchAliases: ["workflow"], hub: "tool", command: true },
+  { id: "orchestrator", path: "/orchestrator", canonicalPath: "/system/ai-rooms", canonicalView: "orchestrator", label: "Trung tâm điều phối", description: "Theo dõi các công việc AutoSpa đang thực hiện.", icon: "orchestrator", section: "system", scope: "account", visibility: "advanced", searchAliases: ["agent", "điều phối"], hub: "tool", premium: true, command: true },
   { id: "services", path: "/services", label: "Danh mục dịch vụ", description: "Quản lý dịch vụ dùng trong nội dung và chăm sóc khách hàng.", icon: "services", section: "system", scope: "account", visibility: "advanced", searchAliases: ["services"], hub: "tool", command: true },
   { id: "learning", path: "/learning", label: "Hệ thống học tập", description: "Theo dõi dữ liệu và kết quả AutoSpa đang học.", icon: "learning", section: "system", scope: "account", visibility: "advanced", premium: true, command: true },
   { id: "council", path: "/council", label: "Hội đồng tư vấn", description: "Xem phân tích và ý kiến từ các vai trò AI.", icon: "council", section: "system", scope: "account", visibility: "advanced", searchAliases: ["AI council"], premium: true, command: true },
@@ -311,6 +347,21 @@ export function getSectionRoutes(sectionId: AppSectionId, placement?: HubPlaceme
 
 export function getCommandRoutes() {
   return APP_ROUTES.filter((route) => route.command);
+}
+
+export function getCanonicalRouteHref(routeId: string, viewOverride?: string) {
+  const route = ROUTES_BY_ID.get(routeId);
+  if (!route) throw new Error(`Unknown route: ${routeId}`);
+  const path = route.canonicalPath ?? route.path;
+  const view = viewOverride ?? route.canonicalView;
+  if (!view) return path;
+
+  const canonicalRoute = ROUTES_BY_PATH.get(path);
+  const viewConfig = canonicalRoute?.views?.find((item) => item.id === view);
+  if (!canonicalRoute || !viewConfig) throw new Error(`Invalid canonical view: ${routeId}/${view}`);
+  const effectiveScope = viewConfig.scope ?? canonicalRoute.scope;
+  const scope = effectiveScope === "account" || effectiveScope === "none" ? "account" : "current";
+  return `${path}?${new URLSearchParams({ view, scope }).toString()}`;
 }
 
 export function routeIsActive(pathname: string, routePath: string) {

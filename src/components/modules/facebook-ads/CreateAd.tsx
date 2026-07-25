@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Megaphone, CheckCircle, Image as ImageIcon, CaretDown } from "@phosphor-icons/react";
 
-interface DraftPost {
+export interface DraftPost {
   id: string;
   caption: string;
   hashtags: string | null;
@@ -17,10 +17,12 @@ interface DraftPost {
 interface Props {
   facebookPageId?: string;
   initialPostId?: string;
+  initialPosts?: DraftPost[];
+  canMutate?: boolean;
 }
 
-export function CreateAd({ facebookPageId, initialPostId }: Props) {
-  const [posts, setPosts] = useState<DraftPost[]>([]);
+export function CreateAd({ facebookPageId, initialPostId, initialPosts, canMutate = true }: Props) {
+  const [posts, setPosts] = useState<DraftPost[]>(initialPosts ?? []);
   const [showPicker, setShowPicker] = useState(false);
   const [selectedPost, setSelectedPost] = useState<DraftPost | null>(null);
 
@@ -52,6 +54,13 @@ export function CreateAd({ facebookPageId, initialPostId }: Props) {
       setSelectedPost(null);
       return;
     }
+    if (initialPosts) {
+      setPosts(initialPosts);
+      setSelectedPost((current) => initialPosts.find((post) => post.id === (initialPostId ?? current?.id)) ?? null);
+      const found = initialPostId ? initialPosts.find((post) => post.id === initialPostId) : undefined;
+      if (found) pickPost(found);
+      return;
+    }
     fetch(`/api/content/list?facebookPageId=${encodeURIComponent(facebookPageId)}`)
       .then((r) => r.json())
       .then((res) => {
@@ -63,7 +72,7 @@ export function CreateAd({ facebookPageId, initialPostId }: Props) {
           if (found) pickPost(found);
         }
       });
-  }, [facebookPageId, initialPostId]);
+  }, [facebookPageId, initialPostId, initialPosts]);
 
   const genderIds = () => {
     if (gender === "male") return [1];
@@ -304,15 +313,21 @@ export function CreateAd({ facebookPageId, initialPostId }: Props) {
         </div>
       )}
 
-      <Button
-        onClick={handleCreate}
-        loading={loading}
-        disabled={!selectedPost}
-        className="w-full"
-        size="lg"
-      >
-        <Megaphone size={16} weight="fill" /> Chạy quảng cáo
-      </Button>
+      {canMutate ? (
+        <Button
+          onClick={handleCreate}
+          loading={loading}
+          disabled={!selectedPost}
+          className="w-full"
+          size="lg"
+        >
+          <Megaphone size={16} weight="fill" /> Tạo bộ quảng cáo PAUSED
+        </Button>
+      ) : (
+        <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-4 text-sm text-[var(--text-secondary)]">
+          Bạn có quyền xem cấu hình tạo quảng cáo nhưng chỉ owner mới có thể tạo resource trên Meta.
+        </p>
+      )}
     </div>
   );
 }

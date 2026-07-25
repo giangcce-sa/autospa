@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getBrainMap, parseSkillForClient, teachBrainSkill, updateSkillConfidence } from "@/lib/brain";
 import { BRAIN_TAXONOMY, normalizeCategory, normalizeDomain, safeJsonParse } from "@/lib/brain-taxonomy";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,7 @@ async function getSummary() {
 
 export async function GET(req: NextRequest) {
   try {
+    await requireUser();
     const { searchParams } = new URL(req.url);
     const action = searchParams.get("action");
 
@@ -82,40 +84,49 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: await getSummary() });
-  } catch (e) {
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: "Không thể đọc dữ liệu kỹ năng", success: false }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const body = await req.json();
     const action = body.action ?? "teach";
 
     if (action === "teach") {
-      const instruction = String(body.instruction ?? "");
-      const skill = await teachBrainSkill(instruction, String(body.source ?? "manual"));
+      const instruction = typeof body.instruction === "string" ? body.instruction.trim().slice(0, 4000) : "";
+      if (!instruction) return NextResponse.json({ error: "Thiếu nội dung hướng dẫn", success: false }, { status: 400 });
+      const source = typeof body.source === "string" ? body.source.trim().slice(0, 100) || "manual" : "manual";
+      const skill = await teachBrainSkill(instruction, source);
       return NextResponse.json({ success: true, data: parseSkillForClient(skill) });
     }
 
     if (action === "outcome") {
-      const skillId = String(body.skillId ?? "");
+      const skillId = typeof body.skillId === "string" ? body.skillId.trim() : "";
       const status = body.status === "success" || body.status === "fail" || body.status === "neutral"
         ? body.status
         : null;
       if (!skillId || !status) return NextResponse.json({ error: "Thiếu skillId/status", success: false }, { status: 400 });
-      const outcome = await updateSkillConfidence(skillId, status, body.notes ? String(body.notes) : undefined);
+      const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 2000) || undefined : undefined;
+      const outcome = await updateSkillConfidence(skillId, status, notes);
       return NextResponse.json({ success: true, data: outcome });
     }
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
-  } catch (e) {
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: "Không thể cập nhật kỹ năng", success: false }, { status: 500 });
   }
 }
 
 export async function PATCH(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const body = await req.json();
     const id = String(body.id ?? "");
     if (!id) return NextResponse.json({ error: "Thiếu id", success: false }, { status: 400 });
@@ -127,6 +138,9 @@ export async function PATCH(req: NextRequest) {
     const feedback: Array<{ field: string; oldValue?: string; newValue?: string }> = [];
 
     if (typeof body.status === "string") {
+      if (!["draft", "active", "paused", "deprecated"].includes(body.status)) {
+        return NextResponse.json({ error: "Status không hợp lệ", success: false }, { status: 400 });
+      }
       patch.status = body.status;
       feedback.push({ field: "status", oldValue: current.status, newValue: body.status });
     }
@@ -149,8 +163,18 @@ export async function PATCH(req: NextRequest) {
     }
     if (Array.isArray(body.tags)) patch.tags = jsonString(body.tags, safeJsonParse(current.tags, []));
     if (Array.isArray(body.tools)) patch.tools = jsonString(body.tools, safeJsonParse(current.tools, []));
-    if (typeof body.permissionLevel === "string") patch.permissionLevel = body.permissionLevel;
-    if (typeof body.riskLevel === "string") patch.riskLevel = body.riskLevel;
+    if (typeof body.permissionLevel === "string") {
+      if (!["suggest", "draft", "supervised", "auto"].includes(body.permissionLevel)) {
+        return NextResponse.json({ error: "Permission level không hợp lệ", success: false }, { status: 400 });
+      }
+      patch.permissionLevel = body.permissionLevel;
+    }
+    if (typeof body.riskLevel === "string") {
+      if (!["low", "medium", "high"].includes(body.riskLevel)) {
+        return NextResponse.json({ error: "Risk level không hợp lệ", success: false }, { status: 400 });
+      }
+      patch.riskLevel = body.riskLevel;
+    }
 
     const updated = await prisma.brainSkill.update({
       where: { id },
@@ -189,7 +213,9 @@ export async function PATCH(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: parseSkillForClient(updated) });
-  } catch (e) {
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: "Không thể chỉnh sửa kỹ năng", success: false }, { status: 500 });
   }
 }

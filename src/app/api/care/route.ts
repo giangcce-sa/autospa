@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateContent } from "@/lib/claude";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { businessMonthDay } from "@/lib/today-policy";
 
 export async function GET() {
   try {
+    await requireUser();
     const messages = await prisma.careMessage.findMany({
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -17,12 +20,15 @@ export async function GET() {
     const customers = await prisma.customer.findMany({ select: { id: true, name: true, phone: true, birthday: true, segment: true }, orderBy: { name: "asc" } });
     return NextResponse.json({ data: { messages, stats, customers } });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const body = await req.json();
     const { action } = body;
 
@@ -45,8 +51,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "bulk-birthday") {
-      const today = new Date();
-      const monthDay = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}`;
+      const monthDay = businessMonthDay();
       const customers = await prisma.customer.findMany({ where: { birthday: { contains: monthDay } } });
       const created = [];
       for (const c of customers) {
@@ -62,6 +67,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }

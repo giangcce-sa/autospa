@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useActivePage } from "@/contexts/ActivePageContext";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
@@ -8,8 +9,8 @@ import { Badge } from "@/components/ui/Badge";
 import { ChatCircle, Robot, Plus, Trash, Warning, CheckCircle, Sparkle, ArrowsClockwise, FacebookLogo } from "@phosphor-icons/react";
 import { truncate } from "@/lib/utils";
 
-interface FbPage { id: string; fbPageId: string; pageName: string; isActive: boolean; }
 interface CommentRule { id: string; trigger: string; reply: string; isActive: boolean; }
+interface PostOption { id: string; caption: string; }
 interface Comment {
   id: string; authorName: string; content: string; sentiment: string | null;
   isReplied: boolean; autoReply: string | null; isAlert: boolean; fbCommentId: string | null;
@@ -24,31 +25,38 @@ const SentimentBadge = ({ s }: { s: string | null }) => {
 
 const SYNC_INTERVAL = 2 * 60 * 1000;
 
-export function AutoCommentManager() {
+export function AutoCommentManager({ canMutate = true }: { canMutate?: boolean }) {
+  const { selectedPageId, selectedPage } = useActivePage();
   const [comments, setComments] = useState<Comment[]>([]);
   const [rules, setRules] = useState<CommentRule[]>([]);
+  const [posts, setPosts] = useState<PostOption[]>([]);
+  const [selectedPostId, setSelectedPostId] = useState("");
   const [alertCount, setAlertCount] = useState(0);
   const [newRule, setNewRule] = useState({ trigger: "", reply: "" });
   const [simForm, setSimForm] = useState({ authorName: "Khách hàng test", content: "" });
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [tab, setTab] = useState<"comments" | "rules">("comments");
-  const [fbPages, setFbPages] = useState<FbPage[]>([]);
-  const [selectedPageId, setSelectedPageId] = useState<string>("");
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [lastSyncCount, setLastSyncCount] = useState<number | null>(null);
   const syncingRef = useRef(false);
 
-  const load = useCallback((pageId?: string) => {
-    const query = pageId ? `?facebookPageId=${pageId}` : "";
-    return fetch(`/api/comments${query}`).then((r) => r.json()).then((res) => {
-      if (res.data) { setComments(res.data.comments); setRules(res.data.rules); setAlertCount(res.data.alertCount); }
+  const load = useCallback((pageId: string) => {
+    const query = new URLSearchParams({ facebookPageId: pageId });
+    return fetch(`/api/comments?${query.toString()}`).then((r) => r.json()).then((res) => {
+      if (res.data) {
+        setComments(res.data.comments);
+        setRules(res.data.rules);
+        setPosts(res.data.posts);
+        setSelectedPostId((current) => res.data.posts.some((post: PostOption) => post.id === current) ? current : (res.data.posts[0]?.id ?? ""));
+        setAlertCount(res.data.alertCount);
+      }
     });
   }, []);
 
-  const syncFb = useCallback(async (silent = false, pageId?: string) => {
-    if (syncingRef.current) return;
+  const syncFb = useCallback(async (silent = false) => {
+    if (!canMutate || !selectedPageId || syncingRef.current) return;
     syncingRef.current = true;
     if (!silent) setSyncing(true);
     setSyncError(null);
@@ -56,7 +64,7 @@ export function AutoCommentManager() {
       const res = await fetch("/api/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sync-fb", facebookPageId: pageId || undefined }),
+        body: JSON.stringify({ action: "sync-fb", facebookPageId: selectedPageId }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -64,7 +72,7 @@ export function AutoCommentManager() {
       } else {
         setLastSynced(new Date());
         setLastSyncCount(data.data.newCount);
-        if (data.data.newCount > 0) await load(pageId);
+        if (data.data.newCount > 0) await load(selectedPageId);
       }
     } catch {
       if (!silent) setSyncError("Không thể kết nối");
@@ -72,60 +80,65 @@ export function AutoCommentManager() {
       syncingRef.current = false;
       if (!silent) setSyncing(false);
     }
-  }, [load]);
+  }, [canMutate, load, selectedPageId]);
 
   useEffect(() => {
-    fetch("/api/facebook-pages").then((r) => r.json()).then((res) => {
-      if (res.data) {
-        const active = res.data.filter((p: FbPage) => p.isActive);
-        setFbPages(active);
-      }
-    });
-    load();
-    syncFb(true);
+    if (!selectedPageId) {
+      setComments([]);
+      setRules([]);
+      setPosts([]);
+      setSelectedPostId("");
+      return;
+    }
+    load(selectedPageId);
+    if (!canMutate) return;
     const interval = setInterval(() => syncFb(true), SYNC_INTERVAL);
     return () => clearInterval(interval);
-  }, [load, syncFb]);
+  }, [canMutate, load, selectedPageId, syncFb]);
 
   const addRule = async () => {
-    if (!newRule.trigger || !newRule.reply) return;
-    await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add-rule", ...newRule }) });
+    if (!selectedPageId || !newRule.trigger || !newRule.reply) return;
+    await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add-rule", facebookPageId: selectedPageId, ...newRule }) });
     setNewRule({ trigger: "", reply: "" });
-    load(selectedPageId || undefined);
+    load(selectedPageId);
   };
 
   const toggleRule = async (id: string) => {
-    await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "toggle-rule", ruleId: id }) });
-    load(selectedPageId || undefined);
+    if (!selectedPageId) return;
+    await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "toggle-rule", facebookPageId: selectedPageId, ruleId: id }) });
+    load(selectedPageId);
   };
 
   const deleteRule = async (id: string) => {
-    await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete-rule", ruleId: id }) });
-    load(selectedPageId || undefined);
+    if (!selectedPageId) return;
+    await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete-rule", facebookPageId: selectedPageId, ruleId: id }) });
+    load(selectedPageId);
   };
 
   const simulate = async () => {
-    if (!simForm.content.trim()) return;
-    await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "simulate", ...simForm }) });
+    if (!selectedPageId || !selectedPostId || !simForm.content.trim()) return;
+    await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "simulate", facebookPageId: selectedPageId, postId: selectedPostId, ...simForm }) });
     setSimForm((p) => ({ ...p, content: "" }));
-    load(selectedPageId || undefined);
+    load(selectedPageId);
   };
 
   const aiReply = async (id: string) => {
+    if (!selectedPageId) return;
     setLoadingId(id + "_ai");
     try {
-      await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ai-reply", commentId: id }) });
-      load(selectedPageId || undefined);
+      await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ai-reply", facebookPageId: selectedPageId, commentId: id }) });
+      load(selectedPageId);
     } finally { setLoadingId(null); }
   };
 
   const sendFbReply = async (id: string) => {
+    if (!selectedPageId) return;
     setLoadingId(id + "_send");
     try {
-      const res = await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send-fb-reply", commentId: id }) });
+      const res = await fetch("/api/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send-fb-reply", facebookPageId: selectedPageId, commentId: id }) });
       const data = await res.json();
       if (!data.success) alert(data.error);
-      else load(selectedPageId || undefined);
+      else load(selectedPageId);
     } finally { setLoadingId(null); }
   };
 
@@ -141,31 +154,19 @@ export function AutoCommentManager() {
 
   return (
     <div className="space-y-4 max-w-5xl">
-      {/* Sync bar */}
       <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs flex-wrap" style={{ background: "var(--bg-subtle)" }}>
-        {fbPages.length > 1 && (
-          <select
-            className="px-2 py-1 rounded border text-xs outline-none"
-            style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
-            value={selectedPageId}
-            onChange={(e) => { setSelectedPageId(e.target.value); load(e.target.value || undefined); }}
-          >
-            <option value="">Tất cả pages</option>
-            {fbPages.map((p) => <option key={p.id} value={p.id}>{p.pageName}</option>)}
-          </select>
-        )}
-        {fbPages.length === 1 && (
-          <span className="flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
-            <FacebookLogo size={11} color="#1877F2" /> {fbPages[0].pageName}
-          </span>
-        )}
+        <span className="flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
+          <FacebookLogo size={11} color="#1877F2" /> {selectedPage?.pageName ?? "Hãy chọn Facebook Page"}
+        </span>
         <div className="flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: lastSynced ? "var(--accent)" : "var(--text-muted)" }} />
           Đồng bộ: {syncLabel}
         </div>
-        <Button size="sm" variant="secondary" loading={syncing} onClick={() => syncFb(false, selectedPageId || undefined)}>
-          <ArrowsClockwise size={11} /> Đồng bộ ngay
-        </Button>
+        {canMutate && (
+          <Button size="sm" variant="secondary" loading={syncing} disabled={!selectedPageId} onClick={() => syncFb(false)}>
+            <ArrowsClockwise size={11} /> Đồng bộ ngay
+          </Button>
+        )}
         {syncError && <span style={{ color: "var(--rose)" }}>{syncErrorLabel}</span>}
       </div>
 
@@ -222,50 +223,66 @@ export function AutoCommentManager() {
                         </div>
                       )}
                     </div>
-                    <div className="flex flex-col gap-1 shrink-0">
-                      {!c.autoReply && (
-                        <Button size="sm" variant="secondary" loading={loadingId === c.id + "_ai"} onClick={() => aiReply(c.id)}>
-                          <Sparkle size={11} /> AI soạn
-                        </Button>
-                      )}
-                      {c.autoReply && !c.isReplied && c.fbCommentId && (
-                        <Button size="sm" loading={loadingId === c.id + "_send"} onClick={() => sendFbReply(c.id)}>
-                          <FacebookLogo size={11} /> Gửi
-                        </Button>
-                      )}
-                      {c.autoReply && !c.isReplied && (
-                        <Button size="sm" variant="secondary" loading={loadingId === c.id + "_ai"} onClick={() => aiReply(c.id)}>
-                          <Sparkle size={11} /> Soạn lại
-                        </Button>
-                      )}
-                    </div>
+                    {canMutate && (
+                      <div className="flex flex-col gap-1 shrink-0">
+                        {!c.autoReply && (
+                          <Button size="sm" variant="secondary" loading={loadingId === c.id + "_ai"} onClick={() => aiReply(c.id)}>
+                            <Sparkle size={11} /> AI soạn
+                          </Button>
+                        )}
+                        {c.autoReply && !c.isReplied && c.fbCommentId && (
+                          <Button size="sm" loading={loadingId === c.id + "_send"} onClick={() => sendFbReply(c.id)}>
+                            <FacebookLogo size={11} /> Gửi
+                          </Button>
+                        )}
+                        {c.autoReply && !c.isReplied && (
+                          <Button size="sm" variant="secondary" loading={loadingId === c.id + "_ai"} onClick={() => aiReply(c.id)}>
+                            <Sparkle size={11} /> Soạn lại
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </Card>
               ))
             )}
           </div>
 
-          <Card>
-            <CardHeader><CardTitle>Mô phỏng bình luận</CardTitle></CardHeader>
-            <div className="space-y-2">
-              <Input label="Tên" value={simForm.authorName} onChange={(e) => setSimForm({ ...simForm, authorName: e.target.value })} />
-              <Textarea label="Nội dung bình luận" rows={3} placeholder="Giá dịch vụ bao nhiêu?" value={simForm.content} onChange={(e) => setSimForm({ ...simForm, content: e.target.value })} />
-              <Button size="sm" onClick={simulate} className="w-full">Gửi test</Button>
-            </div>
-          </Card>
+          {canMutate && (
+            <Card>
+              <CardHeader><CardTitle>Mô phỏng bình luận</CardTitle></CardHeader>
+              <div className="space-y-2">
+                <select
+                  aria-label="Bài viết mô phỏng"
+                  className="w-full px-2 py-2 rounded border text-xs outline-none"
+                  style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
+                  value={selectedPostId}
+                  onChange={(event) => setSelectedPostId(event.target.value)}
+                >
+                  <option value="">Chọn bài viết</option>
+                  {posts.map((post) => <option key={post.id} value={post.id}>{truncate(post.caption, 60)}</option>)}
+                </select>
+                <Input label="Tên" value={simForm.authorName} onChange={(e) => setSimForm({ ...simForm, authorName: e.target.value })} />
+                <Textarea label="Nội dung bình luận" rows={3} placeholder="Giá dịch vụ bao nhiêu?" value={simForm.content} onChange={(e) => setSimForm({ ...simForm, content: e.target.value })} />
+                <Button size="sm" onClick={simulate} disabled={!selectedPostId} className="w-full">Gửi test</Button>
+              </div>
+            </Card>
+          )}
         </div>
       )}
 
       {tab === "rules" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader><CardTitle>Thêm quy tắc mới</CardTitle></CardHeader>
-            <div className="space-y-2">
-              <Input label="Từ khoá kích hoạt" placeholder="VD: giá, bao nhiêu, chi phí" value={newRule.trigger} onChange={(e) => setNewRule({ ...newRule, trigger: e.target.value })} hint="Nếu comment chứa từ này → tự động trả lời" />
-              <Textarea label="Câu trả lời tự động" rows={3} placeholder="Cảm ơn bạn đã quan tâm! Inbox để được tư vấn..." value={newRule.reply} onChange={(e) => setNewRule({ ...newRule, reply: e.target.value })} />
-              <Button size="sm" onClick={addRule} className="w-full"><Plus size={12} /> Thêm quy tắc</Button>
-            </div>
-          </Card>
+          {canMutate && (
+            <Card>
+              <CardHeader><CardTitle>Thêm quy tắc mới</CardTitle></CardHeader>
+              <div className="space-y-2">
+                <Input label="Từ khoá kích hoạt" placeholder="VD: giá, bao nhiêu, chi phí" value={newRule.trigger} onChange={(e) => setNewRule({ ...newRule, trigger: e.target.value })} hint="Nếu comment chứa từ này → tự động trả lời" />
+                <Textarea label="Câu trả lời tự động" rows={3} placeholder="Cảm ơn bạn đã quan tâm! Inbox để được tư vấn..." value={newRule.reply} onChange={(e) => setNewRule({ ...newRule, reply: e.target.value })} />
+                <Button size="sm" onClick={addRule} disabled={!selectedPageId} className="w-full"><Plus size={12} /> Thêm quy tắc</Button>
+              </div>
+            </Card>
+          )}
 
           <div className="space-y-2">
             {rules.length === 0 ? (
@@ -281,10 +298,12 @@ export function AutoCommentManager() {
                       </div>
                       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{truncate(r.reply, 80)}</p>
                     </div>
-                    <div className="flex gap-1 shrink-0">
-                      <Button size="sm" variant="secondary" onClick={() => toggleRule(r.id)}>{r.isActive ? "Tắt" : "Bật"}</Button>
-                      <Button size="sm" variant="danger" onClick={() => deleteRule(r.id)}><Trash size={11} /></Button>
-                    </div>
+                    {canMutate && (
+                      <div className="flex gap-1 shrink-0">
+                        <Button size="sm" variant="secondary" onClick={() => toggleRule(r.id)}>{r.isActive ? "Tắt" : "Bật"}</Button>
+                        <Button size="sm" variant="danger" onClick={() => deleteRule(r.id)}><Trash size={11} /></Button>
+                      </div>
+                    )}
                   </div>
                 </Card>
               ))

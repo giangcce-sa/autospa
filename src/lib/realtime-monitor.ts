@@ -159,7 +159,7 @@ export async function runRealtimeMonitor(): Promise<RealtimeMonitorResult> {
       try {
         const wf = await triggerWorkflow(h.workflow, h.result.signal!);
         workflowId = wf.id;
-        workflowsTriggered++;
+        if (wf.status === "completed") workflowsTriggered++;
       } catch { /* continue with alert only */ }
     }
 

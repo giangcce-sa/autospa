@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db";
 import { generateContent, getBrandContext, getStyleProfile, getStyleSamples } from "@/lib/claude";
-import { reviewContent } from "@/lib/reviewer";
 import { getContentContext } from "@/lib/learning/content-memory";
 import { getCompetitorContext } from "@/lib/learning/competitor-learning";
 import { getHumanVoiceProfile } from "@/lib/human-voice";
@@ -35,10 +34,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
-      serviceId, postType, tone, customNote, platform, saveToLibrary, facebookPageId,
+      serviceId, postType, tone, customNote, platform, facebookPageId,
       includeStory, storyId, mode = "quick", narrator = "brand", material = {},
     } = body;
-    await requirePageAccess(facebookPageId);
+    await requirePageAccess(facebookPageId, { owner: true });
 
     const [brandContext, styleProfile, styleSamples, service, learningCtx, competitorCtx, humanVoice, settings] = await Promise.all([
       getBrandContext(),
@@ -185,27 +184,9 @@ HASHTAGS:
     const caption = edited.caption;
     const hashtags = edited.hashtags || draft.hashtags;
 
-    let savedPost = null;
-    let review = null;
-    if (saveToLibrary) {
-      savedPost = await prisma.post.create({
-        data: { caption, hashtags, platform: platform ?? "facebook", postType: postType ?? "service", tone: tone ?? "friendly", serviceId: serviceId ?? null, facebookPageId: facebookPageId ?? null },
-      });
-      // Auto-review every saved post
-      try {
-        review = await reviewContent({
-          id: savedPost.id,
-          caption: savedPost.caption,
-          hashtags: savedPost.hashtags,
-          platform: savedPost.platform,
-          facebookPageId: savedPost.facebookPageId,
-        });
-      } catch { /* review failure should not block save */ }
-    }
-
     const generation = await prisma.contentGeneration.create({
       data: {
-        postId: savedPost?.id ?? null,
+        postId: null,
         facebookPageId: facebookPageId ?? null,
         promptVersion: "human-v1",
         model: settings?.claudeBaseUrl.includes("anthropic.com") ? "claude-direct" : settings?.openaiChatModel ?? "gateway",
@@ -226,9 +207,7 @@ HASHTAGS:
       data: {
         caption,
         hashtags,
-        postId: savedPost?.id,
         generationId: generation.id,
-        review,
         humanScore,
         draftCaption: draft.caption,
         voiceProfile: humanVoice ? {

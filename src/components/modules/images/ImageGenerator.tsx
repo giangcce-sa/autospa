@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { MediaAssetCard } from "@/components/media/MediaAssetCard";
@@ -9,6 +9,7 @@ import { MediaStatusBadge } from "@/components/media/MediaStatusBadge";
 import { Select } from "@/components/ui/Select";
 import { useActivePage } from "@/contexts/ActivePageContext";
 import { Textarea, Input } from "@/components/ui/Input";
+import { imageReviewStatus } from "@/lib/media-gallery";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import {
   Sparkle, ArrowCounterClockwise, DownloadSimple, Image as ImageIcon, PaperPlaneTilt,
@@ -20,6 +21,7 @@ interface Service { id: string; name: string; }
 interface Props {
   postId?: string;
   facebookPageId?: string;
+  showHistory?: boolean;
   onImageSet?: (imageUrl: string) => void;
   onGoToPublish?: () => void;
 }
@@ -135,7 +137,7 @@ const blankStaffForm = {
   consentStatus: "consented",
 };
 
-export function ImageGenerator({ postId, facebookPageId: providedPageId, onImageSet, onGoToPublish }: Props) {
+export function ImageGenerator({ postId, facebookPageId: providedPageId, showHistory = true, onImageSet, onGoToPublish }: Props) {
   const { selectedPageId } = useActivePage();
   const facebookPageId = providedPageId ?? selectedPageId ?? undefined;
   const [services, setServices] = useState<Service[]>([]);
@@ -191,6 +193,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [history, setHistory] = useState<HistoryImage[]>([]);
   const [previewImage, setPreviewImage] = useState<HistoryImage | null>(null);
+  const generationController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const url = facebookPageId ? `/api/services?facebookPageId=${facebookPageId}` : "/api/services";
@@ -207,10 +210,13 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
   useEffect(() => { loadStaffVisuals().catch(() => null); }, [loadStaffVisuals]);
 
   useEffect(() => {
+    generationController.current?.abort();
     setForm((previous) => ({ ...previous, serviceId: "", staffProfileId: "" }));
     setResult(null);
     setActiveVariant(0);
-  }, [facebookPageId]);
+    setError("");
+    setFeedbackMessage("");
+  }, [facebookPageId, postId]);
 
   useEffect(() => {
     const url = facebookPageId ? `/api/images/visual-profile?facebookPageId=${facebookPageId}` : "/api/images/visual-profile";
@@ -218,9 +224,16 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
   }, [facebookPageId, result?.generationId]);
 
   useEffect(() => {
+    if (!showHistory) {
+      setHistory([]);
+      setPreviewImage(null);
+      return;
+    }
+    const controller = new AbortController();
     const url = facebookPageId ? `/api/images/history?facebookPageId=${facebookPageId}&take=12` : "/api/images/history?take=12";
-    fetch(url).then((res) => res.json()).then((data) => data.success && setHistory(data.data ?? [])).catch(() => null);
-  }, [facebookPageId, result?.generationId]);
+    fetch(url, { signal: controller.signal }).then((res) => res.json()).then((data) => data.success && setHistory(data.data ?? [])).catch(() => null);
+    return () => controller.abort();
+  }, [facebookPageId, result?.generationId, showHistory]);
 
   useEffect(() => {
     setOverlay((prev) => ({
@@ -230,6 +243,9 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
   }, [form.preset]);
 
   const handleGenerate = async () => {
+    generationController.current?.abort();
+    const controller = new AbortController();
+    generationController.current = controller;
     setLoading(true);
     setError("");
     try {
@@ -248,14 +264,22 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
           overlayLogo: overlay.enabled ? overlay.showLogo : false,
           overlayPosition: overlay.position,
         }),
+        signal: controller.signal,
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setResult(data.data);
       setActiveVariant(0);
       setFeedbackMessage("");
-      if (onImageSet) onImageSet(data.data.imageUrl);
-    } finally { setLoading(false); }
+    } catch (generateError) {
+      if (generateError instanceof DOMException && generateError.name === "AbortError") return;
+      setError("Không tạo được hình ảnh");
+    } finally {
+      if (generationController.current === controller) {
+        generationController.current = null;
+        setLoading(false);
+      }
+    }
   };
 
   const sendFeedback = async (rating: string) => {
@@ -352,24 +376,26 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
   };
 
   const handleSendToPublish = async () => {
-    if (!result) return;
+    if (!result || !postId) return;
     const selected = result.variants?.[activeVariant];
     const selectedImageUrl = selected?.imageUrl ?? result.imageUrl;
     const generationId = selected?.generationId ?? result.generationId;
+    if (!generationId) {
+      setError("Ảnh chưa có identity để gắn vào bài viết");
+      return;
+    }
     setAttaching(true);
     setError("");
     try {
-      if (postId && generationId) {
-        const response = await fetch("/api/images/select", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ postId, generationId }),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          setError(data.error ?? "Không gắn được ảnh vào bài viết");
-          return;
-        }
+      const response = await fetch("/api/images/select", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId, generationId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.error ?? "Không gắn được ảnh vào bài viết");
+        return;
       }
       if (onImageSet) onImageSet(selectedImageUrl);
       onGoToPublish?.();
@@ -392,7 +418,6 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
           facebookPageId,
           format: form.format,
           overlay: { ...overlay, enabled: overlay.enabled },
-          applyToPost: Boolean(postId),
         }),
       });
       const data = await res.json();
@@ -419,7 +444,6 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
           variants: previous.variants.map((item, index) => index === activeVariant ? nextVariant : item),
         };
       });
-      if (onImageSet) onImageSet(data.data.imageUrl);
       setFeedbackMessage("Đã lưu một phiên bản chỉnh sửa mới.");
     } finally {
       setEditing(false);
@@ -747,7 +771,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
             )}
           </div>
 
-          {error && <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
+          {error && <p role="alert" className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
           <Button onClick={handleGenerate} loading={loading} className="w-full">
             <Sparkle size={14} weight="fill" /> Tạo hình ảnh
           </Button>
@@ -766,13 +790,12 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
                     <button
                       key={variant.generationId}
                       type="button"
-                      onClick={() => {
-                        setActiveVariant(index);
-                        if (onImageSet) onImageSet(variant.imageUrl);
-                      }}
+                      onClick={() => setActiveVariant(index)}
                       className="relative aspect-square overflow-hidden rounded-md"
                       style={{ border: activeVariant === index ? "2px solid var(--accent)" : "1px solid var(--border)" }}
                       title={`Phương án ${index + 1}`}
+                      aria-pressed={activeVariant === index}
+                      aria-label={`Chọn phương án ${index + 1}`}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={variant.imageUrl} alt="" className="h-full w-full object-cover" />
@@ -831,10 +854,16 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
               <Button variant="secondary" onClick={applyImageEdit} loading={editing} className="w-full">
                 <MagicWand size={13} weight="fill" /> Áp dụng crop và overlay thành phiên bản mới
               </Button>
-              <Button onClick={handleSendToPublish} loading={attaching} className="w-full">
-                <PaperPlaneTilt size={14} weight="fill" />
-                {onGoToPublish ? "Gắn vào bài đăng →" : "Đã lưu vào bài"}
-              </Button>
+              {postId ? (
+                <Button onClick={handleSendToPublish} loading={attaching} className="w-full">
+                  <PaperPlaneTilt size={14} weight="fill" />
+                  {onGoToPublish ? "Gắn vào bài đăng →" : "Gắn ảnh vào bài"}
+                </Button>
+              ) : (
+                <p className="rounded-md border border-[var(--border)] bg-[var(--bg-subtle)] p-3 text-xs text-[var(--text-muted)]">
+                  Mở Xưởng hình ảnh từ một bài viết đã lưu để gắn ảnh vào đúng bài.
+                </p>
+              )}
               {(selectedVariant?.generationId ?? result.generationId) && (
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
@@ -870,13 +899,13 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
                     </div>
                   )}
                   {feedbackMessage && (
-                    <p className="text-[11px] text-center" style={{ color: "var(--text-muted)" }}>{feedbackMessage}</p>
+                    <p role="status" aria-live="polite" className="text-[11px] text-center" style={{ color: "var(--text-muted)" }}>{feedbackMessage}</p>
                   )}
                 </div>
               )}
               {postId && (
                 <p className="text-[10px] text-center" style={{ color: "var(--text-muted)" }}>
-                  Hình đã được lưu vào bài nháp
+                  Ảnh chỉ được gắn vào bài sau khi bạn nhấn nút gắn ảnh.
                 </p>
               )}
               {history.length > 0 && (
@@ -896,7 +925,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
                           thumbnailUrl={item.thumbnailUrl}
                           aspectRatio={item.format}
                           selected={selected}
-                          badges={<MediaStatusBadge status={item.userAccepted ? "approved" : item.generationStatus} />}
+                          badges={<MediaStatusBadge status={imageReviewStatus(item.userAccepted, item.generationStatus)} />}
                           metadata={(
                             <>
                               <span>{item.format}</span>
@@ -913,7 +942,6 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
                               : { imageUrl: item.imageUrl, prompt: item.prompt || "Ảnh trong lịch sử", generationId: item.id, variants: [variant] });
                             setActiveVariant(0);
                             setPreviewImage(item);
-                            if (onImageSet) onImageSet(item.imageUrl);
                           }}
                         />
                       );
@@ -928,7 +956,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, onImage
                     aspectRatio={previewImage?.format}
                     details={previewImage ? (
                       <div className="space-y-3 text-sm">
-                        <div className="flex flex-wrap gap-2"><MediaStatusBadge status={previewImage.userAccepted ? "approved" : previewImage.generationStatus} /></div>
+                        <div className="flex flex-wrap gap-2"><MediaStatusBadge status={imageReviewStatus(previewImage.userAccepted, previewImage.generationStatus)} /></div>
                         <dl className="space-y-2 text-xs">
                           <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">Định dạng</dt><dd>{previewImage.format}</dd></div>
                           <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">Model</dt><dd>{previewImage.model || "Không rõ"}</dd></div>

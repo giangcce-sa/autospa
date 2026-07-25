@@ -1,4 +1,4 @@
-FROM node:24-alpine
+FROM node:24-alpine AS base
 
 WORKDIR /app
 
@@ -14,7 +14,12 @@ RUN npm ci --include=dev
 
 COPY --chown=node:node . .
 RUN npm run build
-RUN npm prune --omit=dev
+
+FROM base AS migrator
+CMD ["npx", "prisma", "migrate", "deploy"]
+
+FROM base AS runner
+RUN npm prune --omit=dev --omit=peer
 
 EXPOSE 3000
 

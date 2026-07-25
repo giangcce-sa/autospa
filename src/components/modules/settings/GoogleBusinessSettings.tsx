@@ -17,59 +17,80 @@ function GoogleIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-interface GbpAccount {
+export interface GbpAccount {
   id: string; email: string; displayName: string | null;
   accountId: string | null; locationId: string | null; locationName: string | null;
   isActive: boolean; expiresAt: string | null;
+  createdAt?: string; updatedAt?: string;
 }
 
 interface GbpLocation { name: string; title: string; }
 
-export function GoogleBusinessSettings() {
-  const [accounts, setAccounts] = useState<GbpAccount[]>([]);
+export function GoogleBusinessSettings({ initialAccounts }: { initialAccounts?: GbpAccount[] }) {
+  const [accounts, setAccounts] = useState<GbpAccount[]>(initialAccounts ?? []);
   const [locations, setLocations] = useState<GbpLocation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [locationAccountId, setLocationAccountId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(initialAccounts === undefined);
   const [authUrl, setAuthUrl] = useState("");
-  const [discoveringLoc, setDiscoveringLoc] = useState(false);
+  const [discoveringAccountId, setDiscoveringAccountId] = useState<string | null>(null);
   const [settingLoc, setSettingLoc] = useState(false);
   const [msg, setMsg] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ac, au] = await Promise.all([
-      fetch("/api/google-business?action=accounts").then((r) => r.json()),
-      fetch("/api/google-business?action=auth-url").then((r) => r.json()),
-    ]);
-    if (ac.success) setAccounts(ac.data);
-    if (au.success) setAuthUrl(au.data.url);
+    const response = await fetch("/api/google-business?action=accounts");
+    const result = await response.json();
+    if (result.success) setAccounts(result.data);
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (initialAccounts === undefined) void load();
+    void fetch("/api/google-business?action=auth-url")
+      .then((response) => response.json())
+      .then((result) => { if (result.success) setAuthUrl(result.data.url); });
+  }, [initialAccounts, load]);
 
-  const discoverLocations = async () => {
-    setDiscoveringLoc(true);
-    const res = await fetch("/api/google-business?action=discover-locations");
-    const json = await res.json();
-    if (json.success) setLocations(json.data);
-    else setMsg(`✗ ${json.message ?? json.error}`);
-    setDiscoveringLoc(false);
+  const discoverLocations = async (accountId: string) => {
+    setDiscoveringAccountId(accountId);
+    setLocationAccountId(accountId);
+    setLocations([]);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/google-business?action=discover-locations&googleAccountDbId=${encodeURIComponent(accountId)}`);
+      const json = await res.json();
+      if (res.ok && json.success) setLocations(json.data);
+      else setMsg(`✗ ${json.message ?? json.error ?? "Không thể tải locations"}`);
+    } finally {
+      setDiscoveringAccountId(null);
+    }
   };
 
   const setLocation = async (accountId: string, locationId: string, locationName: string) => {
     setSettingLoc(true);
-    await fetch("/api/google-business", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "set-location", googleAccountDbId: accountId, locationId, locationName }),
-    });
-    setMsg(`✓ Đã chọn "${locationName}"`);
-    setLocations([]);
-    load();
-    setSettingLoc(false);
+    setMsg("");
+    try {
+      const res = await fetch("/api/google-business", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set-location", googleAccountDbId: accountId, locationId }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setMsg(`✗ ${json.message ?? json.error ?? "Không thể chọn location"}`);
+        return;
+      }
+      setMsg(`✓ Đã chọn "${locationName}"`);
+      setLocations([]);
+      setLocationAccountId(null);
+      await load();
+    } finally {
+      setSettingLoc(false);
+    }
   };
 
   const disconnect = async (id: string) => {
+    if (!window.confirm("Ngắt và xóa tài khoản Google Business này khỏi AutoSpa?")) return;
     await fetch("/api/google-business", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -107,8 +128,8 @@ export function GoogleBusinessSettings() {
                       <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{acc.email}</p>
                     </div>
                   </div>
-                  <button onClick={() => disconnect(acc.id)} style={{ color: "var(--danger)" }}>
-                    <Trash size={13} />
+                  <button type="button" aria-label={`Xóa tài khoản Google Business ${acc.displayName ?? acc.email}`} onClick={() => disconnect(acc.id)} className="flex min-h-11 min-w-11 items-center justify-center" style={{ color: "var(--danger)" }}>
+                    <Trash size={13} aria-hidden="true" />
                   </button>
                 </div>
 
@@ -117,7 +138,7 @@ export function GoogleBusinessSettings() {
                   <div className="mt-2 flex items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
                     <MapPin size={11} weight="fill" style={{ color: "var(--accent)" }} />
                     <span>{acc.locationName ?? acc.locationId}</span>
-                    <button onClick={discoverLocations} className="underline ml-1" style={{ color: "var(--accent)" }}>
+                    <button onClick={() => discoverLocations(acc.id)} className="underline ml-1" style={{ color: "var(--accent)" }}>
                       Đổi
                     </button>
                   </div>
@@ -127,14 +148,14 @@ export function GoogleBusinessSettings() {
                       <XCircle size={11} />
                       <span>Chưa chọn location</span>
                     </div>
-                    <Button size="sm" variant="secondary" onClick={discoverLocations} loading={discoveringLoc}>
+                    <Button size="sm" variant="secondary" onClick={() => discoverLocations(acc.id)} loading={discoveringAccountId === acc.id}>
                       <MapPin size={11} /> Khám phá locations
                     </Button>
                   </div>
                 )}
 
                 {/* Location picker */}
-                {locations.length > 0 && (
+                {locationAccountId === acc.id && locations.length > 0 && (
                   <div className="mt-2 space-y-1">
                     <p className="text-[10px] font-semibold" style={{ color: "var(--text-muted)" }}>CHỌN LOCATION:</p>
                     {locations.map((loc) => (
@@ -158,10 +179,8 @@ export function GoogleBusinessSettings() {
       ) : null}
 
       {authUrl && (
-        <a href={authUrl} target="_blank" rel="noopener noreferrer">
-          <Button size="sm">
-            <LinkSimple size={13} /> Kết nối Google Business
-          </Button>
+        <a href={authUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-2 rounded-md bg-[var(--accent)] px-3 text-xs font-semibold text-[var(--accent-foreground)] shadow-[0_6px_16px_rgba(47,111,84,0.16)] hover:bg-[var(--accent-hover)]">
+          <LinkSimple size={13} aria-hidden="true" /> Kết nối Google Business
         </a>
       )}
 

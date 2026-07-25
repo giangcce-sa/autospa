@@ -7,6 +7,8 @@ import {
 } from "@/lib/google-business";
 import { generateChatCompletion } from "@/lib/openai";
 import { createOAuthState, GOOGLE_OAUTH_STATE_COOKIE, setOAuthStateCookie } from "@/lib/oauth-state";
+import { googleReviewResourceName, safeGoogleAccountSelect } from "@/lib/channel-security";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 
 // Ensure access token is fresh, refresh if needed
 async function getValidToken(accountId: string): Promise<{ token: string; account: { id: string; locationId: string | null; accountId: string | null; locationName: string | null } }> {
@@ -27,16 +29,21 @@ async function getValidToken(accountId: string): Promise<{ token: string; accoun
 
 // Get the primary active account's ID
 async function getPrimaryAccountId(): Promise<string | null> {
-  const account = await prisma.googleAccount.findFirst({ where: { isActive: true } });
+  const account = await prisma.googleAccount.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: "asc" },
+  });
   return account?.id ?? null;
 }
 
 export async function GET(req: NextRequest) {
   try {
+    await requireUser();
     const { searchParams } = new URL(req.url);
     const action = searchParams.get("action");
 
     if (action === "auth-url") {
+      await requireUser({ owner: true });
       const state = createOAuthState();
       const url = getGoogleOAuthUrl(state);
       const res = NextResponse.json({ success: true, data: { url } });
@@ -45,17 +52,16 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === "accounts") {
-      const accounts = await prisma.googleAccount.findMany({
-        select: { id: true, email: true, displayName: true, accountId: true, locationId: true, locationName: true, isActive: true, expiresAt: true },
-      });
+      await requireUser({ owner: true });
+      const accounts = await prisma.googleAccount.findMany({ select: safeGoogleAccountSelect });
       return NextResponse.json({ success: true, data: accounts });
     }
 
-    const primaryId = await getPrimaryAccountId();
-
     if (action === "discover-locations") {
-      if (!primaryId) return NextResponse.json({ success: false, message: "Chưa kết nối Google" }, { status: 400 });
-      const { token, account } = await getValidToken(primaryId);
+      await requireUser({ owner: true });
+      const googleAccountDbId = searchParams.get("googleAccountDbId");
+      if (!googleAccountDbId) return NextResponse.json({ success: false, message: "Thiếu Google account" }, { status: 400 });
+      const { token, account } = await getValidToken(googleAccountDbId);
       if (!account.accountId) return NextResponse.json({ success: false, message: "Chưa có GBP account" }, { status: 400 });
       const locations = await listGbpLocations(account.accountId, token);
       return NextResponse.json({ success: true, data: locations });
@@ -83,6 +89,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === "insights") {
+      const primaryId = await getPrimaryAccountId();
       if (!primaryId) return NextResponse.json({ success: false, message: "Chưa kết nối Google" }, { status: 400 });
       const { token, account } = await getValidToken(primaryId);
       if (!account.locationId) return NextResponse.json({ success: false, message: "Chưa chọn location" }, { status: 400 });
@@ -91,7 +98,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Default: summary
-    const account = await prisma.googleAccount.findFirst({ where: { isActive: true } });
+    const account = await prisma.googleAccount.findFirst({
+      where: { isActive: true },
+      select: safeGoogleAccountSelect,
+    });
     const reviewStats = await prisma.googleReview.aggregate({
       _count: { id: true },
       _avg: { rating: true },
@@ -102,12 +112,15 @@ export async function GET(req: NextRequest) {
       data: { account, reviewCount: reviewStats._count.id, avgRating: reviewStats._avg.rating ?? 0, unreplied },
     });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const body = await req.json();
     const { action } = body;
 
@@ -158,11 +171,12 @@ export async function POST(req: NextRequest) {
       const dbReview = await prisma.googleReview.findUnique({ where: { id: reviewDbId } });
       if (!dbReview) return NextResponse.json({ success: false, message: "Review không tìm thấy" }, { status: 404 });
 
-      const primaryId = await getPrimaryAccountId();
-      if (!primaryId) return NextResponse.json({ success: false, message: "Chưa kết nối Google" }, { status: 400 });
-      const { token } = await getValidToken(primaryId);
+      if (!dbReview.googleAccountId) {
+        return NextResponse.json({ success: false, message: "Review chưa gắn với Google account" }, { status: 409 });
+      }
+      const { token, account } = await getValidToken(dbReview.googleAccountId);
 
-      await replyToGbpReview(dbReview.reviewId, reply, token);
+      await replyToGbpReview(googleReviewResourceName(account.locationId, dbReview.reviewId), reply, token);
       await prisma.googleReview.update({
         where: { id: reviewDbId },
         data: { reply, isReplied: true, repliedAt: new Date() },
@@ -176,11 +190,12 @@ export async function POST(req: NextRequest) {
       const dbReview = await prisma.googleReview.findUnique({ where: { id: reviewDbId } });
       if (!dbReview) return NextResponse.json({ success: false, message: "Review không tìm thấy" }, { status: 404 });
 
-      const primaryId = await getPrimaryAccountId();
-      if (!primaryId) return NextResponse.json({ success: false, message: "Chưa kết nối" }, { status: 400 });
-      const { token } = await getValidToken(primaryId);
+      if (!dbReview.googleAccountId) {
+        return NextResponse.json({ success: false, message: "Review chưa gắn với Google account" }, { status: 409 });
+      }
+      const { token, account } = await getValidToken(dbReview.googleAccountId);
 
-      await deleteGbpReviewReply(dbReview.reviewId, token);
+      await deleteGbpReviewReply(googleReviewResourceName(account.locationId, dbReview.reviewId), token);
       await prisma.googleReview.update({
         where: { id: reviewDbId },
         data: { reply: null, isReplied: false, repliedAt: null },
@@ -238,10 +253,19 @@ Chỉ trả về phản hồi, không giải thích.`;
     }
 
     if (action === "set-location") {
-      const { googleAccountDbId, locationId, locationName } = body;
+      const { googleAccountDbId, locationId } = body;
+      const { token, account } = await getValidToken(googleAccountDbId);
+      if (!account.accountId) {
+        return NextResponse.json({ success: false, message: "Google account chưa có GBP account" }, { status: 400 });
+      }
+      const locations = await listGbpLocations(account.accountId, token);
+      const location = locations.find((item) => item.name === locationId);
+      if (!location) {
+        return NextResponse.json({ success: false, message: "Location không thuộc Google account này" }, { status: 403 });
+      }
       await prisma.googleAccount.update({
         where: { id: googleAccountDbId },
-        data: { locationId, locationName },
+        data: { locationId: location.name, locationName: location.title },
       });
       return NextResponse.json({ success: true });
     }
@@ -254,6 +278,8 @@ Chỉ trả về phản hồi, không giải thích.`;
 
     return NextResponse.json({ success: false, message: "Action không hợp lệ" }, { status: 400 });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { getCanonicalRouteHref } from "@/config/routes";
 import {
   ArrowRight,
   Bell,
@@ -178,7 +179,7 @@ export function TodayQueue() {
               Các việc cần xử lý trước khi AI chạy tiếp.
             </p>
           </div>
-          <Link href="/automation" className="text-[11px] flex items-center gap-0.5 transition-opacity hover:opacity-80" style={{ color: "var(--text-muted)" }}>
+          <Link href={getCanonicalRouteHref("automation", "approvals")} className="text-[11px] flex items-center gap-0.5 transition-opacity hover:opacity-80" style={{ color: "var(--text-muted)" }}>
             Xem việc chờ duyệt <ArrowRight size={10} />
           </Link>
         </CardHeader>

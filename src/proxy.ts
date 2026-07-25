@@ -7,6 +7,8 @@ const PUBLIC_PATHS = [
   "/login",
   "/setup",
   "/api/auth",
+  "/api/health",
+  "/api/ready",
   "/api/cron",              // cron uses CRON_SECRET bearer
   "/api/webhook",           // FB/Zalo webhooks have verify_token
   "/api/spa",               // spa software webhook

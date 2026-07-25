@@ -16,6 +16,8 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
 
 # next.js
 /.next/
@@ -34,8 +36,15 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+!.env.example
+!internal-ai-gateway/.env.example
+!internal-ai-gateway/.env.vps.example
+
+# local Claude harness and personal artifacts
+/.claude/
+/Don_de_nghi_hoan_tien_Duong_Thi_Dung.docx
 
 # vercel
 .vercel

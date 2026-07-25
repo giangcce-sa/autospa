@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -9,14 +10,21 @@ import type { Campaign } from "@/lib/facebook-ads";
 
 function fmt(n: string | undefined) { return n ? Number(n).toLocaleString("vi-VN") : "—"; }
 function fmtVnd(n: string | undefined) { return n ? Number(n).toLocaleString("vi-VN") + "đ" : "—"; }
-function pct(n: string | undefined) { return n ? (Number(n) * 100).toFixed(2) + "%" : "—"; }
+function pct(n: string | undefined) { return n ? Number(n).toFixed(2) + "%" : "—"; }
 
-interface Props { facebookPageId?: string; }
+interface Props {
+  facebookPageId?: string;
+  initialCampaigns?: Campaign[];
+  initialError?: string;
+  canMutate?: boolean;
+  canonical?: boolean;
+}
 
-export function CampaignList({ facebookPageId }: Props) {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+export function CampaignList({ facebookPageId, initialCampaigns, initialError = "", canMutate = true, canonical = false }: Props) {
+  const router = useRouter();
+  const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns ?? []);
+  const [loading, setLoading] = useState(!initialCampaigns && !initialError);
+  const [error, setError] = useState(initialError);
   const [acting, setActing] = useState<string | null>(null);
   const [editBudget, setEditBudget] = useState<{
     campaignId: string;
@@ -37,7 +45,17 @@ export function CampaignList({ facebookPageId }: Props) {
     } finally { setLoading(false); }
   }, [facebookPageId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!canonical) load();
+  }, [canonical, load]);
+
+  useEffect(() => {
+    if (canonical) {
+      setCampaigns(initialCampaigns ?? []);
+      setError(initialError);
+      setLoading(false);
+    }
+  }, [canonical, initialCampaigns, initialError]);
 
   const toggleStatus = async (c: Campaign) => {
     setActing(c.id);
@@ -56,7 +74,8 @@ export function CampaignList({ facebookPageId }: Props) {
         setError(result.error ?? "Không thể cập nhật Campaign");
         return;
       }
-      await load();
+      if (canonical) router.refresh();
+      else await load();
     } finally { setActing(null); }
   };
 
@@ -82,7 +101,8 @@ export function CampaignList({ facebookPageId }: Props) {
         return;
       }
       setEditBudget(null);
-      await load();
+      if (canonical) router.refresh();
+      else await load();
     } finally { setActing(null); }
   };
 
@@ -101,7 +121,7 @@ export function CampaignList({ facebookPageId }: Props) {
           { label: "Tổng chi", value: fmtVnd(String(totalSpend)) },
           { label: "Tổng reach", value: fmt(String(totalReach)) },
           { label: "Đang chạy", value: String(active) },
-          { label: "CTR trung bình", value: (avgCtr * 100).toFixed(2) + "%" },
+          { label: "CTR trung bình", value: avgCtr.toFixed(2) + "%" },
         ].map((s) => (
           <Card key={s.label}>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>{s.label}</p>
@@ -113,7 +133,7 @@ export function CampaignList({ facebookPageId }: Props) {
       <Card>
         <CardHeader>
           <CardTitle>Chiến dịch ({campaigns.length})</CardTitle>
-          <Button size="sm" variant="secondary" loading={loading} onClick={load}>
+          <Button size="sm" variant="secondary" loading={loading} onClick={() => canonical ? router.refresh() : load()}>
             <ArrowClockwise size={13} /> Làm mới
           </Button>
         </CardHeader>
@@ -166,27 +186,31 @@ export function CampaignList({ facebookPageId }: Props) {
                     <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{pct(c.ctr)}</td>
                     <td className="py-2.5 px-2">
                       <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => toggleStatus(c)}
-                          disabled={acting === c.id}
-                          title={c.status === "ACTIVE" ? "Tạm dừng" : "Tiếp tục"}
-                          style={{ color: c.status === "ACTIVE" ? "var(--amber)" : "var(--accent)" }}
-                        >
-                          {c.status === "ACTIVE" ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
-                        </button>
-                        <button
-                          onClick={() => c.budgetTarget && setEditBudget({
-                            campaignId: c.id,
-                            targetId: c.budgetTarget.id,
-                            targetType: c.budgetTarget.type,
-                            value: c.budgetTarget.dailyBudget,
-                          })}
-                          disabled={!c.budgetTarget}
-                          title={c.budgetIssue ?? "Sửa ngân sách"}
-                          style={{ color: c.budgetTarget ? "var(--text-muted)" : "var(--border)" }}
-                        >
-                          <PencilSimple size={14} />
-                        </button>
+                        {canMutate ? (
+                          <>
+                            <button
+                              onClick={() => toggleStatus(c)}
+                              disabled={acting === c.id}
+                              title={c.status === "ACTIVE" ? "Tạm dừng" : "Tiếp tục"}
+                              style={{ color: c.status === "ACTIVE" ? "var(--amber)" : "var(--accent)" }}
+                            >
+                              {c.status === "ACTIVE" ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
+                            </button>
+                            <button
+                              onClick={() => c.budgetTarget && setEditBudget({
+                                campaignId: c.id,
+                                targetId: c.budgetTarget.id,
+                                targetType: c.budgetTarget.type,
+                                value: c.budgetTarget.dailyBudget,
+                              })}
+                              disabled={!c.budgetTarget}
+                              title={c.budgetIssue ?? "Sửa ngân sách"}
+                              style={{ color: c.budgetTarget ? "var(--text-muted)" : "var(--border)" }}
+                            >
+                              <PencilSimple size={14} />
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

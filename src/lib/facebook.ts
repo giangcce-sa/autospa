@@ -33,7 +33,12 @@ function detectFbError(data: { error?: { message: string; code?: number } }) {
   throw new Error(msg);
 }
 
-export async function postToFacebook(message: string, imageUrl?: string, facebookPageId?: string): Promise<string> {
+export async function postToFacebook(
+  message: string,
+  imageUrl?: string,
+  facebookPageId?: string,
+  onCheckpoint?: (checkpoint: string) => Promise<void>,
+): Promise<string> {
   const { token, pageId } = await getPageCreds(facebookPageId);
   const rateKey = await fbRateKey(pageId);
 
@@ -67,6 +72,7 @@ export async function postToFacebook(message: string, imageUrl?: string, faceboo
     const uploadData = await uploadRes.json();
     detectFbError(uploadData);
     const photoId: string = uploadData.id;
+    await onCheckpoint?.(`photo:${photoId}`);
 
     // Step 2: create a feed post with the staged photo attached
     const feedRes = await fetch(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
@@ -126,7 +132,7 @@ export interface FbComment {
   createdTime: string;
 }
 
-export async function fetchFbComments(postLimit = 10, facebookPageId?: string): Promise<FbComment[]> {
+export async function fetchFbComments(postLimit: number, facebookPageId: string): Promise<FbComment[]> {
   const { token, pageId } = await getPageCreds(facebookPageId);
   const fields = "id,message,comments.limit(50){id,message,from,created_time}";
   const url = `https://graph.facebook.com/v21.0/${pageId}/posts?fields=${fields}&limit=${postLimit}`;
@@ -150,7 +156,7 @@ export async function fetchFbComments(postLimit = 10, facebookPageId?: string): 
   return result;
 }
 
-export async function replyToFbComment(commentId: string, message: string, facebookPageId?: string): Promise<void> {
+export async function replyToFbComment(commentId: string, message: string, facebookPageId: string): Promise<void> {
   const { token, pageId } = await getPageCreds(facebookPageId);
   const rateKey = await fbRateKey(pageId);
   await withRateLimit(rateKey, FB_LIMIT, FB_WINDOW, async () => {

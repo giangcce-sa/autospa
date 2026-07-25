@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+!.env.example
+!.env.vps.example
+node_modules
+dist
+data
+audit-logs
+kiro-workspaces
+coverage
+*.log
+.DS_Store
+CLAUDE.md
+DEPLOY.md
+README.md
+scripts

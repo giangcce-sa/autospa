@@ -17,15 +17,17 @@ export function WorkspaceShell({
   state,
   pages,
   effectiveScope = route.scope,
+  visibleViewIds,
   children,
 }: {
   route: AppRoute;
   state: WorkspaceUrlState;
   pages: WorkspacePageOption[];
   effectiveScope?: RouteScope;
+  visibleViewIds?: string[];
   children?: ReactNode;
 }) {
-  const views = route.views ?? [];
+  const views = (route.views ?? []).filter((view) => !visibleViewIds || visibleViewIds.includes(view.id));
   const currentView = views.find((view) => view.id === state.view) ?? views[0];
 
   return (

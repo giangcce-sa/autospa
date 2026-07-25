@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyCronAuth } from "@/lib/cron-auth";
-import { postToFacebook } from "@/lib/facebook";
-import { postToZalo } from "@/lib/zalo";
 import { reviewContent } from "@/lib/reviewer";
+import { executePublishOperation } from "@/lib/publishing/service";
 import { finishJobRun, logActivity, startJobRun } from "@/lib/activity-log";
 
 export async function GET(req: NextRequest) {
@@ -25,8 +24,6 @@ export async function GET(req: NextRequest) {
     let blocked = 0;
 
     for (const post of posts) {
-      const fullText = [post.caption, post.hashtags].filter(Boolean).join("\n\n");
-
       if (post.postType === "video") {
         await prisma.post.update({
           where: { id: post.id },
@@ -109,26 +106,25 @@ export async function GET(req: NextRequest) {
       }
 
       try {
-        if (post.platform === "zalo") {
-          await postToZalo(fullText, post.imageUrl ?? undefined);
-          await prisma.post.update({
-            where: { id: post.id },
-            data: { status: "published", publishedAt: now },
-          });
-        } else {
-          const fbPostId = await postToFacebook(fullText, post.imageUrl ?? undefined, post.facebookPageId ?? undefined);
-          await prisma.post.update({
-            where: { id: post.id },
-            data: { status: "published", publishedAt: now, fbPostId },
-          });
-        }
-        published++;
+        const channels = post.platform === "zalo" ? ["zalo" as const] : ["facebook" as const];
+        const operation = await executePublishOperation({
+          idempotencyKey: `scheduled:${post.id}:${post.updatedAt.toISOString()}`,
+          postId: post.id,
+          facebookPageId: post.facebookPageId,
+          source: "cron",
+          caption: post.caption,
+          hashtags: post.hashtags,
+          imageUrl: post.imageUrl,
+          channels,
+        });
+        if (["completed", "partial"].includes(operation.status)) published++;
+        else failed++;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         failed++;
         await prisma.post.update({
           where: { id: post.id },
-          data: { qualityNotes: `Auto-publish failed: ${message}` },
+          data: { status: "publish_failed", qualityNotes: `Auto-publish failed: ${message}` },
         });
         await logActivity({
           type: "publish_failed",

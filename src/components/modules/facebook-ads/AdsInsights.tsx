@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ArrowClockwise } from "@phosphor-icons/react";
@@ -16,13 +17,20 @@ const DATE_PRESETS = [
 function fmt(n: string) { return Number(n).toLocaleString("vi-VN"); }
 function fmtVnd(n: string) { return Number(n).toLocaleString("vi-VN") + "đ"; }
 
-interface Props { facebookPageId?: string; }
+interface Props {
+  facebookPageId?: string;
+  initialData?: Insights | null;
+  initialError?: string;
+  initialDatePreset?: string;
+  canonical?: boolean;
+}
 
-export function AdsInsights({ facebookPageId }: Props) {
-  const [datePreset, setDatePreset] = useState("last_7d");
-  const [data, setData] = useState<Insights | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+export function AdsInsights({ facebookPageId, initialData, initialError = "", initialDatePreset = "last_7d", canonical = false }: Props) {
+  const router = useRouter();
+  const [datePreset, setDatePreset] = useState(initialDatePreset);
+  const [data, setData] = useState<Insights | null>(initialData ?? null);
+  const [loading, setLoading] = useState(!canonical && !initialData);
+  const [error, setError] = useState(initialError);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,7 +44,18 @@ export function AdsInsights({ facebookPageId }: Props) {
     } finally { setLoading(false); }
   }, [datePreset, facebookPageId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!canonical) load();
+  }, [canonical, load]);
+
+  useEffect(() => {
+    if (canonical) {
+      setData(initialData ?? null);
+      setError(initialError);
+      setDatePreset(initialDatePreset);
+      setLoading(false);
+    }
+  }, [canonical, initialData, initialDatePreset, initialError]);
 
   const stats = data
     ? [
@@ -44,7 +63,7 @@ export function AdsInsights({ facebookPageId }: Props) {
         { label: "Reach", value: fmt(data.reach) },
         { label: "Impressions", value: fmt(data.impressions) },
         { label: "Clicks", value: fmt(data.clicks) },
-        { label: "CTR", value: (Number(data.ctr) * 100).toFixed(2) + "%" },
+        { label: "CTR", value: Number(data.ctr).toFixed(2) + "%" },
         { label: "CPM", value: fmtVnd(data.cpm) },
         { label: "CPC", value: fmtVnd(data.cpc) },
       ]
@@ -58,7 +77,15 @@ export function AdsInsights({ facebookPageId }: Props) {
           {DATE_PRESETS.map((d) => (
             <button
               key={d.value}
-              onClick={() => setDatePreset(d.value)}
+              onClick={() => {
+                if (canonical) {
+                  const params = new URLSearchParams(window.location.search);
+                  params.set("status", d.value);
+                  router.push(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+                } else {
+                  setDatePreset(d.value);
+                }
+              }}
               className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
               style={{
                 background: datePreset === d.value ? "var(--bg-card)" : "transparent",
@@ -70,7 +97,7 @@ export function AdsInsights({ facebookPageId }: Props) {
             </button>
           ))}
         </div>
-        <Button size="sm" variant="secondary" loading={loading} onClick={load}>
+        <Button size="sm" variant="secondary" loading={loading} onClick={() => canonical ? router.refresh() : load()}>
           <ArrowClockwise size={13} /> Làm mới
         </Button>
       </div>
@@ -112,7 +139,7 @@ export function AdsInsights({ facebookPageId }: Props) {
                     <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{fmt(c.reach)}</td>
                     <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{fmt(c.clicks)}</td>
                     <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{fmt(c.impressions)}</td>
-                    <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{(Number(c.ctr) * 100).toFixed(2)}%</td>
+                    <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{Number(c.ctr).toFixed(2)}%</td>
                   </tr>
                 ))}
               </tbody>

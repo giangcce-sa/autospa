@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { getCanonicalRouteHref } from "@/config/routes";
 import {
   ArrowsClockwise,
   ArrowRight,
@@ -259,7 +260,7 @@ export function CEODashboard() {
                 {regenerating ? "Đang tạo..." : "Tạo brief mới"}
               </button>
               <Link
-                href="/orchestrator"
+                href={getCanonicalRouteHref("orchestrator")}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all hover:-translate-y-px"
                 style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}
               >
@@ -308,7 +309,7 @@ export function CEODashboard() {
       </div>
 
       <div className="ceo-row-3 grid grid-cols-1 xl:grid-cols-[1.05fr_1fr_1.05fr] gap-4">
-        <SectionCard title="Việc cần duyệt" icon={Target} iconColor="var(--premium)" href="/automation" hrefLabel="Duyệt việc">
+        <SectionCard title="Việc cần duyệt" icon={Target} iconColor="var(--premium)" href={getCanonicalRouteHref("automation", "approvals")} hrefLabel="Duyệt việc">
           <CEOTaskCenter />
         </SectionCard>
 
@@ -330,7 +331,7 @@ export function CEODashboard() {
           <AdsCommandCenter />
         </SectionCard>
 
-        <SectionCard title="Trạng thái AI team" icon={Robot} iconColor="var(--premium)" href="/orchestrator" hrefLabel="Orchestrator">
+        <SectionCard title="Trạng thái AI team" icon={Robot} iconColor="var(--premium)" href={getCanonicalRouteHref("orchestrator")} hrefLabel="Orchestrator">
           <AITeamStatus />
         </SectionCard>
       </div>

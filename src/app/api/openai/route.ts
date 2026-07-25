@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
       const imageUrl = stored?.url ?? composedImageUrl;
       const generation = await prisma.imageGeneration.create({
         data: {
-          postId: postId ?? null,
+          postId: null,
           facebookPageId: resolvedPageId,
           serviceId: service?.id ?? serviceId ?? null,
           model: settings?.imageModel ?? null,
@@ -237,9 +237,6 @@ export async function POST(req: NextRequest) {
 
     const first = variants[0];
     if (!first) throw new Error("Không tạo được biến thể ảnh");
-    if (postId) {
-      await prisma.post.update({ where: { id: postId }, data: { imageUrl: first.imageUrl, imagePrompt: promptResult.finalPrompt } });
-    }
 
     if (jobId) {
       await finishJobRun(jobId, {

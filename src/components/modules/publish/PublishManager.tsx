@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ChannelMediaPreview } from "@/components/media/ChannelMediaPreview";
 import { Textarea } from "@/components/ui/Input";
 import { StatusBadge } from "@/components/ui/Badge";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   FacebookLogo, PaperPlaneTilt, CalendarBlank, FloppyDisk,
@@ -16,7 +17,21 @@ import { ReviewBadge, type ReviewIssue } from "@/components/ui/ReviewBadge";
 
 interface FbPage { id: string; fbPageId: string; pageName: string; isActive: boolean; }
 
-interface DraftPost {
+interface PublishChannelState {
+  channel: string;
+  status: string;
+  externalId: string | null;
+  error: string | null;
+}
+
+interface PublishOperationState {
+  id: string;
+  status: string;
+  error: string | null;
+  channelAttempts: PublishChannelState[];
+}
+
+export interface PublishingPostData {
   id: string;
   caption: string;
   hashtags: string | null;
@@ -25,16 +40,33 @@ interface DraftPost {
   postType: string;
   tone: string;
   platform: string;
+  status?: string;
+  scheduledAt?: string | null;
   service?: { name: string } | null;
-  createdAt: string;
+  publishOperations?: PublishOperationState[];
+  createdAt?: string;
+}
+
+function sourceLabelForPost(post: PublishingPostData) {
+  return post.service?.name ? `Bài đã lưu · ${post.service.name}` : "Bài đã lưu";
+}
+
+function toLocalDateTime(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
 interface Props {
   initialPostId?: string;
+  initialPost?: PublishingPostData;
+  initialReview?: { status: "pass" | "warn" | "fail"; score: number; issues: ReviewIssue[] } | null;
   initialImageUrl?: string;
+  facebookPageId?: string;
+  onPostIdChange?: (postId?: string) => void;
 }
 
-export function PublishManager({ initialPostId, initialImageUrl }: Props) {
+export function PublishManager({ initialPostId, initialPost, initialReview, initialImageUrl, facebookPageId, onPostIdChange }: Props) {
   const router = useRouter();
   const [postId, setPostId] = useState<string | undefined>(initialPostId);
   const [caption, setCaption] = useState("");
@@ -44,11 +76,14 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
   const [scheduledAt, setScheduledAt] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [publishOperation, setPublishOperation] = useState<PublishOperationState | null>(null);
   const [error, setError] = useState("");
   const [sourceLabel, setSourceLabel] = useState<string | null>(null);
+  const postLoadController = useRef<AbortController | null>(null);
+  const publishRequestRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   // Draft picker
-  const [drafts, setDrafts] = useState<DraftPost[]>([]);
+  const [drafts, setDrafts] = useState<PublishingPostData[]>([]);
   const [showDrafts, setShowDrafts] = useState(false);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
 
@@ -75,7 +110,11 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
       if (res.data) {
         const active = res.data.filter((p: FbPage) => p.isActive);
         setFbPages(active);
-        if (active.length > 0) setSelectedPageId((current) => current || active[0].id);
+        if (facebookPageId && active.some((page: FbPage) => page.id === facebookPageId)) {
+          setSelectedPageId(facebookPageId);
+        } else if (active.length > 0) {
+          setSelectedPageId((current) => current || active[0].id);
+        }
       }
     });
     fetch("/api/instagram").then((r) => r.json()).then((res) => {
@@ -84,42 +123,72 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
     fetch("/api/tiktok?action=accounts").then((r) => r.json()).then((res) => {
       if (res.success) setTiktokConnected(res.data.some((a: { isActive: boolean }) => a.isActive));
     });
-  }, []);
+  }, [facebookPageId]);
 
-  // Sync imageUrl from parent when a new image is generated
   useEffect(() => {
-    if (initialImageUrl) setImageUrl(initialImageUrl);
+    if (facebookPageId) setSelectedPageId(facebookPageId);
+  }, [facebookPageId]);
+
+  useEffect(() => {
+    setImageUrl(initialImageUrl ?? "");
   }, [initialImageUrl]);
 
-  // Load post from postId (passed via URL or set after draft pick)
   useEffect(() => {
-    if (!initialPostId) return;
-    fetch(`/api/publish?postId=${initialPostId}`)
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.data) {
-          setCaption(res.data.caption ?? "");
-          setHashtags(res.data.hashtags ?? "");
-          setPostType(res.data.postType ?? "service");
-          setImageUrl(res.data.imageUrl ?? "");
-          setSelectedPageId(res.data.facebookPageId ?? "");
-          setSourceLabel(res.data.service?.name ? `Từ nội dung AI · ${res.data.service.name}` : "Từ nội dung AI");
-          // Trigger reviewer
-          fetch("/api/reviewer", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ postId: initialPostId }),
-          }).then((r) => r.json()).then((rev) => {
-            if (rev.success) setReview(rev.data);
-          });
+    const controller = new AbortController();
+    postLoadController.current = controller;
+    const resolvedPostId = initialPost?.id ?? initialPostId;
+    setPostId(resolvedPostId);
+    setCaption(initialPost?.caption ?? "");
+    setHashtags(initialPost?.hashtags ?? "");
+    setPostType(initialPost?.postType ?? "service");
+    setImageUrl(initialPost?.imageUrl ?? (resolvedPostId ? "" : initialImageUrl ?? ""));
+    setScheduledAt(toLocalDateTime(initialPost?.scheduledAt));
+    setStatus(initialPost?.status ?? null);
+    setPublishOperation(initialPost?.publishOperations?.[0] ?? null);
+    setError("");
+    setSourceLabel(initialPost ? sourceLabelForPost(initialPost) : null);
+    setReview(initialReview ?? null);
+    setReviewBlocked(false);
+    if (initialPost?.facebookPageId) setSelectedPageId(initialPost.facebookPageId);
+
+    if (!resolvedPostId || initialPost) return () => controller.abort();
+
+    const loadPost = async () => {
+      try {
+        const response = await fetch(`/api/publish?postId=${resolvedPostId}`, { signal: controller.signal });
+        const result = await response.json();
+        if (!response.ok || !result.data) {
+          setError(result.error ?? "Không tải được bài viết");
+          return;
         }
-      });
-  }, [initialPostId]);
+
+        setCaption(result.data.caption ?? "");
+        setHashtags(result.data.hashtags ?? "");
+        setPostType(result.data.postType ?? "service");
+        setImageUrl(result.data.imageUrl ?? "");
+        setSelectedPageId(result.data.facebookPageId ?? "");
+        setSourceLabel(sourceLabelForPost(result.data));
+        setStatus(result.data.status ?? null);
+        setPublishOperation(result.data.publishOperations?.[0] ?? null);
+      } catch (loadError) {
+        if (loadError instanceof DOMException && loadError.name === "AbortError") return;
+        setError("Không tải được bài viết");
+      }
+    };
+
+    loadPost();
+    return () => {
+      controller.abort();
+      if (postLoadController.current === controller) postLoadController.current = null;
+    };
+  }, [initialImageUrl, initialPost, initialPostId, initialReview]);
 
   const loadDrafts = async () => {
     setLoadingDrafts(true);
     try {
-      const res = await fetch("/api/content/list?status=draft");
+      const params = new URLSearchParams({ status: "draft" });
+      if (facebookPageId) params.set("facebookPageId", facebookPageId);
+      const res = await fetch(`/api/content/list?${params.toString()}`);
       const data = await res.json();
       setDrafts(data.data ?? []);
       setShowDrafts(true);
@@ -128,15 +197,25 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
     }
   };
 
-  const pickDraft = (draft: DraftPost) => {
+  const resetReviewState = () => {
+    setReview(null);
+    setReviewBlocked(false);
+  };
+
+  const pickDraft = (draft: PublishingPostData) => {
+    postLoadController.current?.abort();
     setPostId(draft.id);
+    onPostIdChange?.(draft.id);
     setCaption(draft.caption ?? "");
     setHashtags(draft.hashtags ?? "");
     setPostType(draft.postType ?? "service");
     setImageUrl(draft.imageUrl ?? "");
     setSelectedPageId(draft.facebookPageId ?? "");
-    setSourceLabel(draft.service?.name ? `Bài nháp · ${draft.service.name}` : "Bài nháp");
-    setStatus(null);
+    setSourceLabel(sourceLabelForPost(draft));
+    setScheduledAt(toLocalDateTime(draft.scheduledAt));
+    setStatus(draft.status ?? null);
+    setPublishOperation(draft.publishOperations?.[0] ?? null);
+    resetReviewState();
     setError(draft.postType === "video" ? "Video chỉ được xuất bản từ Xưởng video sau khi render, QA và duyệt đúng phiên bản." : "");
     setShowDrafts(false);
   };
@@ -151,6 +230,18 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
     setError("");
     setReviewBlocked(false);
     try {
+      const publishFingerprint = JSON.stringify({
+        postId,
+        caption,
+        hashtags,
+        imageUrl: imageUrl.trim() || null,
+        facebookPageId: (facebookPageId ?? selectedPageId) || null,
+        publishToInstagram,
+        publishToTikTok,
+      });
+      if (action === "publish-now" && publishRequestRef.current?.fingerprint !== publishFingerprint) {
+        publishRequestRef.current = { fingerprint: publishFingerprint, key: crypto.randomUUID() };
+      }
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,28 +253,34 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
           postType,
           imageUrl: imageUrl.trim() || undefined,
           scheduledAt: scheduledAt || undefined,
-          facebookPageId: selectedPageId || undefined,
+          facebookPageId: (facebookPageId ?? selectedPageId) || undefined,
           force,
+          idempotencyKey: action === "publish-now" ? publishRequestRef.current?.key : undefined,
           publishToInstagram: action === "publish-now" ? publishToInstagram : false,
           publishToTikTok: action === "publish-now" ? publishToTikTok : false,
         }),
       });
       const data = await res.json();
+      if (data.data?.id) {
+        setPostId(data.data.id);
+        onPostIdChange?.(data.data.id);
+      }
       if (res.status === 422 && data.error === "REVIEW_BLOCKED") {
         setReview(data.review);
         setReviewBlocked(true);
         setError("Reviewer Agent đã chặn vì có vấn đề nghiêm trọng. Sửa nội dung hoặc nhấn 'Đăng mặc dù' để bỏ qua.");
         return;
       }
+      if (data.operation) setPublishOperation(data.operation);
       if (!res.ok) {
         const facebookResult = typeof data.results?.facebook === "string"
           ? data.results.facebook.replace(/^error:/, "").trim()
           : "";
+        setStatus(data.data?.status ?? null);
         setError(data.error || facebookResult || "Không thể đăng bài lên Facebook. Hãy kiểm tra kết nối và thử lại.");
         return;
       }
       setStatus(data.data.status);
-      if (!postId && data.data.id) setPostId(data.data.id);
     } finally { setLoading(null); }
   };
 
@@ -222,7 +319,7 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
           <CaretDown size={10} />
         </Button>
         {sourceLabel && (
-          <button className="text-xs underline" style={{ color: "var(--text-muted)" }} onClick={() => { setPostId(undefined); setCaption(""); setHashtags(""); setPostType("service"); setImageUrl(""); setSourceLabel(null); setStatus(null); setError(""); }}>
+          <button className="text-xs underline" style={{ color: "var(--text-muted)" }} onClick={() => { postLoadController.current?.abort(); setPostId(undefined); onPostIdChange?.(undefined); setCaption(""); setHashtags(""); setPostType("service"); setImageUrl(""); setSelectedPageId(""); setSourceLabel(null); setStatus(null); setPublishOperation(null); setError(""); resetReviewState(); }}>
             Xóa, tạo bài mới
           </button>
         )}
@@ -247,7 +344,7 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
                   <div className="flex gap-2 mt-0.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
                     {d.service?.name && <span>{d.service.name}</span>}
                     <span>{d.platform}</span>
-                    <span>{new Date(d.createdAt).toLocaleDateString("vi-VN")}</span>
+                    {d.createdAt && <span>{new Date(d.createdAt).toLocaleDateString("vi-VN")}</span>}
                   </div>
                 </button>
               ))}
@@ -265,14 +362,20 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
               placeholder="Nội dung bài viết..."
               rows={6}
               value={caption}
-              onChange={(e) => setCaption(e.target.value)}
+              onChange={(e) => {
+                setCaption(e.target.value);
+                resetReviewState();
+              }}
             />
             <Textarea
               label="Hashtags"
               placeholder="#spa #lamdep #chamsocda"
               rows={2}
               value={hashtags}
-              onChange={(e) => setHashtags(e.target.value)}
+              onChange={(e) => {
+                setHashtags(e.target.value);
+                resetReviewState();
+              }}
             />
 
             {/* Image URL */}
@@ -287,10 +390,23 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
                   className="flex-1 px-3 py-2 text-xs rounded-lg border outline-none"
                   style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
                   value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
+                  onChange={(e) => {
+                    setImageUrl(e.target.value);
+                    resetReviewState();
+                  }}
                 />
                 {imageUrl && (
-                  <button onClick={() => setImageUrl("")} className="text-xs px-2 rounded-lg" style={{ color: "var(--text-muted)", background: "var(--bg-subtle)" }}>✕</button>
+                  <button
+                    onClick={() => {
+                      setImageUrl("");
+                      resetReviewState();
+                    }}
+                    aria-label="Xóa media đính kèm"
+                    className="min-h-11 min-w-11 rounded-lg px-2 text-xs"
+                    style={{ color: "var(--text-muted)", background: "var(--bg-subtle)" }}
+                  >
+                    Xóa
+                  </button>
                 )}
               </div>
               <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
@@ -338,6 +454,7 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
                   style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
                   value={selectedPageId}
                   onChange={(e) => setSelectedPageId(e.target.value)}
+                  disabled={Boolean(facebookPageId)}
                 >
                   {fbPages.map((p) => (
                     <option key={p.id} value={p.id}>{p.pageName}</option>
@@ -371,17 +488,37 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
               <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>
             ) : null}
             {status && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <StatusBadge status={status} />
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Đã xử lý thành công</span>
-                {status === "published" && postId && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => router.push(`/facebook-ads?postId=${postId}`)}
-                  >
-                    <Megaphone size={12} /> Chạy quảng cáo
-                  </Button>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <StatusBadge status={status} />
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {publishOperation?.status === "needs_reconciliation"
+                      ? "Cần đối soát trước khi thử lại"
+                      : publishOperation?.status === "partial"
+                        ? "Một số kênh đã đăng thành công"
+                        : status === "published"
+                          ? "Đã đăng thành công"
+                          : "Trạng thái đã được lưu"}
+                  </span>
+                  {status === "published" && postId && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => router.push(`/facebook-ads?postId=${postId}`)}
+                    >
+                      <Megaphone size={12} /> Chạy quảng cáo
+                    </Button>
+                  )}
+                </div>
+                {publishOperation && (
+                  <div className="grid gap-1 sm:grid-cols-3">
+                    {publishOperation.channelAttempts.map((attempt) => (
+                      <div key={`${attempt.channel}-${attempt.status}`} className="rounded-md border px-2 py-1.5 text-[11px]" style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}>
+                        <strong className="capitalize">{attempt.channel}</strong>: {attempt.status}
+                        {attempt.error ? <p className="mt-0.5" style={{ color: "var(--rose)" }}>{attempt.error}</p> : null}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -412,7 +549,9 @@ export function PublishManager({ initialPostId, initialImageUrl }: Props) {
                 </label>
               )}
               {!igConnected && !tiktokConnected && (
-                <a href="/settings" className="text-[11px] underline" style={{ color: "var(--text-muted)" }}>Thêm Instagram / TikTok →</a>
+                <Link href="/system/settings?view=channels&scope=account" className="text-[11px] underline" style={{ color: "var(--text-muted)" }}>
+                  Thêm Instagram / TikTok →
+                </Link>
               )}
             </div>
 

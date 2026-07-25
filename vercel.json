@@ -4,6 +4,7 @@
     { "path": "/api/cron/realtime-monitor", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/ads-optimize", "schedule": "0 */4 * * *" },
     { "path": "/api/cron/ads-reconcile", "schedule": "7 * * * *" },
+    { "path": "/api/cron/publish-reconcile", "schedule": "17 * * * *" },
     { "path": "/api/cron/daily-report",  "schedule": "0 13 * * *" },
     { "path": "/api/cron/backup-reminder", "schedule": "0 3 * * 0" },
     { "path": "/api/cron/weekly-report", "schedule": "0 * * * *" },
@@ -11,7 +12,7 @@
     { "path": "/api/cron/video-jobs", "schedule": "*/2 * * * *" },
     { "path": "/api/cron/video-cleanup", "schedule": "45 3 * * *" },
     { "path": "/api/cron/video-performance", "schedule": "15 */6 * * *" },
-    { "path": "/api/crm/insights?action=refresh", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/crm-insights", "schedule": "0 3 * * *" },
     { "path": "/api/cron/flash-deal", "schedule": "0 6 * * *" },
     { "path": "/api/cron/learning", "schedule": "0 2 * * *" },
     { "path": "/api/cron/google-reviews", "schedule": "0 8 * * *" }

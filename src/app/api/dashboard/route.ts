@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/db";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { getBusinessMonthRange } from "@/lib/today-policy";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    await requireUser({ owner: true });
+    const { start: startOfMonth } = getBusinessMonthRange();
 
     const [totalPosts, publishedThisMonth, scheduled, pendingAppointments, unreadMessages, services, recentPosts, totalCustomers, hotLeads, pendingCare, unreadAlerts] = await Promise.all([
       prisma.post.count(),
@@ -24,7 +26,9 @@ export async function GET() {
       data: { totalPosts, publishedThisMonth, scheduled, pendingAppointments, unreadMessages, services, recentPosts, totalCustomers, hotLeads, pendingCare, unreadAlerts },
       success: true,
     });
-  } catch {
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
     return NextResponse.json({ error: "Lỗi khi tải dashboard", success: false }, { status: 500 });
   }
 }

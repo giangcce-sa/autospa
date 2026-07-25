@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/db";
 import { runProactiveOutreach } from "@/lib/proactive-sales";
 import { NextRequest, NextResponse } from "next/server";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 
 export async function GET() {
   try {
+    await requireUser({ owner: true });
     // List recent proactive messages sent
     const messages = await prisma.careMessage.findMany({
       where: { type: { startsWith: "proactive_" } },
@@ -20,6 +22,8 @@ export async function GET() {
       success: true,
     });
   } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return access;
     const msg = err instanceof Error ? err.message : "Lỗi";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }
@@ -27,6 +31,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const body = await req.json();
     if (body.action === "run-now") {
       const result = await runProactiveOutreach();
@@ -34,6 +39,8 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return access;
     const msg = err instanceof Error ? err.message : "Lỗi";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }

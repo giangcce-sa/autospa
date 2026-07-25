@@ -2,6 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { evaluateProjectQuality } from "../src/lib/video-studio/quality.ts";
 import { sceneInvalidationFor } from "../src/lib/video-studio/invalidation.ts";
+import { readFile } from "node:fs/promises";
+
+async function source(path) {
+  return readFile(new URL(`../${path}`, import.meta.url), "utf8");
+}
 
 const readyTalkingScene = {
   id: "scene-1", kind: "talking", script: "Xin chào", durationSec: 5,
@@ -52,4 +57,27 @@ test("scene visual changes invalidate video and lip-sync", () => {
   assert.equal(result.clearVideo, true);
   assert.equal(result.clearAudio, false);
   assert.equal(result.clearLipSync, true);
+});
+
+test("Video Job GET returns persisted safe status without polling providers", async () => {
+  const route = await source("src/app/api/video-studio/jobs/[id]/route.ts");
+  const cron = await source("src/app/api/cron/video-jobs/route.ts");
+  const studio = await source("src/components/modules/video-studio/VideoStudio.tsx");
+  const getStart = route.indexOf("export async function GET");
+  const deleteStart = route.indexOf("export async function DELETE");
+  const get = route.slice(getStart, deleteStart);
+
+  assert.match(get, /videoJob\.findUnique\(\{ where: \{ id \}, select: safeJobSelect \}\)/);
+  assert.match(get, /requirePageAccess\(job\.project\.facebookPageId\)/);
+  assert.equal(get.includes("pollVideoJob"), false);
+  assert.equal(route.includes('import { cancelVideoJob, pollVideoJob }'), false);
+  assert.match(route, /id: true,[\s\S]*?updatedAt: true/);
+  assert.equal(route.includes("externalId: true"), false);
+  assert.equal(route.includes("input: true"), false);
+  assert.equal(route.includes("output: true"), false);
+  assert.equal(route.includes("leaseUntil: true"), false);
+  assert.equal(route.includes("actualCostUsd: true"), false);
+  assert.match(cron, /pollVideoJob\(job\.id\)/);
+  assert.match(studio, /`refresh-\$\{job\.id\}`/);
+  assert.equal(studio.includes('`poll-${job.id}`'), false);
 });

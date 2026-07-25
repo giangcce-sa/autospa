@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useActivePage } from "@/contexts/ActivePageContext";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { truncate } from "@/lib/utils";
@@ -18,7 +19,15 @@ function engagementScore(a: Analytics | null) {
 interface JudgeTurn { speaker: string; provider: "claude" | "openai"; content: string; }
 interface JudgeResult { synthesis: string; turns: JudgeTurn[]; }
 
-export function AbTestView() {
+export function AbTestView({
+  facebookPageId: providedPageId,
+  canMutate = true,
+}: {
+  facebookPageId?: string;
+  canMutate?: boolean;
+} = {}) {
+  const { selectedPageId } = useActivePage();
+  const facebookPageId = providedPageId ?? selectedPageId ?? undefined;
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [declaring, setDeclaring] = useState<string | null>(null);
@@ -26,16 +35,22 @@ export function AbTestView() {
   const [judgeResults, setJudgeResults] = useState<Record<string, JudgeResult>>({});
   const [expandedDebate, setExpandedDebate] = useState<Record<string, boolean>>({});
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (!facebookPageId) {
+      setGroups([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch("/api/ab-test");
+      const params = new URLSearchParams({ facebookPageId });
+      const res = await fetch(`/api/ab-test?${params.toString()}`);
       const data = await res.json();
       if (data.success) setGroups(data.data);
     } finally { setLoading(false); }
-  };
+  }, [facebookPageId]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const runJudge = async (abGroupId: string) => {
     setJudging(abGroupId);
@@ -43,7 +58,7 @@ export function AbTestView() {
       const res = await fetch("/api/ab-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "judge", abGroupId }),
+        body: JSON.stringify({ action: "judge", abGroupId, facebookPageId }),
       });
       const data = await res.json();
       if (data.success) {
@@ -59,7 +74,7 @@ export function AbTestView() {
       await fetch("/api/ab-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "declare-winner", winnerId, abGroupId }),
+        body: JSON.stringify({ action: "declare-winner", winnerId, abGroupId, facebookPageId }),
       });
       await load();
     } finally { setDeclaring(null); }
@@ -106,25 +121,27 @@ export function AbTestView() {
                   {new Date(group.createdAt).toLocaleDateString("vi-VN")}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => runJudge(group.abGroupId)}
-                  loading={judging === group.abGroupId}
-                >
-                  <ChatsTeardrop size={12} weight="fill" /> AI Council Judge
-                </Button>
-                {!isDeclared && winner && (
+              {canMutate && (
+                <div className="flex gap-2">
                   <Button
                     size="sm"
-                    onClick={() => declareWinner(winner, group.abGroupId)}
-                    loading={declaring === winner}
+                    variant="secondary"
+                    onClick={() => runJudge(group.abGroupId)}
+                    loading={judging === group.abGroupId}
                   >
-                    <Trophy size={12} weight="fill" /> Chốt thắng
+                    <ChatsTeardrop size={12} weight="fill" /> AI Council Judge
                   </Button>
-                )}
-              </div>
+                  {!isDeclared && winner && (
+                    <Button
+                      size="sm"
+                      onClick={() => declareWinner(winner, group.abGroupId)}
+                      loading={declaring === winner}
+                    >
+                      <Trophy size={12} weight="fill" /> Chốt thắng
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardHeader>
 
             {judgeResults[group.abGroupId] && (

@@ -12,14 +12,21 @@ test("workspace URL parser validates view and scope", () => {
     id: undefined,
     status: undefined,
     q: undefined,
+    domain: undefined,
+    category: undefined,
+    risk: undefined,
     step: undefined,
+    month: undefined,
   });
   assert.equal(parseWorkspaceUrl({ view: "unknown", scope: "unknown" }, options).view, "overview");
   assert.equal(parseWorkspaceUrl({ view: "unknown", scope: "unknown" }, options).scope, "current");
 });
 
 test("workspace URL serialization preserves stable state", () => {
-  assert.equal(workspaceSearchParams({ view: "editor", scope: "current", pageId: "page-1", id: "post-1" }).toString(), "view=editor&scope=current&pageId=page-1&id=post-1");
+  assert.equal(
+    workspaceSearchParams({ view: "brain", scope: "account", pageId: "page-1", id: "post-1", status: "active", q: "spa", domain: "content", category: "caption", risk: "low", month: "2026-07" }).toString(),
+    "view=brain&scope=account&pageId=page-1&id=post-1&status=active&q=spa&domain=content&category=caption&risk=low&month=2026-07",
+  );
 });
 
 test("workspace scope policy rejects unsupported URL scopes", () => {

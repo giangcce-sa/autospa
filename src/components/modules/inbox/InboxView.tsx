@@ -9,7 +9,7 @@ import { ChatCircleDots, Robot, Plus, Check, X, ArrowsClockwise, FacebookLogo } 
 import { formatDateTime } from "@/lib/utils";
 
 interface FbPage { id: string; fbPageId: string; pageName: string; isActive: boolean; }
-interface Message { id: string; senderName: string; senderId: string; message: string; reply: string | null; isAutoReply: boolean; createdAt: string; }
+interface Message { id: string; senderName: string; senderId: string; message: string; reply: string | null; isAutoReply: boolean; facebookPageId: string | null; createdAt: string; }
 interface Appointment { id: string; name: string; phone: string | null; service: string | null; preferredAt: string | null; status: string; createdAt: string; }
 
 const SYNC_INTERVAL = 2 * 60 * 1000;
@@ -82,7 +82,7 @@ export function InboxView() {
       await fetch("/api/inbox", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "auto-reply", messageId: msg.id, senderName: msg.senderName, message: msg.message }),
+        body: JSON.stringify({ action: "auto-reply", messageId: msg.id, facebookPageId: msg.facebookPageId }),
       });
       load();
     } finally { setLoadingMsg(null); }
@@ -94,7 +94,7 @@ export function InboxView() {
       const res = await fetch("/api/inbox", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "send-fb-reply", messageId: msg.id }),
+        body: JSON.stringify({ action: "send-fb-reply", messageId: msg.id, facebookPageId: msg.facebookPageId }),
       });
       const data = await res.json();
       if (!data.success) alert(data.error);
@@ -104,7 +104,9 @@ export function InboxView() {
 
   const handleSimulate = async () => {
     if (!simForm.message.trim()) return;
-    await fetch("/api/inbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "simulate-message", ...simForm }) });
+    const facebookPageId = selectedPageId || fbPages[0]?.id;
+    if (!facebookPageId) return;
+    await fetch("/api/inbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "simulate-message", facebookPageId, ...simForm }) });
     setSimForm({ senderName: "", message: "" });
     load();
   };

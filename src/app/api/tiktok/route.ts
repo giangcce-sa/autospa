@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getTikTokOAuthUrl, getTikTokUser } from "@/lib/tiktok";
 import { createOAuthState, setOAuthStateCookie, TIKTOK_OAUTH_STATE_COOKIE } from "@/lib/oauth-state";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 
 export async function GET(req: NextRequest) {
   try {
+    await requireUser();
     const { searchParams } = new URL(req.url);
     const action = searchParams.get("action");
 
     if (action === "auth-url") {
+      await requireUser({ owner: true });
       const state = createOAuthState();
       const url = getTikTokOAuthUrl(state);
       const res = NextResponse.json({ success: true, data: { url } });
@@ -25,12 +28,15 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: false, message: "Action không hợp lệ" }, { status: 400 });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const body = await req.json();
     const { action } = body;
 
@@ -48,15 +54,15 @@ export async function POST(req: NextRequest) {
 
     // Manual token entry (for testing without OAuth flow)
     if (action === "manual-connect") {
-      const { accessToken, openId, displayName } = body;
+      const { accessToken, openId } = body;
       if (!accessToken || !openId) {
         return NextResponse.json({ success: false, message: "Cần accessToken và openId" }, { status: 400 });
       }
 
-      let user = { openId, displayName: displayName ?? "TikTok Account", avatarUrl: "", followerCount: 0, followingCount: 0, likesCount: 0, videoCount: 0 };
-      try {
-        user = await getTikTokUser(accessToken, openId);
-      } catch { /* use manual info */ }
+      const user = await getTikTokUser(accessToken, openId);
+      if (user.openId !== openId) {
+        return NextResponse.json({ success: false, message: "Open ID không khớp với access token" }, { status: 400 });
+      }
 
       await prisma.tikTokAccount.upsert({
         where: { openId: user.openId },
@@ -69,6 +75,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: false, message: "Action không hợp lệ" }, { status: 400 });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e), success: false }, { status: 500 });
   }
 }

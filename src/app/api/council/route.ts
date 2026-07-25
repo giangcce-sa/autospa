@@ -1,33 +1,33 @@
 import { councilDebate, quickCritique } from "@/lib/ai-council";
 import { formatPriorContext, saveDecision } from "@/lib/ceo-memory";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const { topic, context, mode } = await req.json() as {
-      topic: string;
-      context?: string;
-      mode?: "full" | "quick";
-    };
+    await requireUser({ owner: true });
+    const body = await req.json() as { topic?: unknown; context?: unknown; mode?: unknown };
+    const topic = typeof body.topic === "string" ? body.topic.trim().slice(0, 500) : "";
+    const context = typeof body.context === "string" ? body.context.trim().slice(0, 4000) : "";
+    const mode = body.mode === "quick" ? "quick" : body.mode === "full" || body.mode == null ? "full" : null;
 
-    if (!topic?.trim()) {
+    if (!topic) {
       return NextResponse.json({ error: "Câu hỏi không được trống", success: false }, { status: 400 });
     }
+    if (!mode) {
+      return NextResponse.json({ error: "Chế độ Council không hợp lệ", success: false }, { status: 400 });
+    }
 
-    const t = topic.trim();
-    const ctx = context ?? "";
-    const priorContext = await formatPriorContext(t).catch(() => "");
-
+    const priorContext = await formatPriorContext(topic).catch(() => "");
     const result = mode === "quick"
-      ? await quickCritique({ topic: t, context: ctx, priorContext })
-      : await councilDebate({ topic: t, context: ctx, priorContext });
+      ? await quickCritique({ topic, context, priorContext })
+      : await councilDebate({ topic, context, priorContext });
 
-    // Save decision (no outcome tracking — user-initiated)
-    await saveDecision({ topic: t, context: ctx, council: result, source: "council" }).catch(() => null);
-
+    await saveDecision({ topic, context, council: result, source: "council" });
     return NextResponse.json({ data: result, success: true });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
+    return NextResponse.json({ error: "Không thể hoàn tất Council", success: false }, { status: 500 });
   }
 }

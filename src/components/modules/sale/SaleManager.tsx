@@ -8,9 +8,10 @@ import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Flame, Snowflake, SunDim, CheckCircle, Plus, Sparkle, Trash, ArrowRight } from "@phosphor-icons/react";
 import { truncate } from "@/lib/utils";
+import type { LeadData, LeadStatsData } from "@/lib/customer-workspaces";
 
-interface Lead { id: string; name: string; phone?: string | null; source: string; score: number; stage: string; service?: string | null; lastAction?: string | null; note?: string | null; createdAt: string; }
-interface Stats { total: number; hot: number; warm: number; cold: number; closed: number; }
+type Lead = LeadData;
+type Stats = LeadStatsData;
 
 const StageIcon = ({ s }: { s: string }) => {
   if (s === "hot") return <Flame size={12} weight="fill" style={{ color: "var(--rose)" }} />;
@@ -26,21 +27,52 @@ const stageBadge = (s: string) => {
   return <Badge variant="neutral">Lạnh</Badge>;
 };
 
-export function SaleManager() {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [stats, setStats] = useState<Stats>({ total: 0, hot: 0, warm: 0, cold: 0, closed: 0 });
+export function SaleManager({
+  initialLeads,
+  initialStats,
+  canMutate = true,
+  canonical = false,
+  initialStage = "",
+  onStageChange,
+  onMutate,
+}: {
+  initialLeads?: Lead[];
+  initialStats?: Stats;
+  canMutate?: boolean;
+  canonical?: boolean;
+  initialStage?: string;
+  onStageChange?: (stage?: string) => void;
+  onMutate?: () => void;
+} = {}) {
+  const [leads, setLeads] = useState<Lead[]>(initialLeads ?? []);
+  const [stats, setStats] = useState<Stats>(initialStats ?? { total: 0, hot: 0, warm: 0, cold: 0, closed: 0 });
   const [form, setForm] = useState({ name: "", phone: "", source: "facebook", service: "", stage: "cold", note: "" });
   const [showForm, setShowForm] = useState(false);
   const [scoring, setScoring] = useState(false);
   const [scriptLoading, setScriptLoading] = useState<string | null>(null);
   const [script, setScript] = useState<{ id: string; text: string } | null>(null);
-  const [filterStage, setFilterStage] = useState("");
+  const [filterStage, setFilterStage] = useState(initialStage);
 
   const load = () => fetch("/api/sale").then((r) => r.json()).then((res) => {
     if (res.data) { setLeads(res.data.leads); setStats(res.data.stats); }
   });
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!initialLeads) load();
+  }, [initialLeads]);
+
+  useEffect(() => {
+    if (initialLeads) {
+      setLeads(initialLeads);
+      if (initialStats) setStats(initialStats);
+      setFilterStage(initialStage);
+    }
+  }, [initialLeads, initialStage, initialStats]);
+
+  const refreshData = () => {
+    if (onMutate) onMutate();
+    else load();
+  };
 
   const handleCreate = async () => {
     if (!form.name.trim()) return;
@@ -54,27 +86,27 @@ export function SaleManager() {
         body: JSON.stringify({ action: "create", ...form, score: scoreData.data?.score || 50, stage: scoreData.data?.stage || form.stage }),
       });
       setForm({ name: "", phone: "", source: "facebook", service: "", stage: "cold", note: "" });
-      setShowForm(false); load();
+      setShowForm(false); refreshData();
     } finally { setScoring(false); }
   };
 
-  const updateStage = async (id: string, stage: string, note?: string) => {
-    await fetch("/api/sale", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update-stage", id, stage, note }) });
-    load();
+  const updateStage = async (lead: Lead, stage: string, note?: string) => {
+    await fetch("/api/sale", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update-stage", id: lead.id, facebookPageId: lead.facebookPageId, stage, note }) });
+    refreshData();
   };
 
   const getScript = async (lead: Lead) => {
     setScriptLoading(lead.id);
     try {
-      const res = await fetch("/api/sale", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "consult-script", name: lead.name, service: lead.service, stage: lead.stage }) });
+      const res = await fetch("/api/sale", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "consult-script", id: lead.id, facebookPageId: lead.facebookPageId }) });
       const data = await res.json();
       if (data.data) setScript({ id: lead.id, text: data.data.script });
     } finally { setScriptLoading(null); }
   };
 
-  const deleteLead = async (id: string) => {
-    await fetch("/api/sale", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", id }) });
-    load();
+  const deleteLead = async (lead: Lead) => {
+    await fetch("/api/sale", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", id: lead.id, facebookPageId: lead.facebookPageId }) });
+    refreshData();
   };
 
   const filtered = filterStage ? leads.filter((l) => l.stage === filterStage) : leads;
@@ -90,12 +122,12 @@ export function SaleManager() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex gap-2">
           {["", "hot", "warm", "cold", "closed"].map((s) => (
-            <Button key={s} size="sm" variant={filterStage === s ? "primary" : "secondary"} onClick={() => setFilterStage(s)}>
+            <Button key={s} size="sm" variant={filterStage === s ? "primary" : "secondary"} onClick={() => { setFilterStage(s); onStageChange?.(s || undefined); }}>
               {s === "" ? "Tất cả" : s === "hot" ? "Nóng" : s === "warm" ? "Ấm" : s === "cold" ? "Lạnh" : "Đã chốt"}
             </Button>
           ))}
         </div>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus size={12} /> Thêm lead</Button>
+        {canMutate && !canonical ? <Button size="sm" onClick={() => setShowForm(!showForm)}><Plus size={12} /> Thêm lead</Button> : null}
       </div>
 
       {showForm && (
@@ -154,16 +186,16 @@ export function SaleManager() {
                   {l.note && <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>{truncate(l.note, 80)}</p>}
                 </div>
                 <div className="flex gap-1 shrink-0 flex-wrap justify-end">
-                  {l.stage !== "hot" && l.stage !== "closed" && (
-                    <Button size="sm" variant="secondary" onClick={() => updateStage(l.id, l.stage === "cold" ? "warm" : "hot")}>
+                  {canMutate && l.stage !== "hot" && l.stage !== "closed" && (
+                    <Button size="sm" variant="secondary" onClick={() => updateStage(l, l.stage === "cold" ? "warm" : "hot")}>
                       <ArrowRight size={11} /> {l.stage === "cold" ? "Ấm" : "Nóng"}
                     </Button>
                   )}
-                  {l.stage === "hot" && (
-                    <Button size="sm" onClick={() => updateStage(l.id, "closed", "Đã chốt sale")}><CheckCircle size={11} weight="fill" /> Chốt</Button>
+                  {canMutate && l.stage === "hot" && (
+                    <Button size="sm" onClick={() => updateStage(l, "closed", "Đã chốt sale")}><CheckCircle size={11} weight="fill" /> Chốt</Button>
                   )}
-                  <Button size="sm" variant="secondary" loading={scriptLoading === l.id} onClick={() => getScript(l)}><Sparkle size={11} /></Button>
-                  <Button size="sm" variant="danger" onClick={() => deleteLead(l.id)}><Trash size={11} /></Button>
+                  {canMutate ? <Button size="sm" variant="secondary" loading={scriptLoading === l.id} onClick={() => getScript(l)}><Sparkle size={11} /></Button> : null}
+                  {canMutate ? <Button size="sm" variant="danger" onClick={() => deleteLead(l)}><Trash size={11} /></Button> : null}
                 </div>
               </div>
             </Card>

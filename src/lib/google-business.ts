@@ -144,7 +144,11 @@ export async function replyToGbpReview(reviewName: string, comment: string, acce
 
 export async function deleteGbpReviewReply(reviewName: string, accessToken: string): Promise<void> {
   const url = `${GBP_V4}/${reviewName}/reply`;
-  await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } });
+  const res = await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null) as { error?: { message?: string } } | null;
+    throw new Error(`GBP delete reply: ${data?.error?.message ?? `HTTP ${res.status}`}`);
+  }
 }
 
 // ─── Local Posts ─────────────────────────────────────────────────────────────

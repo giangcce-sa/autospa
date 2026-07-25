@@ -3,11 +3,13 @@ import { readdirSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import test from "node:test";
 import {
+  ACTIVE_LEGACY_REDIRECTS,
   APP_ROUTES,
   APP_SECTIONS,
   ROUTES_BY_ID,
   ROUTES_BY_PATH,
   SECTIONS,
+  getCanonicalRouteHref,
   getCommandRoutes,
   getSectionRoutes,
   routeIsActive,
@@ -27,10 +29,13 @@ function findPageRoutes(directory) {
   });
 }
 
-test("registers every application page exactly once", () => {
-  const pageRoutes = findPageRoutes(appDirectory).sort();
+test("registers every application path as a page or redirect", () => {
+  const runtimeRoutes = new Set([
+    ...findPageRoutes(appDirectory),
+    ...ACTIVE_LEGACY_REDIRECTS.map((redirect) => redirect.source),
+  ]);
   const registeredRoutes = APP_ROUTES.map((route) => route.path).sort();
-  assert.deepEqual(registeredRoutes, pageRoutes);
+  assert.deepEqual(registeredRoutes, [...runtimeRoutes].sort());
   assert.equal(ROUTES_BY_PATH.size, APP_ROUTES.length);
   assert.equal(ROUTES_BY_ID.size, APP_ROUTES.length);
 });
@@ -85,6 +90,71 @@ test("defines mixed account and Page scopes for Brand Assets", () => {
     style: "current_page",
     learning: "account",
   });
+});
+
+test("defines Operations as a local owner-only AI Rooms view", () => {
+  const route = ROUTES_BY_ID.get("system-ai-rooms");
+  const operations = route?.views?.find((view) => view.id === "operations");
+
+  assert.ok(operations);
+  assert.equal(operations.ownerOnly, true);
+  assert.equal(operations.targetPath, undefined);
+  assert.equal(operations.scope, undefined);
+});
+
+test("keeps canonical Automation Settings account-scoped and locally dispatched", () => {
+  const route = ROUTES_BY_ID.get("system-settings");
+  const automationView = route?.views?.find((view) => view.id === "automation");
+
+  assert.equal(route?.kind, "workspace");
+  assert.equal(route?.scope, "account");
+  assert.equal(route?.ownerOnly, true);
+  assert.ok(automationView);
+  assert.equal(automationView.targetPath, undefined);
+  for (const viewId of ["connections", "channels", "providers", "images", "video", "ads", "automation", "data", "security"]) {
+    assert.equal(route.views?.find((view) => view.id === viewId)?.targetPath, undefined);
+  }
+});
+
+test("builds canonical AI workspace links from route metadata", () => {
+  assert.equal(getCanonicalRouteHref("brain"), "/system/ai-rooms?view=brain&scope=account");
+  assert.equal(getCanonicalRouteHref("orchestrator"), "/system/ai-rooms?view=orchestrator&scope=account");
+  assert.equal(getCanonicalRouteHref("automation"), "/system/ai-rooms?view=operations&scope=account");
+  assert.equal(getCanonicalRouteHref("automation", "approvals"), "/system/ai-rooms?view=approvals&scope=account");
+});
+
+test("activates only legacy routes with canonical browser parity", () => {
+  assert.deepEqual(ACTIVE_LEGACY_REDIRECTS, [
+    {
+      id: "council",
+      source: "/council",
+      destination: "/system/ai-rooms?view=council&scope=account",
+    },
+    {
+      id: "ceo-memory",
+      source: "/ceo-memory",
+      destination: "/system/ai-rooms?view=memory&scope=account",
+    },
+    {
+      id: "brain",
+      source: "/brain",
+      destination: "/system/ai-rooms?view=brain&scope=account",
+    },
+    {
+      id: "orchestrator",
+      source: "/orchestrator",
+      destination: "/system/ai-rooms?view=orchestrator&scope=account",
+    },
+    {
+      id: "automation",
+      source: "/automation",
+      destination: "/system/ai-rooms?view=operations&scope=account",
+    },
+  ]);
+
+  for (const id of ["council", "ceo-memory", "brain", "orchestrator", "automation"]) {
+    assert.equal(ROUTES_BY_ID.get(id)?.kind, "alias");
+  }
 });
 
 test("matches routes and sections without prefix collisions", () => {

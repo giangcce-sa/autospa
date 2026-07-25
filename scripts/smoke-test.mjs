@@ -2,8 +2,8 @@ const baseUrl = (process.env.SMOKE_BASE_URL || "http://localhost:3000").replace(
 const smokeEmail = process.env.SMOKE_EMAIL;
 const smokePassword = process.env.SMOKE_PASSWORD;
 
-async function check(name, path, expectedStatus, validate) {
-  const response = await fetch(`${baseUrl}${path}`, { redirect: "manual" });
+async function check(name, path, expectedStatus, validate, init = {}) {
+  const response = await fetch(`${baseUrl}${path}`, { ...init, redirect: "manual" });
   const body = await response.text();
 
   if (response.status !== expectedStatus) {
@@ -17,6 +17,8 @@ async function check(name, path, expectedStatus, validate) {
   console.log(`PASS ${name} (${response.status})`);
 }
 
+await check("liveness", "/api/health", 200, (_response, body) => JSON.parse(body).status === "ok");
+await check("readiness", "/api/ready", 200, (_response, body) => JSON.parse(body).ready === true);
 await check("login page", "/login", 200);
 await check(
   "protected dashboard",
@@ -29,6 +31,106 @@ await check(
   "/api/settings",
   307,
   (response) => response.headers.get("location")?.includes("/login?from=%2Fapi%2Fsettings") === true,
+);
+await check(
+  "protected Automation Settings workspace",
+  "/system/settings?view=automation&scope=account",
+  307,
+  (response) => response.headers.get("location")?.includes("/login?from=%2Fsystem%2Fsettings") === true,
+);
+await check(
+  "protected Automation Settings API",
+  "/api/settings/automation",
+  307,
+  (response) => response.headers.get("location")?.includes("/login?from=%2Fapi%2Fsettings%2Fautomation") === true,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ webhookMode: "manual" }),
+  },
+);
+await check(
+  "protected Connections Settings API",
+  "/api/settings/connections",
+  307,
+  (response) => response.headers.get("location")?.includes("/login?from=%2Fapi%2Fsettings%2Fconnections") === true,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ spaApiUrl: "https://spa.example.com" }),
+  },
+);
+await check(
+  "protected Channels Settings API",
+  "/api/settings/channels",
+  307,
+  (response) => response.headers.get("location")?.includes("/login?from=%2Fapi%2Fsettings%2Fchannels") === true,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ zaloOaId: "oa-smoke" }),
+  },
+);
+await check(
+  "protected Provider Settings API",
+  "/api/settings/providers",
+  307,
+  (response) => response.headers.get("location")?.includes("/login?from=%2Fapi%2Fsettings%2Fproviders") === true,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ openaiChatModel: "gpt-5" }),
+  },
+);
+await check(
+  "protected Image Settings API",
+  "/api/settings/images",
+  307,
+  (response) => response.headers.get("location")?.includes("/login?from=%2Fapi%2Fsettings%2Fimages") === true,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageModel: "dall-e-3" }),
+  },
+);
+await check(
+  "protected Ads Settings API",
+  "/api/settings/ads",
+  307,
+  (response) => response.headers.get("location")?.includes("/login?from=%2Fapi%2Fsettings%2Fads") === true,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ adsOptimizePauseCtr: 0.5 }),
+  },
+);
+await check(
+  "protected Video Settings API",
+  "/api/settings/video",
+  307,
+  (response) => response.headers.get("location")?.includes("/login?from=%2Fapi%2Fsettings%2Fvideo") === true,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ videoMockMode: true }),
+  },
+);
+await check(
+  "protected Data Settings API",
+  "/api/settings/data",
+  307,
+  (response) => response.headers.get("location")?.includes("/login?from=%2Fapi%2Fsettings%2Fdata") === true,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ draftRetentionDays: 30 }),
+  },
+);
+await check(
+  "protected backup",
+  "/api/backup",
+  307,
+  (response) => response.headers.get("location")?.includes("/login?from=%2Fapi%2Fbackup") === true,
 );
 
 const cronResponse = await fetch(`${baseUrl}/api/cron/weekly-report`, { redirect: "manual" });
@@ -43,10 +145,11 @@ if (cronResponse.status === 401 && cronBody.includes("Unauthorized")) {
 }
 
 await check(
-  "OAuth callback authorization",
+  "OAuth callback state protection",
   "/api/auth/google?code=smoke&state=smoke",
   307,
-  (response) => response.headers.get("location")?.includes("/login") === true,
+  (response) => response.headers.get("location")?.includes("reason=invalid_state") === true
+    && response.headers.getSetCookie().some((cookie) => cookie.startsWith("autospa_google_oauth_state=") && cookie.includes("Max-Age=0")),
 );
 
 if (smokeEmail && smokePassword) {

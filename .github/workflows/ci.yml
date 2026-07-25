@@ -36,6 +36,11 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autospa_test
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/autospa_test
       AUTH_SECRET: ci-only-auth-secret
+      CRON_SECRET: ci-only-cron-secret
+      AUTH_URL: https://autospa.example.test
+      NEXT_PUBLIC_APP_URL: https://autospa.example.test
+      DEPLOYMENT_ENV: ci
+      APP_RELEASE: ${{ github.sha }}
       MEDIA_STORAGE_PROVIDER: local
       VIDEO_MOCK_MODE: "true"
       ADS_EXECUTION_MODE: read_only
@@ -48,13 +53,50 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
       - run: npx prisma validate
       - run: npx prisma generate
       - run: npx prisma migrate deploy
       - run: npm run lint
       - run: npm run typecheck -- --incremental false
       - run: npm test
+      - run: npm run test:e2e:seed
+        env:
+          E2E_OWNER_EMAIL: owner-e2e@example.test
+          E2E_OWNER_PASSWORD: owner-e2e-password
+          E2E_VIEWER_EMAIL: viewer-e2e@example.test
+          E2E_VIEWER_PASSWORD: viewer-e2e-password
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          E2E_OWNER_EMAIL: owner-e2e@example.test
+          E2E_OWNER_PASSWORD: owner-e2e-password
+          E2E_VIEWER_EMAIL: viewer-e2e@example.test
+          E2E_VIEWER_PASSWORD: viewer-e2e-password
+      - name: Run production smoke
+        run: |
+          npm run start -- --hostname 127.0.0.1 > /tmp/autospa-production.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 60); do
+            curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null && break
+            kill -0 "$server_pid"
+            sleep 1
+          done
+          SMOKE_EMAIL=owner-e2e@example.test \
+          SMOKE_PASSWORD=owner-e2e-password \
+          npm run smoke
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autospa-failure-artifacts-${{ github.run_id }}
+          if-no-files-found: ignore
+          path: |
+            playwright-report/
+            test-results/
+            /tmp/autospa-production.log
       - name: Build immutable app image
         run: docker build --tag autospa:${{ github.sha }} .
 
@@ -73,6 +115,7 @@ jobs:
           cache: npm
           cache-dependency-path: internal-ai-gateway/package-lock.json
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm test
       - run: npm run build

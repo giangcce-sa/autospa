@@ -1,25 +1,28 @@
 "use client";
 
 import Link from "next/link";
+import { getCanonicalRouteHref } from "@/config/routes";
 import {
   PencilSimple, Tag, ArrowsClockwise, FloppyDisk, Image as ImageIcon,
   CheckCircle, Flame, Robot,
 } from "@phosphor-icons/react";
 
+const APPROVALS_HREF = getCanonicalRouteHref("automation", "approvals");
+
 const ACTIONS = [
-  { label: "Duyệt việc", href: "/automation", icon: CheckCircle, color: "var(--premium)", premium: true },
+  { label: "Duyệt việc", href: APPROVALS_HREF, icon: CheckCircle, color: "var(--premium)", premium: true },
   { label: "Chăm lead", href: "/sale", icon: Flame, color: "var(--rose)" },
   { label: "Viết bài AI", href: "/content", icon: PencilSimple, color: "var(--accent)" },
   { label: "Tạo khuyến mãi", href: "/promotions", icon: Tag, color: "var(--amber)" },
   { label: "Tạo ảnh", href: "/images", icon: ImageIcon, color: "var(--blue)" },
-  { label: "Run AI team", href: "/orchestrator", icon: Robot, color: "var(--premium)", premium: true },
+  { label: "Run AI team", href: getCanonicalRouteHref("orchestrator"), icon: Robot, color: "var(--premium)", premium: true },
   { label: "Sync đối thủ", href: "/competitors", icon: ArrowsClockwise, color: "var(--text-secondary)" },
   { label: "Backup", href: "/settings", icon: FloppyDisk, color: "var(--text-secondary)" },
 ];
 
 export function QuickActions({ simple = false }: { simple?: boolean }) {
   const actions = simple
-    ? ACTIONS.filter((action) => ["/automation", "/sale", "/content", "/promotions"].includes(action.href))
+    ? ACTIONS.filter((action) => [APPROVALS_HREF, "/sale", "/content", "/promotions"].includes(action.href))
     : ACTIONS;
 
   return (

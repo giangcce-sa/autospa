@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { quickCritique } from "./ai-council";
+import { businessDateKey, nextAnnualBusinessOccurrence } from "./today-policy";
 
 export type Scenario = "baseline" | "ads_2x" | "promo_30" | "tet_boost";
 
@@ -39,25 +40,23 @@ const HOLIDAY_BOOST: Record<string, number> = {
 };
 
 function detectHolidayBoost(date: Date, holidays: { name: string; date: string }[]): { boost: number; name: string | null } {
-  const dStr = date.toISOString().slice(0, 10);
+  const dateKey = businessDateKey(date);
 
-  // Direct match
-  const direct = holidays.find((h) => h.date === dStr);
-  if (direct) {
-    for (const [key, mult] of Object.entries(HOLIDAY_BOOST)) {
-      if (direct.name.toLowerCase().includes(key.toLowerCase())) return { boost: mult, name: direct.name };
+  for (const holiday of holidays) {
+    const occurrence = nextAnnualBusinessOccurrence(holiday.date, new Date(date.getTime() - 4 * 86400000));
+    const occurrenceKey = businessDateKey(occurrence.eventDate);
+    if (occurrenceKey === dateKey) {
+      for (const [key, multiplier] of Object.entries(HOLIDAY_BOOST)) {
+        if (holiday.name.toLowerCase().includes(key.toLowerCase())) return { boost: multiplier, name: holiday.name };
+      }
+      return { boost: 1.1, name: holiday.name };
     }
-    return { boost: 1.1, name: direct.name };
-  }
 
-  // Within 3 days before a major holiday → pre-holiday rush
-  for (const h of holidays) {
-    const hDate = new Date(h.date);
-    const diff = (hDate.getTime() - date.getTime()) / 86400000;
-    if (diff > 0 && diff <= 3) {
-      for (const [key, mult] of Object.entries(HOLIDAY_BOOST)) {
-        if (h.name.toLowerCase().includes(key.toLowerCase())) {
-          return { boost: 1 + (mult - 1) * 0.6, name: `chuẩn bị ${h.name}` };
+    const difference = Math.round((occurrence.eventDate.getTime() - date.getTime()) / 86400000);
+    if (difference > 0 && difference <= 3) {
+      for (const [key, multiplier] of Object.entries(HOLIDAY_BOOST)) {
+        if (holiday.name.toLowerCase().includes(key.toLowerCase())) {
+          return { boost: 1 + (multiplier - 1) * 0.6, name: `chuẩn bị ${holiday.name}` };
         }
       }
     }
@@ -111,6 +110,7 @@ export async function computeForecast(opts: {
   horizonDays?: number;
   scenario?: Scenario;
   save?: boolean;
+  useCouncil?: boolean;
 }): Promise<{ id?: string; days: ForecastDay[]; total: number; confidence: number; notes: string }> {
   const horizon = opts.horizonDays ?? 30;
   const scenario = opts.scenario ?? "baseline";
@@ -160,22 +160,23 @@ export async function computeForecast(opts: {
 
   total = Math.round(total);
 
-  // AI Council validates (best effort)
   let notes = `Dự báo dựa trên ${stats.daysWithData} ngày data lịch sử. Avg daily: ${Math.round(baseDaily).toLocaleString("vi-VN")}đ. Confidence: ${Math.round(confidence * 100)}%`;
-  try {
-    const context = `Dự báo doanh thu ${horizon} ngày tới = ${total.toLocaleString("vi-VN")}đ.
+  if (opts.useCouncil !== false) {
+    try {
+      const context = `Dự báo doanh thu ${horizon} ngày tới = ${total.toLocaleString("vi-VN")}đ.
 Avg daily history: ${Math.round(baseDaily).toLocaleString("vi-VN")}đ (${stats.daysWithData} ngày data)
 Std dev: ${Math.round(stats.std).toLocaleString("vi-VN")}đ
 Scenario: ${scenario} (multiplier ${scenarioMult})
 Holidays trong horizon: ${days.filter(d => d.factors.some(f => f.includes("+"))).length} ngày có boost`;
 
-    const council = await quickCritique({
-      topic: `Dự báo doanh thu spa ${horizon} ngày tới có hợp lý không?`,
-      context,
-    });
-    notes = council.synthesis.slice(0, 800);
-  } catch {
-    // council failed — keep statistical notes
+      const council = await quickCritique({
+        topic: `Dự báo doanh thu spa ${horizon} ngày tới có hợp lý không?`,
+        context,
+      });
+      notes = council.synthesis.slice(0, 800);
+    } catch {
+      // Keep statistical notes if Council is unavailable.
+    }
   }
 
   let savedId: string | undefined;

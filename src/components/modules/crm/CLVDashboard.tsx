@@ -6,21 +6,9 @@ import { Button } from "@/components/ui/Button";
 import { Crown, Warning, TrendUp, Users, ArrowsClockwise, Phone, ChatCircle } from "@phosphor-icons/react";
 import Link from "next/link";
 
-interface CustomerCLV {
-  customerId: string; name: string; phone: string | null; segment: string;
-  clvTotal: number; clvTier: string; bookingCount: number; avgOrderValue: number;
-  avgVisitDays: number; daysSinceLastBooking: number; churnRisk: string;
-  rfmScore: number; rfm: { r: number; f: number; m: number };
-  services: string[]; upsellSuggestion: string | null;
-}
+import type { CustomerCLVSummaryData } from "@/lib/customer-clv";
 
-interface Summary {
-  total: number; avgCLV: number;
-  tiers: { premium: number; high: number; mid: number; low: number };
-  churn: { high: number; medium: number; low: number };
-  atRisk: CustomerCLV[];
-  topCustomers: CustomerCLV[];
-}
+type Summary = CustomerCLVSummaryData;
 
 const TIER_META: Record<string, { label: string; color: string }> = {
   premium: { label: "Premium", color: "var(--premium)" },
@@ -51,9 +39,9 @@ function RFMBar({ value, color }: { value: number; color: string }) {
   );
 }
 
-export function CLVDashboard() {
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
+export function CLVDashboard({ initialSummary, canMutate = true }: { initialSummary?: Summary; canMutate?: boolean } = {}) {
+  const [summary, setSummary] = useState<Summary | null>(initialSummary ?? null);
+  const [loading, setLoading] = useState(!initialSummary);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<"top" | "risk">("top");
 
@@ -64,11 +52,13 @@ export function CLVDashboard() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!initialSummary) load();
+  }, [initialSummary, load]);
 
   const refresh = async () => {
     setRefreshing(true);
-    await fetch("/api/crm/insights?action=refresh");
+    await fetch("/api/crm/insights", { method: "POST" });
     await load();
     setRefreshing(false);
   };
@@ -112,9 +102,11 @@ export function CLVDashboard() {
       <Card>
         <CardHeader>
           <CardTitle>Phân tầng CLV</CardTitle>
-          <Button size="sm" variant="secondary" onClick={refresh} loading={refreshing}>
-            <ArrowsClockwise size={12} /> Cập nhật
-          </Button>
+          {canMutate ? (
+            <Button size="sm" variant="secondary" onClick={refresh} loading={refreshing}>
+              <ArrowsClockwise size={12} /> Cập nhật
+            </Button>
+          ) : null}
         </CardHeader>
         <div className="grid grid-cols-4 gap-2">
           {(["premium","high","mid","low"] as const).map(tier => {

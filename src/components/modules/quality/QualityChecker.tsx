@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useActivePage } from "@/contexts/ActivePageContext";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
@@ -9,22 +10,41 @@ import { CheckCircle, XCircle, Warning, Sparkle } from "@phosphor-icons/react";
 interface CheckItem { label: string; pass: boolean; note: string; }
 interface QualityResult { score: number; checks: CheckItem[]; suggestions: string[]; summary: string; }
 
-export function QualityChecker() {
-  const [caption, setCaption] = useState("");
-  const [hashtags, setHashtags] = useState("");
+export function QualityChecker({
+  facebookPageId: providedPageId,
+  postId,
+  initialCaption = "",
+  initialHashtags = "",
+}: {
+  facebookPageId?: string;
+  postId?: string;
+  initialCaption?: string;
+  initialHashtags?: string;
+} = {}) {
+  const { selectedPageId } = useActivePage();
+  const facebookPageId = providedPageId ?? selectedPageId ?? undefined;
+  const [caption, setCaption] = useState(initialCaption);
+  const [hashtags, setHashtags] = useState(initialHashtags);
   const [result, setResult] = useState<QualityResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    setCaption(initialCaption);
+    setHashtags(initialHashtags);
+    setResult(null);
+    setError("");
+  }, [facebookPageId, initialCaption, initialHashtags, postId]);
+
   const handleCheck = async () => {
-    if (!caption.trim()) return;
+    if (!caption.trim() || !facebookPageId) return;
     setLoading(true);
     setError("");
     try {
       const res = await fetch("/api/quality", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption, hashtags }),
+        body: JSON.stringify({ caption, hashtags, postId, facebookPageId }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
@@ -56,7 +76,7 @@ export function QualityChecker() {
             onChange={(e) => setHashtags(e.target.value)}
           />
           {error && <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
-          <Button onClick={handleCheck} loading={loading} className="w-full">
+          <Button onClick={handleCheck} loading={loading} disabled={!facebookPageId} className="w-full">
             <Sparkle size={14} weight="fill" /> Kiểm tra chất lượng
           </Button>
         </div>

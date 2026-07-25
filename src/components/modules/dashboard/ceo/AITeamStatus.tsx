@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getCanonicalRouteHref } from "@/config/routes";
 import {
   Eye, Megaphone, PencilSimple, Flame, Robot, ArrowRight,
 } from "@phosphor-icons/react";
@@ -45,7 +46,7 @@ export function AITeamStatus() {
           { key: "ads_creative", label: "AI quảng cáo", icon: Megaphone, color: "var(--blue)", href: "/facebook-ads" },
           { key: "content_research", label: "AI nội dung", icon: PencilSimple, color: "var(--accent)", href: "/content-research" },
           { key: "proactive_sales", label: "AI bán hàng", icon: Flame, color: "var(--rose)", href: "/sale" },
-          { key: "orchestrator", label: "Orchestrator", icon: Robot, color: "var(--premium)", href: "/orchestrator" },
+          { key: "orchestrator", label: "Orchestrator", icon: Robot, color: "var(--premium)", href: getCanonicalRouteHref("orchestrator") },
         ];
 
         const result = base.map((b) => {

@@ -80,7 +80,7 @@ export function RevenueForecast() {
 
   return (
     <div className="space-y-4">
-      {/* Controls */}
+      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Phạm vi: toàn tài khoản · Nguồn: BookingRevenue 90 ngày · Không gọi AI/provider khi tải trang.</p>
       <div className="flex flex-wrap gap-2 items-center">
         <div className="flex gap-1 p-1 rounded-lg" style={{ background: "var(--bg-subtle)" }}>
           {HORIZONS.map((d) => (

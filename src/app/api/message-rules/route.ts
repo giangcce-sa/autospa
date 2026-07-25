@@ -1,19 +1,24 @@
 import { prisma } from "@/lib/db";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
   try {
+    await requireUser();
     const rules = await prisma.messageRule.findMany({
       orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
     });
     return NextResponse.json({ data: rules, success: true });
-  } catch {
+  } catch (error) {
+    const access = accessErrorResponse(error);
+    if (access) return access;
     return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const body = await req.json();
     const { action } = body;
 
@@ -71,6 +76,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return access;
     const msg = err instanceof Error ? err.message : "Lỗi";
     return NextResponse.json({ error: msg, success: false }, { status: 500 });
   }

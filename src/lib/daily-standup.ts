@@ -5,6 +5,7 @@ import { generateSalesReport, type SalesReport } from "./sub-agents/sales-report
 import { councilDebate } from "./ai-council";
 import { formatPriorContext, saveDecision } from "./ceo-memory";
 import { generateContent } from "./claude";
+import { businessDateKey } from "./today-policy";
 
 export interface SubReports {
   intelligence: IntelligenceReport;
@@ -35,7 +36,7 @@ Recommendations: ${r.recommendations.join(" | ") || "(none)"}`;
 }
 
 export async function runDailyStandup(): Promise<DailyStandupResult> {
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = businessDateKey();
 
   // Run 4 sub-agents in parallel
   const [intelligence, ads, content, sales] = await Promise.all([

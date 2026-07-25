@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  imageReviewStatus,
   mediaAspectClass,
   mediaStatusPresentation,
   videoPosterUrl,
@@ -10,6 +11,9 @@ import {
 test("does not present completed media as approved", () => {
   assert.deepEqual(mediaStatusPresentation("completed"), { label: "Hoàn tất", tone: "info" });
   assert.deepEqual(mediaStatusPresentation("approved"), { label: "Đã duyệt", tone: "success" });
+  assert.equal(imageReviewStatus(true, "completed"), "approved");
+  assert.equal(imageReviewStatus(false, "completed"), "rejected");
+  assert.equal(imageReviewStatus(null, "completed"), "completed");
 });
 
 test("reports render and approval freshness independently", () => {

@@ -1,5 +1,5 @@
-import { WorkspacePage, type WorkspacePageProps } from "@/components/workspace/WorkspacePage";
+import { AIRoomsWorkspace, type AIRoomsWorkspaceProps } from "@/components/modules/ai-rooms/AIRoomsWorkspace";
 
-export default function Page({ searchParams }: WorkspacePageProps) {
-  return <WorkspacePage routeId="system-ai-rooms" searchParams={searchParams} />;
+export default function Page({ searchParams }: AIRoomsWorkspaceProps) {
+  return <AIRoomsWorkspace searchParams={searchParams} />;
 }

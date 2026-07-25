@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 
 export async function GET(req: NextRequest) {
   try {
+    await requireUser();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
@@ -25,12 +27,15 @@ export async function GET(req: NextRequest) {
     };
     return NextResponse.json({ data: { customers, stats } });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const body = await req.json();
     const { action } = body;
 
@@ -51,17 +56,22 @@ export async function POST(req: NextRequest) {
     const customer = await prisma.customer.create({ data });
     return NextResponse.json({ data: customer });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
+    await requireUser({ owner: true });
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (id) await prisma.customer.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (e) {
+    const access = accessErrorResponse(e);
+    if (access) return access;
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }

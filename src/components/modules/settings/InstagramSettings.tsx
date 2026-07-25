@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { InstagramLogo, CheckCircle, XCircle, ArrowsClockwise, Link, LinkBreak } from "@phosphor-icons/react";
 
-interface FbPageWithIg {
+export interface FbPageWithIg {
   id: string;
   pageName: string;
   fbPageId: string;
@@ -14,9 +14,9 @@ interface FbPageWithIg {
   isActive: boolean;
 }
 
-export function InstagramSettings() {
-  const [pages, setPages] = useState<FbPageWithIg[]>([]);
-  const [loading, setLoading] = useState(true);
+export function InstagramSettings({ initialPages }: { initialPages?: FbPageWithIg[] }) {
+  const [pages, setPages] = useState<FbPageWithIg[]>(initialPages ?? []);
+  const [loading, setLoading] = useState(initialPages === undefined);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
 
@@ -28,7 +28,9 @@ export function InstagramSettings() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (initialPages === undefined) void load();
+  }, [initialPages]);
 
   const connect = async (pageId: string) => {
     setConnecting(pageId);
@@ -49,6 +51,7 @@ export function InstagramSettings() {
   };
 
   const disconnect = async (pageId: string) => {
+    if (!window.confirm("Gỡ kết nối Instagram khỏi Facebook Page này?")) return;
     await fetch("/api/instagram", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

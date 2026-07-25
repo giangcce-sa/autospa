@@ -15,7 +15,11 @@ export interface WorkspaceUrlState {
   id?: string;
   status?: string;
   q?: string;
+  domain?: string;
+  category?: string;
+  risk?: string;
   step?: string;
+  month?: string;
 }
 
 type SearchValue = string | string[] | undefined;
@@ -47,13 +51,17 @@ export function parseWorkspaceUrl(
     id: single(params.id),
     status: single(params.status),
     q: single(params.q),
+    domain: single(params.domain),
+    category: single(params.category),
+    risk: single(params.risk),
     step: single(params.step),
+    month: single(params.month),
   };
 }
 
 export function workspaceSearchParams(state: WorkspaceUrlState) {
   const params = new URLSearchParams({ view: state.view, scope: state.scope });
-  for (const key of ["pageId", "id", "status", "q", "step"] as const) {
+  for (const key of ["pageId", "id", "status", "q", "domain", "category", "risk", "step", "month"] as const) {
     if (state[key]) params.set(key, state[key]);
   }
   return params;

@@ -25,12 +25,14 @@ export interface BrandAssetsOverviewData {
   pages: BrandAssetsPageReadiness[];
 }
 
-export async function getBrandAssetsOverview(): Promise<BrandAssetsOverviewData> {
-  const user = await requireUser();
-  const authorizedPageIds = await getAuthorizedPageIds(user);
+export async function getBrandAssetsOverview(
+  user?: Awaited<ReturnType<typeof requireUser>>,
+): Promise<BrandAssetsOverviewData> {
+  const currentUser = user ?? await requireUser();
+  const authorizedPageIds = await getAuthorizedPageIds(currentUser);
   const pageWhere = {
     ...(authorizedPageIds ? { id: { in: authorizedPageIds } } : {}),
-    ...(user.role === "owner" ? {} : { isActive: true }),
+    ...(currentUser.role === "owner" ? {} : { isActive: true }),
   };
 
   const [
@@ -84,7 +86,7 @@ export async function getBrandAssetsOverview(): Promise<BrandAssetsOverviewData>
   const storiesByPage = new Map(stories.map((item) => [item.facebookPageId, item._count._all]));
 
   return {
-    canMutate: user.role === "owner",
+    canMutate: currentUser.role === "owner",
     brandItemCount,
     brandUpdatedAt: latestBrand?.updatedAt ?? null,
     learningInsightCount,

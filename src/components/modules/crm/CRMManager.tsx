@@ -8,15 +8,11 @@ import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { UserCircle, Plus, Star, Users, Crown, ArrowLeft, PencilSimple, Trash, Note, ClockCounterClockwise } from "@phosphor-icons/react";
 import { CustomerTimeline } from "./CustomerTimeline";
+import type { CustomerDetailData, CustomerStatsData, CustomerSummaryData } from "@/lib/customer-workspaces";
 
-interface Customer { id: string; name: string; phone?: string | null; fbName?: string | null; email?: string | null; birthday?: string | null; segment: string; leadScore: number; lastContact?: string | null; note?: string | null; tags?: string | null; createdAt: string; }
-interface CustomerDetail extends Customer {
-  notes: { id: string; content: string; type: string; createdAt: string }[];
-  appointments: { id: string; service?: string | null; preferredAt?: string | null; status: string; createdAt?: string }[];
-  careMessages: { id: string; type: string; content: string; status: string; sentAt?: string | null; createdAt: string }[];
-  messages: { id: string; message: string; reply?: string | null; isAutoReply: boolean; createdAt: string }[];
-}
-interface Stats { total: number; new: number; regular: number; vip: number; }
+type Customer = CustomerSummaryData;
+type CustomerDetail = CustomerDetailData;
+type Stats = CustomerStatsData;
 
 const SegmentBadge = ({ s }: { s: string }) => {
   if (s === "vip") return <Badge variant="warning"><Crown size={9} className="mr-0.5" /> VIP</Badge>;
@@ -26,22 +22,56 @@ const SegmentBadge = ({ s }: { s: string }) => {
 
 const emptyForm = { name: "", phone: "", email: "", birthday: "", fbName: "", segment: "new", leadScore: 0, note: "", tags: "" };
 
-export function CRMManager() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [stats, setStats] = useState<Stats>({ total: 0, new: 0, regular: 0, vip: 0 });
-  const [selected, setSelected] = useState<CustomerDetail | null>(null);
+export function CRMManager({
+  initialCustomers,
+  initialStats,
+  initialCustomer,
+  canMutate = true,
+  initialSegment = "",
+  onCustomerChange,
+  onSegmentChange,
+  onMutate,
+}: {
+  initialCustomers?: Customer[];
+  initialStats?: Stats;
+  initialCustomer?: CustomerDetail | null;
+  canMutate?: boolean;
+  initialSegment?: string;
+  onCustomerChange?: (id?: string) => void;
+  onSegmentChange?: (segment?: string) => void;
+  onMutate?: () => void;
+} = {}) {
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers ?? []);
+  const [stats, setStats] = useState<Stats>(initialStats ?? { total: 0, new: 0, regular: 0, vip: 0 });
+  const [selected, setSelected] = useState<CustomerDetail | null>(initialCustomer ?? null);
   const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [noteContent, setNoteContent] = useState("");
-  const [filterSegment, setFilterSegment] = useState("");
+  const [filterSegment, setFilterSegment] = useState(initialSegment);
 
   const load = (seg?: string) =>
     fetch(`/api/crm${seg ? `?segment=${seg}` : ""}`).then((r) => r.json()).then((res) => {
       if (res.data) { setCustomers(res.data.customers); setStats(res.data.stats); }
     });
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!initialCustomers) load();
+  }, [initialCustomers]);
+
+  useEffect(() => {
+    if (initialCustomers) {
+      setCustomers(initialCustomers);
+      if (initialStats) setStats(initialStats);
+      setSelected(initialCustomer ?? null);
+      setFilterSegment(initialSegment);
+    }
+  }, [initialCustomer, initialCustomers, initialSegment, initialStats]);
+
+  const refresh = () => {
+    if (onMutate) onMutate();
+    else load(filterSegment || undefined);
+  };
 
   const loadDetail = (id: string) =>
     fetch(`/api/crm?id=${id}`).then((r) => r.json()).then((res) => res.data && setSelected(res.data));
@@ -53,19 +83,21 @@ export function CRMManager() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(editId ? { ...form, id: editId, leadScore: Number(form.leadScore) } : { ...form, leadScore: Number(form.leadScore) }),
     });
-    setForm(emptyForm); setShowForm(false); setEditId(null); load();
+    setForm(emptyForm); setShowForm(false); setEditId(null); refresh();
   };
 
   const handleDelete = async (id: string) => {
     await fetch(`/api/crm?id=${id}`, { method: "DELETE" });
     if (selected?.id === id) setSelected(null);
-    load();
+    refresh();
   };
 
   const addNote = async () => {
     if (!selected || !noteContent.trim()) return;
     await fetch("/api/crm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add-note", customerId: selected.id, content: noteContent }) });
-    setNoteContent(""); loadDetail(selected.id);
+    setNoteContent("");
+    if (onMutate) onMutate();
+    else loadDetail(selected.id);
   };
 
   const startEdit = (c: Customer) => {
@@ -76,7 +108,7 @@ export function CRMManager() {
   if (selected) {
     return (
       <div className="space-y-4 max-w-3xl">
-        <Button size="sm" variant="secondary" onClick={() => setSelected(null)}><ArrowLeft size={13} /> Quay lại</Button>
+        <Button size="sm" variant="secondary" onClick={() => { setSelected(null); onCustomerChange?.(); }}><ArrowLeft size={13} /> Quay lại</Button>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-4">
             <Card>
@@ -88,7 +120,7 @@ export function CRMManager() {
                     <div className="flex items-center gap-1.5 mt-0.5"><SegmentBadge s={selected.segment} /><span className="text-xs" style={{ color: "var(--text-muted)" }}>Lead score: {selected.leadScore}</span></div>
                   </div>
                 </div>
-                <Button size="sm" variant="secondary" onClick={() => { startEdit(selected); setSelected(null); }}><PencilSimple size={12} /></Button>
+                {canMutate ? <Button size="sm" variant="secondary" onClick={() => { startEdit(selected); setSelected(null); onCustomerChange?.(); }}><PencilSimple size={12} /></Button> : null}
               </div>
               <div className="mt-3 grid grid-cols-2 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
                 {selected.phone && <span>📞 {selected.phone}</span>}
@@ -99,13 +131,15 @@ export function CRMManager() {
               {selected.tags && <div className="mt-2 flex flex-wrap gap-1">{selected.tags.split(",").map((t) => <span key={t} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "var(--accent-light)", color: "var(--accent)" }}>{t.trim()}</span>)}</div>}
             </Card>
 
-            <Card>
-              <CardHeader><CardTitle>Thêm ghi chú</CardTitle></CardHeader>
-              <div className="space-y-2">
-                <Textarea rows={2} placeholder="Thêm ghi chú..." value={noteContent} onChange={(e) => setNoteContent(e.target.value)} />
-                <Button size="sm" onClick={addNote}><Note size={12} /> Lưu ghi chú</Button>
-              </div>
-            </Card>
+            {canMutate ? (
+              <Card>
+                <CardHeader><CardTitle>Thêm ghi chú</CardTitle></CardHeader>
+                <div className="space-y-2">
+                  <Textarea rows={2} placeholder="Thêm ghi chú..." value={noteContent} onChange={(e) => setNoteContent(e.target.value)} />
+                  <Button size="sm" onClick={addNote}><Note size={12} /> Lưu ghi chú</Button>
+                </div>
+              </Card>
+            ) : null}
           </div>
 
           <div className="space-y-3">
@@ -146,14 +180,16 @@ export function CRMManager() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex gap-2">
           {["", "new", "regular", "vip"].map((s) => (
-            <Button key={s} size="sm" variant={filterSegment === s ? "primary" : "secondary"} onClick={() => { setFilterSegment(s); load(s || undefined); }}>
+            <Button key={s} size="sm" variant={filterSegment === s ? "primary" : "secondary"} onClick={() => { setFilterSegment(s); if (onSegmentChange) onSegmentChange(s || undefined); else load(s || undefined); }}>
               {s === "" ? "Tất cả" : s === "new" ? "Mới" : s === "regular" ? "Thân thiết" : "VIP"}
             </Button>
           ))}
         </div>
-        <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setShowForm(!showForm); }}>
-          <Plus size={12} /> Thêm khách
-        </Button>
+        {canMutate ? (
+          <Button size="sm" onClick={() => { setForm(emptyForm); setEditId(null); setShowForm(!showForm); }}>
+            <Plus size={12} /> Thêm khách
+          </Button>
+        ) : null}
       </div>
 
       {showForm && (
@@ -183,7 +219,7 @@ export function CRMManager() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {customers.map((c) => (
-          <Card key={c.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => loadDetail(c.id).then(() => {})}>
+          <Card key={c.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { if (onCustomerChange) onCustomerChange(c.id); else loadDetail(c.id).then(() => {}); }}>
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0" style={{ background: c.segment === "vip" ? "var(--amber)" : c.segment === "regular" ? "var(--accent)" : "var(--text-muted)" }}>{c.name[0]}</div>
@@ -192,10 +228,12 @@ export function CRMManager() {
                   <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{c.phone || "Chưa có SĐT"}</p>
                 </div>
               </div>
-              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                <Button size="sm" variant="secondary" onClick={() => startEdit(c)}><PencilSimple size={11} /></Button>
-                <Button size="sm" variant="danger" onClick={() => handleDelete(c.id)}><Trash size={11} /></Button>
-              </div>
+              {canMutate ? (
+                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Button size="sm" variant="secondary" onClick={() => startEdit(c)}><PencilSimple size={11} /></Button>
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(c.id)}><Trash size={11} /></Button>
+                </div>
+              ) : null}
             </div>
             <div className="mt-2 flex items-center justify-between">
               <SegmentBadge s={c.segment} />

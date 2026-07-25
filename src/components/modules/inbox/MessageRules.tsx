@@ -8,17 +8,9 @@ import { Select } from "@/components/ui/Select";
 import {
   Plus, Pencil, Trash, X, FacebookLogo, Lightning, PlayCircle, CheckCircle, XCircle,
 } from "@phosphor-icons/react";
+import type { MessageRuleData } from "@/lib/customer-inbox";
 
-interface Rule {
-  id: string;
-  trigger: string;
-  reply: string;
-  matchMode: string;
-  priority: number;
-  channel: string;
-  isActive: boolean;
-  createdAt: string;
-}
+type Rule = MessageRuleData;
 
 const MATCH_MODES = [
   { value: "contains", label: "Chứa (substring)" },
@@ -41,8 +33,8 @@ const QUICK_TEMPLATES = [
   { trigger: "đặt lịch", reply: "Để đặt lịch, bạn cho mình xin tên + SĐT + dịch vụ muốn làm, mình sẽ sắp lịch luôn nhé 🌿" },
 ];
 
-export function MessageRules() {
-  const [rules, setRules] = useState<Rule[]>([]);
+export function MessageRules({ initialRules, canMutate = true }: { initialRules?: Rule[]; canMutate?: boolean }) {
+  const [rules, setRules] = useState<Rule[]>(initialRules ?? []);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Rule | null>(null);
   const [form, setForm] = useState(BLANK);
@@ -61,7 +53,9 @@ export function MessageRules() {
     if (data.success) setRules(data.data);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!initialRules) load();
+  }, [initialRules, load]);
 
   const openCreate = () => {
     setEditing(null);
@@ -169,9 +163,11 @@ export function MessageRules() {
             <p className="text-[10px]" style={{ color: "var(--accent)" }}>Đang bật</p>
           </div>
         </div>
-        <Button onClick={openCreate}>
-          <Plus size={14} weight="bold" /> Thêm rule
-        </Button>
+        {canMutate ? (
+          <Button onClick={openCreate}>
+            <Plus size={14} weight="bold" /> Thêm rule
+          </Button>
+        ) : null}
       </div>
 
       {/* Form */}
@@ -250,9 +246,11 @@ export function MessageRules() {
             <p className="text-xs mt-1 max-w-xs" style={{ color: "var(--text-muted)" }}>
               Thêm rule để tool tự trả lời khi khách hỏi câu lặp như &ldquo;giá bao nhiêu&rdquo;, &ldquo;địa chỉ&rdquo;, &ldquo;mở cửa mấy giờ&rdquo;...
             </p>
-            <Button onClick={openCreate} className="mt-4">
-              <Plus size={13} weight="bold" /> Thêm rule đầu tiên
-            </Button>
+            {canMutate ? (
+              <Button onClick={openCreate} className="mt-4">
+                <Plus size={13} weight="bold" /> Thêm rule đầu tiên
+              </Button>
+            ) : null}
           </div>
         </Card>
       ) : (
@@ -293,38 +291,42 @@ export function MessageRules() {
                 </p>
               </div>
 
-              <div className="flex flex-col gap-1.5 shrink-0">
-                <button
-                  onClick={() => toggle(rule.id)}
-                  className="text-[10px] px-2 py-1 rounded-lg font-medium"
-                  style={rule.isActive
-                    ? { background: "var(--accent)", color: "white" }
-                    : { background: "var(--bg-subtle)", color: "var(--text-muted)" }}
-                >
-                  {rule.isActive ? "Bật" : "Tắt"}
-                </button>
-                <button
-                  onClick={() => openEdit(rule)}
-                  className="p-1.5 rounded-lg hover:opacity-70"
-                  style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)" }}
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  onClick={() => remove(rule.id)}
-                  className="p-1.5 rounded-lg hover:opacity-70"
-                  style={{ background: "var(--bg-subtle)", color: "var(--rose)" }}
-                >
-                  <Trash size={12} />
-                </button>
-              </div>
+              {canMutate ? (
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button
+                    onClick={() => toggle(rule.id)}
+                    className="text-[10px] px-2 py-1 rounded-lg font-medium"
+                    style={rule.isActive
+                      ? { background: "var(--accent)", color: "white" }
+                      : { background: "var(--bg-subtle)", color: "var(--text-muted)" }}
+                  >
+                    {rule.isActive ? "Bật" : "Tắt"}
+                  </button>
+                  <button
+                    onClick={() => openEdit(rule)}
+                    aria-label={`Chỉnh sửa rule ${rule.trigger}`}
+                    className="p-1.5 rounded-lg hover:opacity-70"
+                    style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)" }}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    onClick={() => remove(rule.id)}
+                    aria-label={`Xóa rule ${rule.trigger}`}
+                    className="p-1.5 rounded-lg hover:opacity-70"
+                    style={{ background: "var(--bg-subtle)", color: "var(--rose)" }}
+                  >
+                    <Trash size={12} />
+                  </button>
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
       )}
 
       {/* Test playground */}
-      {rules.length > 0 && (
+      {rules.length > 0 && canMutate && (
         <Card>
           <CardHeader>
             <CardTitle>Test rule matching</CardTitle>

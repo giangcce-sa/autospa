@@ -14,6 +14,7 @@ export interface WorkspaceAccess {
   state: WorkspaceUrlState;
   pages: WorkspacePageOption[];
   canMutate: boolean;
+  visibleViewIds: string[];
 }
 
 export async function resolveWorkspaceAccess(
@@ -21,13 +22,18 @@ export async function resolveWorkspaceAccess(
   state: WorkspaceUrlState,
   effectiveScope = route.scope,
 ): Promise<WorkspaceAccess> {
-  const user = await requireUser({ owner: route.ownerOnly });
+  const selectedView = route.views?.find((view) => view.id === state.view);
+  const user = await requireUser({ owner: route.ownerOnly || selectedView?.ownerOnly });
+  const visibleViewIds = (route.views ?? [])
+    .filter((view) => !view.ownerOnly || user.role === "owner")
+    .map((view) => view.id);
 
   if (effectiveScope === "account" || effectiveScope === "none") {
     return {
       state: { ...state, scope: "account", pageId: undefined },
       pages: [],
       canMutate: user.role === "owner",
+      visibleViewIds,
     };
   }
 
@@ -46,6 +52,7 @@ export async function resolveWorkspaceAccess(
       state: { ...state, scope: "current", pageId: undefined },
       pages,
       canMutate: user.role === "owner",
+      visibleViewIds,
     };
   }
 
@@ -58,6 +65,7 @@ export async function resolveWorkspaceAccess(
       state: { ...state, scope: "all", pageId: undefined },
       pages,
       canMutate: user.role === "owner",
+      visibleViewIds,
     };
   }
 
@@ -70,5 +78,6 @@ export async function resolveWorkspaceAccess(
     state: { ...state, scope: "current", pageId },
     pages,
     canMutate: user.role === "owner",
+    visibleViewIds,
   };
 }

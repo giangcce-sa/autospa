@@ -5,10 +5,9 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
-import { ChartBar, Eye, ThumbsUp, ChatCircle, Share, Plus, Trophy, TrendUp, UsersThree } from "@phosphor-icons/react";
+import { ChartBar, Eye, ThumbsUp, ChatCircle, Share, Plus, Trophy, TrendUp } from "@phosphor-icons/react";
 import { truncate } from "@/lib/utils";
 import { EngagementTrend } from "./EngagementTrend";
-import { LeadConversionChart } from "./LeadConversionChart";
 import { PlatformBreakdown } from "./PlatformBreakdown";
 
 interface Post { id: string; caption: string; publishedAt: string | null; analytics: { reach: number; likes: number; comments: number; shares: number } | null; }
@@ -78,27 +77,15 @@ export function AnalyticsDashboard() {
         </Card>
       </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <TrendUp size={14} style={{ color: "var(--accent)" }} weight="fill" />
-              <CardTitle>Xu hướng tương tác 30 ngày</CardTitle>
-            </div>
-          </CardHeader>
-          <EngagementTrend />
-        </Card>
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <UsersThree size={14} style={{ color: "var(--blue)" }} weight="fill" />
-              <CardTitle>Chuyển đổi Lead</CardTitle>
-            </div>
-          </CardHeader>
-          <LeadConversionChart />
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <TrendUp size={14} style={{ color: "var(--accent)" }} weight="fill" />
+            <CardTitle>Xu hướng tương tác 30 ngày</CardTitle>
+          </div>
+        </CardHeader>
+        <EngagementTrend />
+      </Card>
 
       <PlatformBreakdown />
 

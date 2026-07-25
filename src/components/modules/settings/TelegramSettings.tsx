@@ -6,9 +6,8 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { TelegramLogo, Bell, CalendarBlank, PaperPlaneTilt, CheckCircle } from "@phosphor-icons/react";
 
-interface TelegramConfig {
+export interface TelegramConfig {
   hasBotToken: boolean;
-  botTokenMasked: string | null;
   telegramChatId: string;
   telegramAdminUserId: string;
   telegramAlerts: boolean;
@@ -22,13 +21,15 @@ interface TelegramConfig {
 
 const DAYS = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
 
-export function TelegramSettings() {
-  const [config, setConfig] = useState<TelegramConfig>({
-    hasBotToken: false, botTokenMasked: null, telegramChatId: "", telegramAdminUserId: "",
-    telegramAlerts: true, weeklyReportEnabled: true, weeklyReportDay: 1, weeklyReportHour: 8,
-    webhookConfigured: false, webhookUrl: null,
-    lastDelivery: null,
-  });
+const EMPTY_CONFIG: TelegramConfig = {
+  hasBotToken: false, telegramChatId: "", telegramAdminUserId: "",
+  telegramAlerts: true, weeklyReportEnabled: true, weeklyReportDay: 1, weeklyReportHour: 8,
+  webhookConfigured: false, webhookUrl: null,
+  lastDelivery: null,
+};
+
+export function TelegramSettings({ initialConfig }: { initialConfig?: TelegramConfig }) {
+  const [config, setConfig] = useState<TelegramConfig>(initialConfig ?? EMPTY_CONFIG);
   const [botToken, setBotToken] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -37,10 +38,11 @@ export function TelegramSettings() {
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
+    if (initialConfig !== undefined) return;
     fetch("/api/telegram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "get" }) })
       .then(r => r.json())
       .then(res => { if (res.data) setConfig(res.data); });
-  }, []);
+  }, [initialConfig]);
 
   const showMsg = (text: string, ok: boolean) => {
     setMsg({ text, ok });
@@ -56,13 +58,15 @@ export function TelegramSettings() {
       });
       const data = await res.json();
       showMsg(data.success ? "Đã lưu cài đặt Telegram" : data.error, data.success);
-      if (data.success) setBotToken("");
+      if (data.success) {
+        if (data.data) setConfig(data.data);
+        setBotToken("");
+      }
     } finally { setSaving(false); }
   };
 
   const test = async () => {
-    const tokenToTest = botToken || config.botTokenMasked || "";
-    if (!tokenToTest || !config.telegramChatId) {
+    if ((!botToken && !config.hasBotToken) || !config.telegramChatId) {
       showMsg("Nhập Bot Token và Chat ID trước", false); return;
     }
     setTesting(true);
@@ -143,7 +147,7 @@ export function TelegramSettings() {
       <div className="space-y-3">
         <Input
           label="Bot Token"
-          placeholder={config.botTokenMasked ?? "123456789:AAFxxxxxxxxxx"}
+          placeholder={config.hasBotToken ? "Để trống = giữ token hiện tại" : "123456789:AAFxxxxxxxxxx"}
           value={botToken}
           onChange={e => setBotToken(e.target.value)}
           hint="Để trống nếu không muốn thay đổi token hiện tại"
@@ -188,7 +192,7 @@ export function TelegramSettings() {
                   <Button size="sm" variant="secondary" onClick={() => updateWebhook("webhook-status")} loading={webhookBusy}>
                     Kiểm tra webhook
                   </Button>
-                  <Button size="sm" variant="danger" onClick={() => updateWebhook("delete-webhook")} loading={webhookBusy}>
+                  <Button size="sm" variant="danger" onClick={() => { if (window.confirm("Ngắt Telegram webhook khỏi AutoSpa?")) void updateWebhook("delete-webhook"); }} loading={webhookBusy}>
                     Ngắt webhook
                   </Button>
                 </>
@@ -212,14 +216,18 @@ export function TelegramSettings() {
               <Bell size={13} style={{ color: "var(--warning)" }} weight="fill" />
               <span className="text-xs" style={{ color: "var(--text)" }}>Cảnh báo tức thời (revenue drop, lead spike...)</span>
             </div>
-            <div
+            <button
+              type="button"
+              role="switch"
+              aria-checked={config.telegramAlerts}
+              aria-label="Bật cảnh báo Telegram tức thời"
               onClick={() => setConfig(c => ({ ...c, telegramAlerts: !c.telegramAlerts }))}
-              className="w-9 h-5 rounded-full transition-colors cursor-pointer relative"
-              style={{ background: config.telegramAlerts ? "var(--accent)" : "var(--border)" }}
+              className="relative h-11 w-11 rounded-full transition-colors"
             >
-              <div className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
-                style={{ left: config.telegramAlerts ? "calc(100% - 18px)" : "2px" }} />
-            </div>
+              <span className="absolute left-1 top-[13px] h-[18px] w-9 rounded-full" style={{ background: config.telegramAlerts ? "var(--accent)" : "var(--border)" }} />
+              <span className="absolute top-[14px] h-4 w-4 rounded-full bg-white shadow transition-transform"
+                style={{ left: config.telegramAlerts ? "24px" : "5px" }} />
+            </button>
           </label>
 
           <label className="flex items-center justify-between cursor-pointer">
@@ -227,14 +235,18 @@ export function TelegramSettings() {
               <CalendarBlank size={13} style={{ color: "var(--blue)" }} weight="fill" />
               <span className="text-xs" style={{ color: "var(--text)" }}>Báo cáo tuần tự động</span>
             </div>
-            <div
+            <button
+              type="button"
+              role="switch"
+              aria-checked={config.weeklyReportEnabled}
+              aria-label="Bật báo cáo Telegram hàng tuần"
               onClick={() => setConfig(c => ({ ...c, weeklyReportEnabled: !c.weeklyReportEnabled }))}
-              className="w-9 h-5 rounded-full transition-colors cursor-pointer relative"
-              style={{ background: config.weeklyReportEnabled ? "var(--accent)" : "var(--border)" }}
+              className="relative h-11 w-11 rounded-full transition-colors"
             >
-              <div className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
-                style={{ left: config.weeklyReportEnabled ? "calc(100% - 18px)" : "2px" }} />
-            </div>
+              <span className="absolute left-1 top-[13px] h-[18px] w-9 rounded-full" style={{ background: config.weeklyReportEnabled ? "var(--accent)" : "var(--border)" }} />
+              <span className="absolute top-[14px] h-4 w-4 rounded-full bg-white shadow transition-transform"
+                style={{ left: config.weeklyReportEnabled ? "24px" : "5px" }} />
+            </button>
           </label>
 
           {config.weeklyReportEnabled && (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { getCanonicalRouteHref } from "@/config/routes";
 import {
   Sun, ArrowRight, X, ArrowsClockwise, ChatsTeardrop, CaretDown,
   Eye, Megaphone, PencilSimple, Flame, CheckCircle,
@@ -268,7 +269,7 @@ export function MorningBriefCard() {
             {assignments.map((a, idx) => {
               const meta = AGENT_META[a.agent];
               const Icon = meta?.icon ?? CheckCircle;
-              const href = meta?.href ?? "/orchestrator";
+              const href = meta?.href ?? getCanonicalRouteHref("orchestrator");
               return (
                 <Link
                   key={idx}

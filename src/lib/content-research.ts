@@ -1,3 +1,5 @@
+import "server-only";
+
 import { prisma } from "./db";
 import { generateContent, getBrandContext } from "./claude";
 import { generateChatCompletion } from "./openai";
@@ -6,6 +8,7 @@ import { reviewContent } from "./reviewer";
 import { scoreHumanWriting } from "./content-humanizer";
 import { getHumanVoiceProfile } from "./human-voice";
 import { getCompetitorContext } from "./learning/competitor-learning";
+import { nextAnnualBusinessOccurrence } from "./today-policy";
 
 interface ContentIdea {
   topic: string;
@@ -18,16 +21,21 @@ interface ContentIdea {
 }
 
 export async function generateContentPlan(
+  facebookPageId: string,
   daysAhead: number = 7,
-  postsPerDay: number = 1
+  postsPerDay: number = 1,
 ): Promise<{ created: number; ideas: ContentIdea[] }> {
   const now = new Date();
 
   // Gather context in parallel
   const [services, topPosts, holidays, brandCtx, competitorPosts, competitorMemory] = await Promise.all([
-    prisma.service.findMany({ select: { name: true, description: true }, take: 10 }),
+    prisma.service.findMany({
+      where: { facebookPageId },
+      select: { name: true, description: true },
+      take: 10,
+    }),
     prisma.post.findMany({
-      where: { status: "published" },
+      where: { facebookPageId, status: "published" },
       orderBy: [{ analytics: { likes: "desc" } }],
       select: { caption: true, postType: true, tone: true },
       take: 5,
@@ -44,10 +52,10 @@ export async function generateContentPlan(
 
   const serviceList = services.map((s: { name: string; description: string | null }) => `- ${s.name}${s.description ? `: ${s.description}` : ""}`).join("\n");
   const topCaptions = topPosts.map((p: { caption: string }, i: number) => `${i + 1}. ${p.caption.slice(0, 120)}...`).join("\n");
-  const cutoff = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const todayStr = now.toISOString().slice(0, 10);
-  const upcomingHolidays = holidays.filter((h: { name: string; date: string }) => h.date >= todayStr && h.date <= cutoff);
-  const holidayList = upcomingHolidays.map((h: { name: string; date: string }) => `- ${h.name}: ${h.date}`).join("\n");
+  const upcomingHolidays = holidays
+    .map((holiday: { name: string; date: string }) => ({ ...holiday, occurrence: nextAnnualBusinessOccurrence(holiday.date, now) }))
+    .filter((holiday) => holiday.occurrence.daysUntil <= daysAhead);
+  const holidayList = upcomingHolidays.map((holiday) => `- ${holiday.name}: ${holiday.occurrence.eventDate.toISOString().slice(0, 10)}`).join("\n");
   const totalPosts = daysAhead * postsPerDay;
 
   const prompt = `Hôm nay: ${now.toLocaleDateString("vi-VN")} (${["Chủ nhật","Thứ 2","Thứ 3","Thứ 4","Thứ 5","Thứ 6","Thứ 7"][now.getDay()]})
@@ -134,7 +142,7 @@ Hãy điều chỉnh kế hoạch để khắc phục các điểm phản biện
   if (!ideas.length) return { created: 0, ideas: [] };
 
   const draftIdeas = ideas.map((idea) => ({ ...idea }));
-  const voiceProfile = await getHumanVoiceProfile(null);
+  const voiceProfile = await getHumanVoiceProfile(facebookPageId);
   const voiceRules = voiceProfile?.autoApply ? voiceProfile.rules : "";
   const lowScoreItems = ideas
     .map((idea, index) => ({ index, idea, score: scoreHumanWriting(idea.caption, Boolean(voiceRules)) }))
@@ -192,6 +200,7 @@ Trả JSON array đúng dạng:
           status: "draft",
           scheduledAt,
           qualityNotes: `AI-RESEARCH: ${idea.topic}`,
+          facebookPageId,
         },
       });
     })
@@ -202,6 +211,7 @@ Trả JSON array đúng dạng:
       const score = scoreHumanWriting(ideas[index].caption, Boolean(voiceRules));
       return {
         postId: post.id,
+        facebookPageId,
         promptVersion: "research-human-v1",
         mode: "research",
         narrator: "brand",
@@ -233,10 +243,29 @@ Trả JSON array đúng dạng:
   return { created: created.length, ideas };
 }
 
-export async function getResearchDrafts(limit = 30) {
-  return prisma.post.findMany({
-    where: { status: "draft", qualityNotes: { startsWith: "AI-RESEARCH:" } },
+export async function getResearchDrafts(facebookPageId: string, limit = 30) {
+  const drafts = await prisma.post.findMany({
+    where: {
+      facebookPageId,
+      status: "draft",
+      qualityNotes: { startsWith: "AI-RESEARCH:" },
+    },
     orderBy: { scheduledAt: "asc" },
     take: limit,
+    select: {
+      id: true,
+      caption: true,
+      hashtags: true,
+      postType: true,
+      tone: true,
+      scheduledAt: true,
+      qualityNotes: true,
+      createdAt: true,
+    },
   });
+  return drafts.map((draft) => ({
+    ...draft,
+    scheduledAt: draft.scheduledAt?.toISOString() ?? null,
+    createdAt: draft.createdAt.toISOString(),
+  }));
 }

@@ -1,5 +1,5 @@
-import { WorkspacePage, type WorkspacePageProps } from "@/components/workspace/WorkspacePage";
+import { SettingsWorkspace, type SettingsWorkspaceProps } from "@/components/modules/settings/SettingsWorkspace";
 
-export default function Page({ searchParams }: WorkspacePageProps) {
-  return <WorkspacePage routeId="system-settings" searchParams={searchParams} />;
+export default function Page({ searchParams }: SettingsWorkspaceProps) {
+  return <SettingsWorkspace searchParams={searchParams} />;
 }

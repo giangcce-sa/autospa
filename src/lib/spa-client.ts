@@ -1,16 +1,22 @@
 import { prisma } from "./db";
+import { assertSafeSpaApiUrl } from "./spa-url-security";
 
-async function getSpaCreds() {
-  const settings = await prisma.settings.findFirst();
+interface SpaCredentials {
+  url: string;
+  key: string;
+}
+
+async function getSpaCreds(): Promise<SpaCredentials> {
+  const settings = await prisma.settings.findFirst({ select: { spaApiUrl: true, spaApiKey: true } });
   if (!settings?.spaApiUrl) throw new Error("Chưa cấu hình Spa API URL trong Cài đặt");
-  return { url: settings.spaApiUrl.replace(/\/$/, ""), key: settings.spaApiKey ?? "" };
+  return { url: await assertSafeSpaApiUrl(settings.spaApiUrl), key: settings.spaApiKey ?? "" };
 }
 
 async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(url, { ...options, redirect: "error", signal: controller.signal });
     return res;
   } catch (err) {
     if (retries > 0) return fetchWithRetry(url, options, retries - 1);
@@ -86,14 +92,23 @@ export async function getSpaBookingLink(service?: string | null): Promise<string
   return service ? `${url}/booking?service=${encodeURIComponent(service)}` : `${url}/booking`;
 }
 
-export async function testSpaConnection(): Promise<{ success: boolean; message: string }> {
+export async function testSpaConnectionWithCredentials(
+  credentials: SpaCredentials,
+): Promise<{ success: boolean; message: string }> {
   try {
-    const { url, key } = await getSpaCreds();
-    const res = await fetchWithRetry(`${url}/health`, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
+    const res = await fetchWithRetry(`${credentials.url}/health`, {
+      headers: { Authorization: `Bearer ${credentials.key}` },
+    }, 0);
     if (res.ok) return { success: true, message: "Kết nối thành công!" };
     return { success: false, message: `Spa API trả về ${res.status}` };
+  } catch (err) {
+    return { success: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function testSpaConnection(): Promise<{ success: boolean; message: string }> {
+  try {
+    return testSpaConnectionWithCredentials(await getSpaCreds());
   } catch (err) {
     return { success: false, message: err instanceof Error ? err.message : String(err) };
   }

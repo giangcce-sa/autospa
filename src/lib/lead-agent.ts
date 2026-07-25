@@ -2,7 +2,7 @@ import { prisma } from "./db";
 import { generateContent } from "./claude";
 import { replyToFbConversation } from "./facebook";
 import { postToZalo } from "./zalo";
-import { pushLeadToSpa, getSpaBookingLink } from "./spa-client";
+import { getSpaBookingLink } from "./spa-client";
 
 const STEP_QUESTIONS = [
   "Xin chào! Bạn tên gì để mình tiện xưng hô ạ?",
@@ -23,34 +23,63 @@ async function extractInfo(field: string, text: string): Promise<string | null> 
   }
 }
 
+function isUniqueConstraintError(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+}
+
 export async function getOrCreateConversation(
   senderId: string,
   facebookPageId?: string | null,
   channel: "facebook" | "zalo" = "facebook",
   attribution?: { fromPostId?: string; fromCampaignId?: string; fromAdId?: string }
 ) {
+  if (channel === "facebook" && !facebookPageId) {
+    throw new Error("Messenger conversation yêu cầu Facebook Page nội bộ");
+  }
+
+  const pageId = facebookPageId ?? null;
+  const where = { senderId, facebookPageId: pageId, isComplete: false };
   const existing = await prisma.leadConversation.findFirst({
-    where: { senderId, facebookPageId: facebookPageId ?? null, isComplete: false },
+    where,
     orderBy: { createdAt: "desc" },
   });
   if (existing) return existing;
 
-  const existingLead = await prisma.lead.findFirst({ where: { channelId: senderId, channelType: channel } });
-  const lead = existingLead ?? await prisma.lead.create({
-    data: {
-      name: channel === "zalo" ? "Khách Zalo" : "Khách Facebook",
-      source: channel,
-      channelType: channel,
-      channelId: senderId,
-      fromPostId: attribution?.fromPostId ?? null,
-      fromCampaignId: attribution?.fromCampaignId ?? null,
-      fromAdId: attribution?.fromAdId ?? null,
-    },
-  });
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const previousConversation = await tx.leadConversation.findFirst({
+        where: { senderId, facebookPageId: pageId },
+        orderBy: { createdAt: "desc" },
+        select: { leadId: true },
+      });
+      const existingLead = previousConversation
+        ? await tx.lead.findUnique({ where: { id: previousConversation.leadId } })
+        : channel === "zalo"
+          ? await tx.lead.findFirst({ where: { channelId: senderId, channelType: channel } })
+          : null;
+      const lead = existingLead ?? await tx.lead.create({
+        data: {
+          name: channel === "zalo" ? "Khách Zalo" : "Khách Facebook",
+          source: channel,
+          channelType: channel,
+          channelId: senderId,
+          fromPostId: attribution?.fromPostId ?? null,
+          fromCampaignId: attribution?.fromCampaignId ?? null,
+          fromAdId: attribution?.fromAdId ?? null,
+        },
+      });
 
-  return prisma.leadConversation.create({
-    data: { leadId: lead.id, senderId, facebookPageId: facebookPageId ?? null, step: 1 },
-  });
+      return tx.leadConversation.create({
+        data: { leadId: lead.id, senderId, facebookPageId: pageId, step: 1 },
+      });
+    });
+  } catch (error) {
+    if (!isUniqueConstraintError(error) || !pageId) throw error;
+    return prisma.leadConversation.findFirstOrThrow({
+      where,
+      orderBy: { createdAt: "desc" },
+    });
+  }
 }
 
 export async function processIncomingMessage(
@@ -58,34 +87,31 @@ export async function processIncomingMessage(
   messageText: string
 ): Promise<{ replyText: string; isComplete: boolean }> {
   const conv = await prisma.leadConversation.findUnique({ where: { id: convId } });
-  if (!conv || conv.isComplete) return { replyText: "", isComplete: true };
+  if (!conv || conv.isComplete) return { replyText: "", isComplete: false };
 
   let replyText = "";
   let nextStep = conv.step;
-  const updateData: Record<string, unknown> = {};
+  let conversationData: Record<string, unknown> = {};
+  let leadData: Record<string, unknown> | null = null;
 
   if (conv.step === 0) {
-    // Send first question
     replyText = STEP_QUESTIONS[0];
     nextStep = 1;
   } else if (conv.step === 1) {
-    // Extract name from reply
     const name = await extractInfo("tên người", messageText);
     if (name) {
-      updateData.collectedName = name;
-      // Update lead name
-      await prisma.lead.updateMany({ where: { channelId: conv.senderId }, data: { name } });
+      conversationData = { collectedName: name };
+      leadData = { name };
       replyText = `Xin chào ${name}! ${STEP_QUESTIONS[1]}`;
       nextStep = 2;
     } else {
       replyText = "Mình chưa hiểu tên bạn ạ. Bạn có thể cho mình biết tên không?";
     }
   } else if (conv.step === 2) {
-    // Extract service
     const service = await extractInfo("tên dịch vụ spa/làm đẹp", messageText);
     if (service) {
-      updateData.collectedService = service;
-      await prisma.lead.updateMany({ where: { channelId: conv.senderId }, data: { service } });
+      conversationData = { collectedService: service };
+      leadData = { service };
       const name = conv.collectedName ?? "bạn";
       replyText = `${name} muốn ${service} — tuyệt! ${STEP_QUESTIONS[2]}`;
       nextStep = 3;
@@ -93,24 +119,31 @@ export async function processIncomingMessage(
       replyText = "Spa có nhiều dịch vụ như facial, massage, waxing, nail... Bạn quan tâm đến dịch vụ nào ạ?";
     }
   } else if (conv.step === 3) {
-    // Extract time preference
     const timePreference = await extractInfo("thời gian/lịch hẹn", messageText);
-    updateData.isComplete = true;
+    conversationData = { isComplete: true };
+    leadData = {
+      stage: "hot",
+      score: 80,
+      lastAction: `Qualification hoàn tất: ${conv.collectedService ?? "dịch vụ spa"}`,
+      note: timePreference ? `Muốn đặt lịch: ${timePreference}` : undefined,
+    };
     nextStep = 4;
-    // Score the lead
-    await prisma.lead.updateMany({
-      where: { channelId: conv.senderId },
-      data: { stage: "hot", score: 80, lastAction: `Qualification hoàn tất: ${conv.collectedService ?? "dịch vụ spa"}`, note: timePreference ? `Muốn đặt lịch: ${timePreference}` : undefined },
-    });
     replyText = `Cảm ơn ${conv.collectedName ?? "bạn"}! Mình đã ghi nhận thông tin. Nhân viên sẽ liên hệ xác nhận lịch cho bạn sớm nhé! 😊`;
   }
 
-  await prisma.leadConversation.update({
-    where: { id: convId },
-    data: { step: nextStep, ...updateData },
+  const advanced = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.leadConversation.updateMany({
+      where: { id: conv.id, version: conv.version, isComplete: false },
+      data: { step: nextStep, version: { increment: 1 }, ...conversationData },
+    });
+    if (claimed.count !== 1) return false;
+    if (leadData) await tx.lead.update({ where: { id: conv.leadId }, data: leadData });
+    return true;
   });
 
-  return { replyText, isComplete: nextStep >= 4 };
+  return advanced
+    ? { replyText, isComplete: nextStep >= 4 }
+    : { replyText: "", isComplete: false };
 }
 
 export async function executeHandoff(
@@ -137,25 +170,14 @@ export async function executeHandoff(
   if (mode === "link") {
     const link = await getSpaBookingLink(conv.collectedService);
     await replyToLead(`Bạn có thể đặt lịch trực tiếp tại đây nhé: ${link}`);
-  } else if (mode === "api") {
-    try {
-      const { bookingId } = await pushLeadToSpa({
-        name: lead.name,
-        phone: lead.phone,
-        service: conv.collectedService,
-        source: isZalo ? "zalo_bot" : "facebook_bot",
-        note: lead.note,
-      });
-      await prisma.lead.update({ where: { id: lead.id }, data: { spaBookingId: bookingId } });
-      await replyToLead(`Mình đã đặt lịch cho bạn! Nhân viên sẽ xác nhận qua tin nhắn sớm nhé.`);
-    } catch {
-      await notifyStaff(lead.name, conv.collectedService, conv.senderId, lead.channelType ?? "facebook", recipientZaloId);
-    }
   } else {
     await notifyStaff(lead.name, conv.collectedService, conv.senderId, lead.channelType ?? "facebook", recipientZaloId);
   }
 
-  await prisma.lead.update({ where: { id: lead.id }, data: { handoffAt, handoffMode: mode } });
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { handoffAt, handoffMode: mode === "api" ? "staff" : mode },
+  });
 }
 
 async function notifyStaff(

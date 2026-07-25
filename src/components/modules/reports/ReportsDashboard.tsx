@@ -7,8 +7,8 @@ import { ChartBar, Eye, ThumbsUp, Users, Flame, Heart, Sparkle } from "@phosphor
 import { truncate } from "@/lib/utils";
 
 interface ReportData {
-  overview: { postCount: number; publishedCount: number; totalReach: number; totalLikes: number; totalComments: number; totalShares: number; avgEngagement: number };
-  crm: { customers: number; leads: number; closedLeads: number; hotLeads: number; conversionRate: number; careMessages: number };
+  overview: { postCount: number; publishedCount: number; totalReach: number | null; totalLikes: number | null; totalComments: number | null; totalShares: number | null; avgEngagement: number | null };
+  crm: { customers: number; leads: number; closedLeads: number; hotLeads: number; conversionRate: number; careMessages: number } | null;
   topPosts: { id: string; caption: string; analytics: { likes: number; comments: number; shares: number; reach: number } | null }[];
   bySource: { source: string; _count: number }[];
   bySegment: { segment: string; _count: number }[];
@@ -61,17 +61,23 @@ export function ReportsDashboard() {
     <div className="space-y-4 max-w-5xl">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricCard label="Bài đã đăng" value={data.overview.publishedCount} sub={`/ ${data.overview.postCount} tổng`} icon={ChartBar} color="var(--accent)" />
-        <MetricCard label="Tổng tiếp cận" value={data.overview.totalReach.toLocaleString("vi-VN")} icon={Eye} color="var(--blue)" />
-        <MetricCard label="Tổng lượt thích" value={data.overview.totalLikes.toLocaleString("vi-VN")} icon={ThumbsUp} color="var(--rose)" />
-        <MetricCard label="Tỷ lệ tương tác" value={`${data.overview.avgEngagement}%`} icon={Flame} color="var(--amber)" />
+        <MetricCard label="Tổng tiếp cận" value={data.overview.totalReach?.toLocaleString("vi-VN") ?? "Chưa đo"} icon={Eye} color="var(--blue)" />
+        <MetricCard label="Tổng lượt thích" value={data.overview.totalLikes?.toLocaleString("vi-VN") ?? "Chưa đo"} icon={ThumbsUp} color="var(--rose)" />
+        <MetricCard label="Tỷ lệ tương tác" value={data.overview.avgEngagement == null ? "Chưa đo" : `${data.overview.avgEngagement}%`} icon={Flame} color="var(--amber)" />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricCard label="Khách hàng CRM" value={data.crm.customers} icon={Users} color="var(--accent)" />
-        <MetricCard label="Tổng leads" value={data.crm.leads} sub={`${data.crm.hotLeads} đang nóng`} icon={Flame} color="var(--rose)" />
-        <MetricCard label="Đã chốt" value={data.crm.closedLeads} sub={`${data.crm.conversionRate}% tỷ lệ`} icon={ChartBar} color="var(--accent)" />
-        <MetricCard label="Tin nhắn chăm sóc" value={data.crm.careMessages} icon={Heart} color="var(--rose)" />
-      </div>
+      {data.crm ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <MetricCard label="Khách hàng CRM" value={data.crm.customers} icon={Users} color="var(--accent)" />
+          <MetricCard label="Tổng leads" value={data.crm.leads} sub={`${data.crm.hotLeads} đang nóng`} icon={Flame} color="var(--rose)" />
+          <MetricCard label="Đã chốt" value={data.crm.closedLeads} sub={`${data.crm.conversionRate}% tỷ lệ`} icon={ChartBar} color="var(--accent)" />
+          <MetricCard label="Tin nhắn chăm sóc" value={data.crm.careMessages} icon={Heart} color="var(--rose)" />
+        </div>
+      ) : (
+        <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-4 text-xs leading-5 text-[var(--text-muted)]">
+          CRM, lead và care chưa có Page ownership tương thích nên không được ghép vào báo cáo theo Page.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-3">

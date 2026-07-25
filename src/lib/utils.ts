@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { BUSINESS_TIME_ZONE } from "@/lib/today-policy";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -15,6 +16,7 @@ export function formatDate(date: Date | string) {
 
 export function formatDateTime(date: Date | string) {
   return new Date(date).toLocaleString("vi-VN", {
+    timeZone: BUSINESS_TIME_ZONE,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
