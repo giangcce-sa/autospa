@@ -31,6 +31,7 @@ test("Gateway deployment preserves data and rolls back only the application imag
 
   assert.match(deploy, /Refusing to reuse immutable release image/);
   assert.match(deploy, /SSH_IDENTITY_FILE/);
+  assert.match(deploy, /run --rm --no-deps -T/);
   assert.match(deploy, /VACUUM INTO/);
   assert.match(deploy, /PRAGMA integrity_check/);
   assert.ok(deploy.indexOf("VACUUM INTO") < deploy.indexOf("up -d --no-deps gateway"));

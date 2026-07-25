@@ -68,7 +68,7 @@ if [[ -n "${previous_container_id}" ]]; then
 fi
 
 GATEWAY_IMAGE="${release_image}" "${compose[@]}" build gateway
-BACKUP_RELEASE="${release}" GATEWAY_IMAGE="${release_image}" "${compose[@]}" run --rm --no-deps \
+BACKUP_RELEASE="${release}" GATEWAY_IMAGE="${release_image}" "${compose[@]}" run --rm --no-deps -T \
   -e BACKUP_RELEASE gateway node --input-type=module -e '
     import { existsSync, mkdirSync } from "node:fs";
     import { dirname, resolve } from "node:path";
