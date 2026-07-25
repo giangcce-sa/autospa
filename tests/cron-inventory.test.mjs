@@ -22,6 +22,8 @@ test("every scheduled task uses a dedicated authenticated cron route", async () 
 test("VPS cron schedule stays in parity with Vercel", async () => {
   const config = JSON.parse(await source("vercel.json"));
   const crontab = await source("deploy/autospa.cron.example");
+  assert.equal((crontab.match(/set -a; \. \/etc\/autospa-cron\.env; set \+a;/g) ?? []).length, config.crons.length);
+
   const entries = crontab
     .split("\n")
     .filter((line) => line && !line.startsWith("#") && !line.includes("="))
