@@ -100,7 +100,7 @@ BACKUP_RELEASE="${release}" GATEWAY_IMAGE="${release_image}" "${compose[@]}" run
       throw new Error(`SQLite backup integrity check failed: ${JSON.stringify(integrity)}`);
     }
     console.log(`Verified SQLite backup: ${backupPath}`);
-  '
+  ' </dev/null
 GATEWAY_IMAGE="${release_image}" "${compose[@]}" up -d nine-router
 GATEWAY_IMAGE="${release_image}" "${compose[@]}" up -d --no-deps gateway
 
