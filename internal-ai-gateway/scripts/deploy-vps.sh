@@ -27,7 +27,7 @@ ssh_options=()
 rsync_ssh=()
 if [[ -n "${SSH_IDENTITY_FILE:-}" ]]; then
   ssh_options=(-i "${SSH_IDENTITY_FILE}")
-  rsync_ssh=(-e "ssh -i ${SSH_IDENTITY_FILE@Q}")
+  rsync_ssh=(-e "ssh -i \"${SSH_IDENTITY_FILE}\"")
 fi
 
 rsync -az --delete "${rsync_ssh[@]}" \
