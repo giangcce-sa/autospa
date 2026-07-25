@@ -30,6 +30,7 @@ rsync -az --delete \
   --exclude audit-logs \
   --exclude kiro-workspaces \
   --exclude backups \
+  --exclude '.backup-*' \
   --exclude .env \
   --exclude .git \
   "${project_dir}/" "${ssh_target}:${remote_dir}/"
