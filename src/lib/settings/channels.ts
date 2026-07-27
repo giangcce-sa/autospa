@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { safeFacebookPage } from "@/lib/facebook-page-response";
 import { safeGoogleAccountSelect } from "@/lib/channel-security";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { resolveSecretInput } from "@/lib/settings-secrets";
 import {
   parseCanonicalZaloSettingsRequest,
@@ -88,7 +89,7 @@ export async function testZaloSettings(input: unknown) {
     where: { id: "1" },
     select: { zaloToken: true },
   });
-  const token = resolveSecretInput(request.zaloToken, settings?.zaloToken);
+  const token = resolveSecretInput(request.zaloToken, decryptSecret(settings?.zaloToken));
   if (!token) throw new Error("Chưa có Zalo Token — nhập token rồi kiểm tra");
 
   const response = await fetch("https://openapi.zalo.me/v2.0/oa/getoa", {

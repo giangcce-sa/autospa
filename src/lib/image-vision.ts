@@ -3,6 +3,7 @@ import "server-only";
 import sharp from "sharp";
 import { prisma } from "@/lib/db";
 import { assertSafeAiProviderUrl } from "@/lib/provider-url-security";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { imageSourceToBuffer } from "@/lib/media-storage";
 
 export interface ImageVisionResult {
@@ -66,7 +67,8 @@ export async function analyzeGeneratedImage(input: {
   const settings = await prisma.settings.findFirst({
     select: { openaiApiKey: true, openaiBaseUrl: true },
   });
-  if (!settings?.openaiApiKey) throw new Error("Chưa cấu hình API key cho Vision");
+  const visionApiKey = decryptSecret(settings?.openaiApiKey);
+  if (!settings || !visionApiKey) throw new Error("Chưa cấu hình API key cho Vision");
 
   const imageBase64 = await normalizedBase64(input.imageUrl);
   const baseUrl = await assertSafeAiProviderUrl((settings.openaiBaseUrl || "https://api.openai.com/v1")
@@ -89,7 +91,7 @@ Chấm 0-100 cho anatomy, identity, serviceFit, brandFit, realism, layout, safet
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.openaiApiKey}`,
+      Authorization: `Bearer ${visionApiKey}`,
     },
     body: JSON.stringify({
       model: "auto",

@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { assertSafeAiProviderUrl } from "./provider-url-security";
+import { decryptSecret } from "./secrets-crypto";
 
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 const DIRECT_CLAUDE_MODEL = "claude-sonnet-4-6";
@@ -23,10 +24,11 @@ function isAnthropicBaseUrl(url: string) {
 
 async function getSettings() {
   const settings = await prisma.settings.findFirst();
-  if (!settings?.claudeApiKey) throw new Error("Chưa cấu hình Claude API Key");
+  const apiKey = decryptSecret(settings?.claudeApiKey);
+  if (!settings || !apiKey) throw new Error("Chưa cấu hình Claude API Key");
 
   return {
-    apiKey: settings.claudeApiKey,
+    apiKey,
     baseURL: await assertSafeAiProviderUrl(normalizeBaseUrl(settings.claudeBaseUrl || ANTHROPIC_BASE_URL), "claude"),
   };
 }

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { postToFacebook, postVideoToFacebook } from "@/lib/facebook";
 import { postToInstagram, postVideoToInstagram } from "@/lib/instagram";
 import { signedMediaUrl, storageKeyFromMediaUrl } from "@/lib/media-storage";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { postPhotoToTikTok, postVideoToTikTok } from "@/lib/tiktok";
 import { postToZalo } from "@/lib/zalo";
 
@@ -263,13 +264,17 @@ async function executeChannel(input: PublishRequest, operationId: string, channe
       const mediaUrl = input.imageUrl!;
       const storageKey = storageKeyFromMediaUrl(mediaUrl);
       const publicUrl = storageKey ? signedMediaUrl(storageKey, 3600) : mediaUrl;
+      const pageToken = decryptSecret(page!.accessToken);
+      if (!pageToken) return failBeforeOutbound(attempt.id, "Access Token của Facebook Page không đọc được");
       externalId = input.mediaType === "video"
-        ? await postVideoToInstagram(page!.igAccountId!, page!.accessToken, text, publicUrl, checkpoint)
-        : await postToInstagram(page!.igAccountId!, page!.accessToken, text, mediaUrl, checkpoint);
+        ? await postVideoToInstagram(page!.igAccountId!, pageToken, text, publicUrl, checkpoint)
+        : await postToInstagram(page!.igAccountId!, pageToken, text, mediaUrl, checkpoint);
     } else if (channel === "tiktok") {
+      const tiktokToken = decryptSecret(tiktokAccount!.accessToken);
+      if (!tiktokToken) return failBeforeOutbound(attempt.id, "Access Token TikTok không đọc được");
       externalId = input.mediaType === "video"
-        ? (await postVideoToTikTok(tiktokAccount!.accessToken, text, input.imageUrl!)).publishId
-        : (await postPhotoToTikTok(tiktokAccount!.accessToken, tiktokAccount!.openId, text, [input.imageUrl!])).publishId;
+        ? (await postVideoToTikTok(tiktokToken, text, input.imageUrl!)).publishId
+        : (await postPhotoToTikTok(tiktokToken, tiktokAccount!.openId, text, [input.imageUrl!])).publishId;
     } else {
       externalId = await postToZalo(text, input.imageUrl ?? undefined);
     }

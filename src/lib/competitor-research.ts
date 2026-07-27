@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { calculateCompetitorEngagement, competitorViralLevel } from "./learning/competitor-learning";
+import { decryptSecret } from "./secrets-crypto";
 
 interface RawFbPost {
   id: string;
@@ -33,10 +34,10 @@ export async function syncOneCompetitor(competitorId: string): Promise<{ added: 
   if (!competitor.isActive) return { added: 0, total: 0 };
 
   // Pick token: competitor's own → first active page's token
-  let token = competitor.accessToken;
+  let token = decryptSecret(competitor.accessToken) ?? null;
   if (!token) {
     const ownPage = await prisma.facebookPage.findFirst({ where: { isActive: true } });
-    token = ownPage?.accessToken ?? null;
+    token = decryptSecret(ownPage?.accessToken) ?? null;
   }
   if (!token) throw new Error("Cần access token (cấu hình Facebook Page hoặc nhập token cho đối thủ)");
 

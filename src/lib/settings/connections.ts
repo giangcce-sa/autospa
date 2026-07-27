@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { assertSafeSpaApiUrl, SpaUrlError } from "@/lib/spa-url-security";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { getSecretReplacement, resolveSecretInput } from "@/lib/settings-secrets";
 import {
   parseCanonicalConnectionSettingsRequest,
@@ -66,7 +67,7 @@ export async function testConnectionSettings(input: unknown) {
     throw new SpaUrlError("Khi đổi máy chủ Spa API, bạn phải nhập lại khóa truy cập");
   }
 
-  const key = resolveSecretInput(request.spaApiKey, settings?.spaApiKey);
+  const key = resolveSecretInput(request.spaApiKey, decryptSecret(settings?.spaApiKey));
   if (!key) throw new Error("Chưa có Spa API key — nhập key rồi kiểm tra");
   return testSpaConnectionWithCredentials({ url, key });
 }

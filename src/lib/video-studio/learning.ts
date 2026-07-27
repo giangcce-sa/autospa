@@ -6,6 +6,7 @@ import path from "path";
 import { createHash } from "crypto";
 import { prisma } from "@/lib/db";
 import { assertSafeAiProviderUrl } from "@/lib/provider-url-security";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { readMedia, storageKeyFromMediaUrl } from "@/lib/media-storage";
 import { generateChatCompletion } from "@/lib/openai";
 import { analyzeGeneratedImage } from "@/lib/image-vision";
@@ -33,14 +34,15 @@ function parseSkills(value: string): LearnedSkill[] {
 
 async function transcribeAudio(buffer: Buffer) {
   const settings = await prisma.settings.findFirst({ select: { openaiApiKey: true, openaiBaseUrl: true } });
-  if (!settings?.openaiApiKey) return "";
+  const transcriptionKey = decryptSecret(settings?.openaiApiKey);
+  if (!settings || !transcriptionKey) return "";
   const baseUrl = await assertSafeAiProviderUrl(
     (settings.openaiBaseUrl || "https://api.openai.com/v1").replace(/\/(chat\/completions|images\/generations)\/?$/, "").replace(/\/$/, ""),
     "openai",
   );
   const response = await providerFetch(`${baseUrl}/audio/transcriptions`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${settings.openaiApiKey}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${transcriptionKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model: "auto", audio_base64: buffer.toString("base64"), language: "vi", response_format: "verbose_json", metadata: { app: "autospa", feature: "video-learning" } }),
   }, 180_000);
   const data = await response.json() as { text?: string; transcript?: string };

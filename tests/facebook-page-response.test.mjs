@@ -34,6 +34,12 @@ test("serializes Facebook Pages without exposing the raw access token", () => {
   assert.equal(safe.accessTokenHint, "••••••••oken");
 });
 
+test("encrypted-at-rest tokens get a fixed hint instead of a ciphertext suffix", () => {
+  const safe = safeFacebookPage(pageFixture({ accessToken: "enc:v2:aWl2:dGFn:Y2lwaGVydGV4dA" }));
+  assert.equal(safe.accessTokenHint, "••••••••");
+  assert.equal(JSON.stringify(safe).includes("enc:v2"), false);
+});
+
 test("returns structured readiness and tolerates malformed stored permission JSON", () => {
   const safe = safeFacebookPage(pageFixture({ adsPermissions: "invalid", adsMissingPermissions: '["ads_management",7]' }));
   assert.deepEqual(safe.adsReadiness.permissions, []);

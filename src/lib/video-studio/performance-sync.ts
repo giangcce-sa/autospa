@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { fetchIgInsights } from "@/lib/instagram";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { fetchTikTokVideoStats } from "@/lib/tiktok";
 
 export async function syncPublishedVideoPerformance(limit = 25) {
@@ -21,8 +22,9 @@ export async function syncPublishedVideoPerformance(limit = 25) {
     if (post.igPostId && project.facebookPageId) {
       try {
         const page = await prisma.facebookPage.findUnique({ where: { id: project.facebookPageId } });
-        if (!page) throw new Error("Không tìm thấy Facebook Page chứa Instagram token");
-        const stats = await fetchIgInsights(post.igPostId, page.accessToken);
+        const igToken = decryptSecret(page?.accessToken);
+        if (!page || !igToken) throw new Error("Không tìm thấy Facebook Page chứa Instagram token");
+        const stats = await fetchIgInsights(post.igPostId, igToken);
         await prisma.videoPerformance.create({ data: {
           projectId: project.id, platform: "instagram", externalPostId: post.igPostId,
           views: stats.impressions, impressions: stats.impressions,
@@ -34,7 +36,9 @@ export async function syncPublishedVideoPerformance(limit = 25) {
     }
     if (post.tiktokVideoId && tiktok) {
       try {
-        const stats = await fetchTikTokVideoStats(tiktok.accessToken, post.tiktokVideoId);
+        const tiktokToken = decryptSecret(tiktok.accessToken);
+        if (!tiktokToken) throw new Error("Access Token TikTok không đọc được");
+        const stats = await fetchTikTokVideoStats(tiktokToken, post.tiktokVideoId);
         await prisma.videoPerformance.create({ data: {
           projectId: project.id, platform: "tiktok", externalPostId: post.tiktokVideoId, views: stats.views,
         } });

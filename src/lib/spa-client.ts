@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { decryptSecret } from "./secrets-crypto";
 import { assertSafeSpaApiUrl } from "./spa-url-security";
 
 interface SpaCredentials {
@@ -9,7 +10,7 @@ interface SpaCredentials {
 async function getSpaCreds(): Promise<SpaCredentials> {
   const settings = await prisma.settings.findFirst({ select: { spaApiUrl: true, spaApiKey: true } });
   if (!settings?.spaApiUrl) throw new Error("Chưa cấu hình Spa API URL trong Cài đặt");
-  return { url: await assertSafeSpaApiUrl(settings.spaApiUrl), key: settings.spaApiKey ?? "" };
+  return { url: await assertSafeSpaApiUrl(settings.spaApiUrl), key: decryptSecret(settings.spaApiKey) ?? "" };
 }
 
 async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {

@@ -1,4 +1,5 @@
 import { prisma } from "../db";
+import { decryptSecret } from "../secrets-crypto";
 
 /**
  * Fetch active ads from Facebook Ads Library API.
@@ -40,14 +41,15 @@ async function fetchAdsForKeyword(keyword: string, token: string, limit = 25): P
 export async function syncAdsLibrary(): Promise<{ saved: number; errors: string[] }> {
   // Use the first active FB Page's access token
   const fbPage = await prisma.facebookPage.findFirst({ where: { isActive: true } });
-  if (!fbPage) return { saved: 0, errors: ["Chưa cấu hình FB Page để dùng làm access token"] };
+  const libraryToken = decryptSecret(fbPage?.accessToken);
+  if (!fbPage || !libraryToken) return { saved: 0, errors: ["Chưa cấu hình FB Page để dùng làm access token"] };
 
   const errors: string[] = [];
   let saved = 0;
 
   for (const kw of BEAUTY_KEYWORDS) {
     try {
-      const ads = await fetchAdsForKeyword(kw, fbPage.accessToken);
+      const ads = await fetchAdsForKeyword(kw, libraryToken);
       // Count unique pages running ads for this keyword
       const pages = new Set(ads.map((a) => a.page_name).filter(Boolean) as string[]);
       const volume = pages.size;

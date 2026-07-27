@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { withRateLimit } from "./rate-limiter";
+import { decryptSecret } from "./secrets-crypto";
 import { imageSourceToBuffer } from "./media-storage";
 
 type PageCreds = { token: string; pageId: string };
@@ -20,7 +21,9 @@ async function getPageCreds(facebookPageId?: string): Promise<PageCreds> {
     page = await prisma.facebookPage.findFirst({ where: { isActive: true } });
   }
   if (!page) throw new Error("Chưa cấu hình Facebook Page");
-  return { token: page.accessToken, pageId: page.fbPageId };
+  const token = decryptSecret(page.accessToken);
+  if (!token) throw new Error("Access Token của Facebook Page không đọc được — nhập lại trong Cài đặt");
+  return { token, pageId: page.fbPageId };
 }
 
 function detectFbError(data: { error?: { message: string; code?: number } }) {

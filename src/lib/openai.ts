@@ -1,11 +1,13 @@
 import { prisma } from "./db";
 import { assertSafeAiProviderUrl } from "./provider-url-security";
+import { decryptSecret } from "./secrets-crypto";
 
 async function getSettings() {
   const settings = await prisma.settings.findFirst();
-  if (!settings?.openaiApiKey) throw new Error("Chưa cấu hình OpenAI API Key");
+  const apiKey = decryptSecret(settings?.openaiApiKey);
+  if (!settings || !apiKey) throw new Error("Chưa cấu hình OpenAI API Key");
   return {
-    apiKey: settings.openaiApiKey,
+    apiKey,
     baseURL: await assertSafeAiProviderUrl((settings.openaiBaseUrl || "https://api.openai.com/v1").replace(/\/$/, ""), "openai"),
     model: settings.imageModel || "dall-e-3",
     chatModel: settings.openaiChatModel || "gpt-5",

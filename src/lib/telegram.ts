@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { splitTelegramText } from "@/lib/telegram-control";
 
 const BASE = "https://api.telegram.org";
@@ -14,8 +15,9 @@ type TelegramCreds = { token: string; chatId: string };
 
 async function getCreds(): Promise<TelegramCreds | null> {
   const settings = await prisma.settings.findFirst();
-  if (!settings?.telegramBotToken || !settings.telegramChatId) return null;
-  return { token: settings.telegramBotToken, chatId: settings.telegramChatId };
+  const token = decryptSecret(settings?.telegramBotToken);
+  if (!token || !settings?.telegramChatId) return null;
+  return { token, chatId: settings.telegramChatId };
 }
 
 async function call<T = Record<string, unknown>>(

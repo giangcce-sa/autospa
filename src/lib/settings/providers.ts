@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { assertSafeAiProviderUrl, ProviderUrlError, sameProviderOrigin } from "@/lib/provider-url-security";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { getSecretReplacement, resolveSecretInput } from "@/lib/settings-secrets";
 import {
   parseCanonicalImageSettingsRequest,
@@ -85,7 +86,7 @@ export async function testProviderSettings(input: unknown) {
   const settings = await prisma.settings.findUnique({ where: { id: "1" }, select: providerSelect });
 
   if (request.provider === "claude") {
-    const key = resolveSecretInput(request.apiKey, settings?.claudeApiKey);
+    const key = resolveSecretInput(request.apiKey, decryptSecret(settings?.claudeApiKey));
     const savedUrl = normalizeBaseUrl(settings?.claudeBaseUrl || PROVIDER_SETTINGS_DEFAULTS.claudeBaseUrl);
     const requestedUrl = normalizeBaseUrl(request.baseUrl || savedUrl);
     const url = await assertSafeAiProviderUrl(requestedUrl, "claude");
@@ -110,7 +111,7 @@ export async function testProviderSettings(input: unknown) {
     return providerTestResult(response);
   }
 
-  const key = resolveSecretInput(request.apiKey, settings?.openaiApiKey);
+  const key = resolveSecretInput(request.apiKey, decryptSecret(settings?.openaiApiKey));
   const savedUrl = normalizeBaseUrl(settings?.openaiBaseUrl || PROVIDER_SETTINGS_DEFAULTS.openaiBaseUrl);
   const requestedUrl = normalizeBaseUrl(request.baseUrl || savedUrl);
   const url = await assertSafeAiProviderUrl(requestedUrl, "openai");

@@ -12,6 +12,7 @@ import {
 } from "./ads-ownership";
 import { enforceAdsMutation } from "./ads-safety";
 import { prisma } from "./db";
+import { decryptSecret } from "./secrets-crypto";
 import { sanitizeMetaPagingUrl } from "./meta-graph-url";
 import { AccessError } from "./page-access";
 
@@ -31,8 +32,10 @@ async function getAdsCreds(facebookPageId?: string): Promise<AdsCreds> {
   if (!page) throw new Error("Chưa cấu hình Facebook Page");
   if (!page.adAccountId) throw new Error("Chưa cấu hình Ad Account ID — vào Cài đặt → Facebook Page để thêm");
   const actId = page.adAccountId.startsWith("act_") ? page.adAccountId : `act_${page.adAccountId}`;
+  const token = decryptSecret(page.accessToken);
+  if (!token) throw new Error("Access Token của Facebook Page không đọc được — nhập lại trong Cài đặt");
   return {
-    token: page.accessToken,
+    token,
     actId,
     pageId: page.fbPageId,
     facebookPageId: page.id,

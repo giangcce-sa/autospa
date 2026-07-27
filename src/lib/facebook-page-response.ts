@@ -1,3 +1,5 @@
+import { isEncryptedSecret } from "./secrets-crypto.ts";
+
 function parsedList(value: string) {
   try {
     const parsed = JSON.parse(value);
@@ -34,7 +36,9 @@ export function safeFacebookPage(page: {
     isActive: page.isActive,
     adAccountId: page.adAccountId,
     createdAt: page.createdAt,
-    accessTokenHint: "••••••••" + page.accessToken.slice(-4),
+    // Encrypted-at-rest tokens get a fixed hint — a ciphertext suffix means nothing
+    // and decrypting purely for display would widen exposure.
+    accessTokenHint: isEncryptedSecret(page.accessToken) ? "••••••••" : "••••••••" + page.accessToken.slice(-4),
     adsReadiness: {
       status: page.adsReadinessStatus,
       error: page.adsReadinessError,
