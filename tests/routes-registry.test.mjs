@@ -116,11 +116,17 @@ test("keeps canonical Automation Settings account-scoped and locally dispatched"
   }
 });
 
-test("builds canonical AI workspace links from route metadata", () => {
+test("builds canonical workspace links from route metadata", () => {
   assert.equal(getCanonicalRouteHref("brain"), "/system/ai-rooms?view=brain&scope=account");
   assert.equal(getCanonicalRouteHref("orchestrator"), "/system/ai-rooms?view=orchestrator&scope=account");
   assert.equal(getCanonicalRouteHref("automation"), "/system/ai-rooms?view=operations&scope=account");
   assert.equal(getCanonicalRouteHref("automation", "approvals"), "/system/ai-rooms?view=approvals&scope=account");
+  assert.equal(getCanonicalRouteHref("content-research"), "/creative/ideas?view=research&scope=current");
+  assert.equal(getCanonicalRouteHref("content"), "/creative/content?view=editor&scope=current");
+  assert.equal(getCanonicalRouteHref("bulk"), "/creative/content?view=bulk&scope=current");
+  assert.equal(getCanonicalRouteHref("images"), "/creative/images?view=create&scope=current");
+  assert.equal(getCanonicalRouteHref("video-studio"), "/creative/video?view=projects&scope=current");
+  assert.equal(getCanonicalRouteHref("publish"), "/creative/publishing?view=composer&scope=current");
 });
 
 test("activates only legacy routes with canonical browser parity", () => {

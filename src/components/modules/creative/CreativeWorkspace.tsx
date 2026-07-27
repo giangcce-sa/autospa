@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { AbTestView } from "@/components/modules/ab-test/AbTestView";
+import { BulkGenerator } from "@/components/modules/bulk/BulkGenerator";
 import { ContentResearch } from "@/components/modules/content-research/ContentResearch";
 import { ImageGenerator } from "@/components/modules/images/ImageGenerator";
 import { ImageLibrary } from "@/components/modules/images/ImageLibrary";
@@ -14,6 +15,7 @@ import { WorkspacePermissionState } from "@/components/workspace/WorkspacePermis
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { ROUTES_BY_ID } from "@/config/routes";
 import { prisma } from "@/lib/db";
+import { getBulkPlans } from "@/lib/bulk-plans";
 import { readPostBrief, type PostBrief } from "@/lib/creative-brief";
 import { getConnectedChannels } from "@/lib/connected-channels";
 import { getResearchDrafts } from "@/lib/content-research";
@@ -101,6 +103,9 @@ export async function CreativeWorkspace({ routeId, searchParams }: CreativeWorks
   const editorChannels = routeId === "creative-content" && pageId && access.state.view === "editor"
     ? await getConnectedChannels(pageId)
     : undefined;
+  const bulkPlans = routeId === "creative-content" && pageId && access.state.view === "bulk"
+    ? await getBulkPlans(pageId)
+    : undefined;
   const imageHistory = routeId === "creative-images" && pageId && access.state.view !== "create"
     ? await getImageHistoryPage(pageId, { take: access.state.view === "overview" ? 8 : 24 })
     : undefined;
@@ -116,10 +121,11 @@ export async function CreativeWorkspace({ routeId, searchParams }: CreativeWorks
     : [undefined, undefined, undefined, undefined];
   let post: CreativePostData | undefined;
   let postReview: CreativePostReviewData | null = null;
-  if (access.state.id && pageId) {
+  const recordId = creativeRecordIdForView(routeId, access.state.view, access.state.id);
+  if (recordId && pageId) {
     if (routeId === "creative-video") {
       const project = await prisma.videoProject.findUnique({
-        where: { id: access.state.id },
+        where: { id: recordId },
         select: { facebookPageId: true },
       });
       if (!project) notFound();
@@ -128,7 +134,7 @@ export async function CreativeWorkspace({ routeId, searchParams }: CreativeWorks
       }
     } else {
       const record = await prisma.post.findUnique({
-        where: { id: access.state.id },
+        where: { id: recordId },
         select: {
           id: true,
           facebookPageId: true,
@@ -197,7 +203,7 @@ export async function CreativeWorkspace({ routeId, searchParams }: CreativeWorks
           drafts={researchDrafts}
           ideasData={ideasData}
           historyData={historyData}
-          selectedId={access.state.id}
+          selectedId={recordId}
           canMutate={access.canMutate}
         />
       ) : null}
@@ -206,12 +212,13 @@ export async function CreativeWorkspace({ routeId, searchParams }: CreativeWorks
           <ContentView
             view={access.state.view}
             pageId={pageId}
-            postId={access.state.id}
+            postId={recordId}
             post={post}
             status={access.state.status}
             query={access.state.q}
             canMutate={access.canMutate}
             connectedChannels={editorChannels}
+            bulkPlans={bulkPlans}
           />
         </WithRail>
       ) : null}
@@ -220,7 +227,7 @@ export async function CreativeWorkspace({ routeId, searchParams }: CreativeWorks
           <ImageView
             view={access.state.view}
             pageId={pageId}
-            postId={access.state.id}
+            postId={recordId}
             imageHistory={imageHistory}
             canMutate={access.canMutate}
           />
@@ -228,7 +235,7 @@ export async function CreativeWorkspace({ routeId, searchParams }: CreativeWorks
       ) : null}
       {routeId === "creative-video" ? (
         <WithRail rail={videoStudio ? <VideoStudioRail data={videoStudio} /> : undefined}>
-          <VideoView view={access.state.view} pageId={pageId} projectId={access.state.id} sceneId={access.state.step} canMutate={access.canMutate} />
+          <VideoView view={access.state.view} pageId={pageId} projectId={recordId} sceneId={recordId ? access.state.step : undefined} canMutate={access.canMutate} />
         </WithRail>
       ) : null}
       {routeId === "creative-publishing" ? (
@@ -236,7 +243,7 @@ export async function CreativeWorkspace({ routeId, searchParams }: CreativeWorks
           <PublishingView
             view={access.state.view}
             pageId={pageId}
-            postId={access.state.id}
+            postId={recordId}
             post={post}
             postReview={postReview}
             status={access.state.status}
@@ -286,6 +293,7 @@ function IdeasView({
         drafts={drafts}
         data={ideasData}
         selectedId={selectedId}
+        canMutate={canMutate}
       />
     );
   }
@@ -302,6 +310,7 @@ function ContentView({
   query,
   canMutate,
   connectedChannels,
+  bulkPlans,
 }: {
   view: string;
   pageId?: string;
@@ -311,6 +320,7 @@ function ContentView({
   query?: string;
   canMutate: boolean;
   connectedChannels?: string[];
+  bulkPlans?: Awaited<ReturnType<typeof getBulkPlans>>;
 }) {
   if (!pageId) return null;
   if (view === "editor") {
@@ -323,7 +333,7 @@ function ContentView({
       />
     );
   }
-  if (view === "bulk") return <PageOwnershipMessage />;
+  if (view === "bulk") return <BulkGenerator facebookPageId={pageId} canMutate={canMutate} initialPlans={bulkPlans} />;
   if (view === "experiments") return <AbTestView facebookPageId={pageId} canMutate={canMutate} />;
   if (view === "review") {
     return canMutate ? (
@@ -439,6 +449,16 @@ function PublishingView({
   return <CreativePublishingComposer facebookPageId={pageId} postId={postId} initialPost={post} initialReview={postReview} />;
 }
 
+export function creativeRecordIdForView(routeId: CreativeWorkspaceProps["routeId"], view: string, id?: string) {
+  if (!id) return undefined;
+  if (routeId === "creative-ideas") return view === "overview" ? id : undefined;
+  if (routeId === "creative-content") return view === "editor" || view === "review" ? id : undefined;
+  if (routeId === "creative-images") return view === "create" ? id : undefined;
+  if (routeId === "creative-video") return view === "projects" || view === "review" || view === "jobs" ? id : undefined;
+  if (routeId === "creative-publishing") return view === "composer" ? id : undefined;
+  return undefined;
+}
+
 function parsePostReview(review: { status: string; score: number; issues: string }): CreativePostReviewData | null {
   if (review.status !== "pass" && review.status !== "warn" && review.status !== "fail") return null;
   try {
@@ -448,14 +468,6 @@ function parsePostReview(review: { status: string; score: number; issues: string
   } catch {
     return null;
   }
-}
-
-function PageOwnershipMessage() {
-  return (
-    <section className="rounded-[11px] border border-[var(--border)] bg-[var(--bg-card)] p-5 text-sm text-[var(--text-secondary)]">
-      View này tạm khóa trong workspace theo Page cho đến khi dữ liệu legacy có ownership và authorization đầy đủ. Các workflow Content, Images và Publishing chính vẫn hoạt động bình thường.
-    </section>
-  );
 }
 
 function ReadOnlyMessage() {

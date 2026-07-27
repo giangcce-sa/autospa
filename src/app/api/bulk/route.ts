@@ -1,32 +1,32 @@
+import { NextRequest, NextResponse } from "next/server";
+import { routeErrorResponse } from "@/lib/api-response";
+import {
+  bulkDeleteInputSchema,
+  bulkPlanInputSchema,
+  bulkPlanPostCount,
+  parseGeneratedBulkPosts,
+} from "@/lib/bulk-plan-policy";
 import { generateContent, getBrandContext, getStyleProfile } from "@/lib/claude";
 import { prisma } from "@/lib/db";
-import { AccessError, accessErrorResponse, requireExplicitPageAccess, requirePageAccess } from "@/lib/page-access";
-import { routeErrorResponse } from "@/lib/api-response";
+import { getBulkPlans } from "@/lib/bulk-plans";
+import { AccessError, requireExplicitPageAccess, requirePageAccess, requireUser } from "@/lib/page-access";
 import { reviewContent } from "@/lib/reviewer";
-import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
   try {
     const facebookPageId = new URL(req.url).searchParams.get("facebookPageId");
     const { page } = await requireExplicitPageAccess(facebookPageId);
-    const plans = await prisma.bulkPlan.findMany({
-      where: { facebookPageId: page!.id },
-      include: { posts: { select: { id: true, status: true, scheduledAt: true, caption: true } } },
-      orderBy: { createdAt: "desc" },
-    });
+    const plans = await getBulkPlans(page!.id);
     return NextResponse.json({ data: plans, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
     return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { month, year, postsPerWeek, postTypes, tone, facebookPageId } = await req.json();
-    if (!month || !year) return NextResponse.json({ error: "Thiếu tháng/năm", success: false }, { status: 400 });
-    const { page } = await requireExplicitPageAccess(facebookPageId, { owner: true });
+    const input = bulkPlanInputSchema.parse(await req.json());
+    const { page } = await requireExplicitPageAccess(input.facebookPageId, { owner: true });
     const pageId = page!.id;
 
     const [brandContext, styleProfile, services] = await Promise.all([
@@ -35,23 +35,22 @@ export async function POST(req: NextRequest) {
       prisma.service.findMany({ where: { facebookPageId: pageId, active: true }, take: 10 }),
     ]);
 
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const totalPosts = Math.round((daysInMonth / 7) * (postsPerWeek ?? 3));
-    const serviceList = services.map((s: { name: string; price: string | null }) => `- ${s.name} (${s.price ?? "liên hệ"})`).join("\n");
-    const typeList = (postTypes ?? ["service", "tip", "promotion"]).join(", ");
+    const totalPosts = bulkPlanPostCount(input.year, input.month, input.postsPerWeek);
+    const serviceList = services.map((service) => `- ${service.name} (${service.price ?? "liên hệ"})`).join("\n");
+    const typeList = input.postTypes.join(", ");
 
     const systemPrompt = `Bạn là chuyên gia lập kế hoạch nội dung cho spa.
 ${brandContext ? `Thông tin spa:\n${brandContext}` : ""}
 ${styleProfile ? `Văn phong:\n${styleProfile}` : ""}
 Viết bằng tiếng Việt.`;
 
-    const prompt = `Tạo kế hoạch ${totalPosts} bài đăng Facebook cho tháng ${month}/${year}.
+    const prompt = `Tạo kế hoạch ${totalPosts} bài đăng Facebook cho tháng ${input.month}/${input.year}.
 
 Dịch vụ spa:
 ${serviceList || "Chăm sóc da, triệt lông, massage, giảm béo"}
 
 Loại bài: ${typeList}
-Tone: ${tone ?? "friendly"}
+Tone: ${input.tone}
 
 Trả về JSON array theo format:
 [
@@ -65,26 +64,23 @@ Trả về JSON array theo format:
 Chỉ trả về JSON, không thêm gì khác.`;
 
     const result = await generateContent(prompt, systemPrompt);
-    const jsonMatch = result.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error("Không tạo được kế hoạch");
-
-    const postsData = JSON.parse(jsonMatch[0]);
+    const postsData = parseGeneratedBulkPosts(result, input);
 
     const plan = await prisma.bulkPlan.create({
       data: {
-        name: `Kế hoạch tháng ${month}/${year}`,
-        month: Number(month),
-        year: Number(year),
+        name: `Kế hoạch tháng ${input.month}/${input.year}`,
+        month: input.month,
+        year: input.year,
         facebookPageId: pageId,
         posts: {
-          create: postsData.map((p: { day: number; caption: string; hashtags: string; postType: string }) => ({
-            caption: p.caption,
-            hashtags: p.hashtags,
-            postType: p.postType ?? "service",
-            tone: tone ?? "friendly",
+          create: postsData.map((post) => ({
+            caption: post.caption,
+            hashtags: post.hashtags,
+            postType: post.postType,
+            tone: input.tone,
             platform: "facebook",
             status: "draft",
-            scheduledAt: new Date(year, month - 1, p.day, 9, 0),
+            scheduledAt: new Date(input.year, input.month - 1, post.day, 9, 0),
             facebookPageId: pageId,
           })),
         },
@@ -106,18 +102,14 @@ Chỉ trả về JSON, không thêm gì khác.`;
 
     return NextResponse.json({ data: plan, success: true });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    return routeErrorResponse(err, "Lỗi không xác định");
+    return routeErrorResponse(err, "Không tạo được kế hoạch");
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { id } = await req.json();
-    if (typeof id !== "string" || !id) {
-      return NextResponse.json({ error: "Thiếu kế hoạch cần xóa", success: false }, { status: 400 });
-    }
+    const { id } = bulkDeleteInputSchema.parse(await req.json());
+    await requireUser({ owner: true });
     const plan = await prisma.bulkPlan.findUnique({ where: { id }, select: { facebookPageId: true } });
     if (!plan) return NextResponse.json({ success: true });
     if (!plan.facebookPageId) throw new AccessError("Kế hoạch chưa xác định được Facebook Page", 409);
@@ -128,8 +120,6 @@ export async function DELETE(req: NextRequest) {
     ]);
     return NextResponse.json({ success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
     return routeErrorResponse(error, "Lỗi khi xóa");
   }
 }

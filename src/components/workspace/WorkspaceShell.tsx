@@ -93,7 +93,7 @@ function WorkspaceScopeControl({
       {pages.length > 0 && state.scope === "current" && (
         <div className="flex flex-wrap gap-1">
           {pages.map((page) => {
-            const params = workspaceSearchParams({ ...state, scope: "current", pageId: page.id });
+            const params = workspaceSearchParams({ ...state, scope: "current", pageId: page.id, id: undefined, step: undefined });
             return (
               <Link
                 key={page.id}
@@ -111,7 +111,7 @@ function WorkspaceScopeControl({
         <div className="flex gap-1 rounded-md border border-[var(--border)] bg-[var(--bg-subtle)] p-1">
           {scopes.map((scope) => {
             const pageId = scope === "current" ? state.pageId ?? pages[0]?.id : undefined;
-            const params = workspaceSearchParams({ ...state, scope, pageId });
+            const params = workspaceSearchParams({ ...state, scope, pageId, id: undefined, step: undefined });
             return (
               <Link
                 key={scope}
@@ -154,6 +154,26 @@ function WorkspaceDisconnectedState({ route }: { route: AppRoute }) {
   );
 }
 
+function workspaceViewState(route: AppRoute, state: WorkspaceUrlState): WorkspaceUrlState {
+  if (route.section !== "creative") return state;
+  const recordViewsByRoute: Record<string, readonly string[]> = {
+    "creative-ideas": ["overview"],
+    "creative-content": ["editor", "review"],
+    "creative-images": ["create"],
+    "creative-video": ["projects", "review", "jobs"],
+    "creative-publishing": ["composer"],
+  };
+  const libraryViews = new Set(["overview", "library"]);
+  return {
+    ...state,
+    id: recordViewsByRoute[route.id]?.includes(state.view) ? state.id : undefined,
+    step: route.id === "creative-video" && state.view === "projects" ? state.step : undefined,
+    status: libraryViews.has(state.view) ? state.status : undefined,
+    q: libraryViews.has(state.view) ? state.q : undefined,
+    month: state.view === "calendar" ? state.month : undefined,
+  };
+}
+
 function WorkspaceNav({
   route,
   views,
@@ -172,7 +192,7 @@ function WorkspaceNav({
         const allowedScopes = workspaceScopesForRoute(targetScope);
         const scope = allowedScopes.includes(state.scope) ? state.scope : allowedScopes[0];
         const pageId = scope === "current" ? state.pageId ?? pages[0]?.id : undefined;
-        const params = workspaceSearchParams({ ...state, view: view.id, scope, pageId });
+        const params = workspaceSearchParams(workspaceViewState(route, { ...state, view: view.id, scope, pageId }));
         return (
           <Link
             key={view.id}

@@ -53,7 +53,116 @@ try {
        "status" = EXCLUDED."status", "learnedFrom" = EXCLUDED."learnedFrom",
        "councilNotes" = EXCLUDED."councilNotes", "updatedAt" = NOW()`,
   );
-  console.log(`Seeded owner, viewer, and Brain fixture in ${databaseName}`);
+
+  await pool.query("BEGIN");
+  try {
+    await pool.query(`DELETE FROM "PostAsset" WHERE "id" = 'e2e-creative-asset'`);
+    await pool.query(`DELETE FROM "ContentReview" WHERE "id" = 'e2e-creative-review'`);
+    await pool.query(`DELETE FROM "ContentGeneration" WHERE "id" = 'e2e-creative-generation'`);
+    await pool.query(`DELETE FROM "ImageGeneration" WHERE "id" = 'e2e-creative-image'`);
+    await pool.query(`DELETE FROM "VideoProject" WHERE "id" = 'e2e-creative-video'`);
+    await pool.query(`DELETE FROM "Post" WHERE "id" IN ('e2e-creative-draft', 'e2e-bulk-post')`);
+    await pool.query(`DELETE FROM "BulkPlan" WHERE "id" = 'e2e-bulk-plan'`);
+    await pool.query(`DELETE FROM "BrandKit" WHERE "id" = 'e2e-creative-brand'`);
+    await pool.query(`DELETE FROM "Service" WHERE "id" = 'e2e-creative-service'`);
+    await pool.query(`DELETE FROM "UserPageAccess" WHERE "userId" = 'e2e-viewer' AND "facebookPageId" = 'e2e-creative-page'`);
+    await pool.query(`DELETE FROM "IntelligenceSignal" WHERE "id" LIKE 'e2e-creative-signal-%'`);
+    await pool.query(`DELETE FROM "JobRun" WHERE "id" = 'e2e-creative-job'`);
+
+    await pool.query(
+      `INSERT INTO "FacebookPage" ("id", "fbPageId", "pageName", "accessToken", "isActive", "createdAt")
+       VALUES ('e2e-creative-page', 'e2e-creative-fb-page', 'E2E Creative Spa', 'e2e-page-token', TRUE, NOW())
+       ON CONFLICT ("id") DO UPDATE SET
+         "fbPageId" = EXCLUDED."fbPageId", "pageName" = EXCLUDED."pageName",
+         "accessToken" = EXCLUDED."accessToken", "isActive" = TRUE`,
+    );
+    await pool.query(
+      `INSERT INTO "UserPageAccess" ("id", "userId", "facebookPageId", "permission", "createdAt")
+       VALUES ('e2e-viewer-creative-access', 'e2e-viewer', 'e2e-creative-page', 'viewer', NOW())`,
+    );
+    await pool.query(
+      `INSERT INTO "BrandKit" ("id", "facebookPageId", "primaryColor", "accentColor", "fontStyle", "spaName", "tagline", "updatedAt")
+       VALUES ('e2e-creative-brand', 'e2e-creative-page', '#6C5CE7', '#F43F6E', 'elegant', 'E2E Creative Spa', 'Fixture kiểm thử', NOW())`,
+    );
+    await pool.query(
+      `INSERT INTO "Service" ("id", "facebookPageId", "name", "description", "price", "active", "createdAt", "updatedAt")
+       VALUES ('e2e-creative-service', 'e2e-creative-page', 'Peel da an toàn', 'Dịch vụ fixture cho Creative', 'Liên hệ', TRUE, NOW(), NOW())`,
+    );
+    await pool.query(
+      `INSERT INTO "Post" (
+         "id", "facebookPageId", "title", "summary", "outline", "hooks", "topicTags", "targetChannels",
+         "caption", "hashtags", "platform", "postType", "tone", "status", "scheduledAt", "qualityNotes", "createdAt", "updatedAt"
+       ) VALUES (
+         'e2e-creative-draft', 'e2e-creative-page', 'Quy trình peel an toàn E2E',
+         'Brief fixture để kiểm thử hành trình Creative từ ý tưởng tới xuất bản.',
+         '["Soi da","Thực hiện peel","Chăm sóc sau peel"]', '["Peel mùa hè có an toàn không?"]',
+         '["Kiến thức","Chăm sóc da"]', '["facebook"]',
+         'Peel da an toàn bắt đầu từ soi da và lựa chọn nồng độ phù hợp.', '#peelda #spa',
+         'facebook', 'educational', 'professional', 'draft', NOW() + INTERVAL '1 day',
+         'AI-RESEARCH: Quy trình peel an toàn E2E', NOW() - INTERVAL '2 hour', NOW()
+       )`,
+    );
+    await pool.query(
+      `INSERT INTO "PostAsset" ("id", "postId", "kind", "name", "url", "mimeType", "sizeBytes", "position", "source", "createdAt")
+       VALUES ('e2e-creative-asset', 'e2e-creative-draft', 'image', 'peel-e2e.jpg', 'mock://creative-image', 'image/jpeg', 1258291, 0, 'upload', NOW())`,
+    );
+    await pool.query(
+      `INSERT INTO "ContentReview" ("id", "postId", "status", "score", "issues", "reviewer", "reviewedAt")
+       VALUES ('e2e-creative-review', 'e2e-creative-draft', 'pass', 92, '[]', 'e2e', NOW())`,
+    );
+    await pool.query(
+      `INSERT INTO "ContentGeneration" (
+         "id", "postId", "facebookPageId", "promptVersion", "model", "mode", "narrator", "brief",
+         "draftCaption", "editorCaption", "finalCaption", "humanScore", "scoreDetails", "createdAt", "updatedAt"
+       ) VALUES (
+         'e2e-creative-generation', 'e2e-creative-draft', 'e2e-creative-page', 'e2e-v1', 'e2e-model', 'research', 'brand',
+         '{"topic":"peel"}', 'Peel da an toàn', 'Peel da an toàn', 'Peel da an toàn', 91, '[]', NOW() - INTERVAL '2 hour', NOW()
+       )`,
+    );
+    await pool.query(
+      `INSERT INTO "BulkPlan" ("id", "name", "month", "year", "status", "facebookPageId", "createdAt", "updatedAt")
+       VALUES ('e2e-bulk-plan', 'Kế hoạch E2E', 8, 2026, 'draft', 'e2e-creative-page', NOW() - INTERVAL '1 day', NOW())`,
+    );
+    await pool.query(
+      `INSERT INTO "Post" (
+         "id", "facebookPageId", "bulkPlanId", "caption", "hashtags", "platform", "postType", "tone", "status", "scheduledAt", "createdAt", "updatedAt"
+       ) VALUES (
+         'e2e-bulk-post', 'e2e-creative-page', 'e2e-bulk-plan', 'Bài fixture trong kế hoạch hàng loạt E2E.', '#e2e',
+         'facebook', 'service', 'friendly', 'draft', NOW() + INTERVAL '2 day', NOW() - INTERVAL '1 day', NOW()
+       )`,
+    );
+    await pool.query(
+      `INSERT INTO "ImageGeneration" (
+         "id", "facebookPageId", "prompt", "finalPrompt", "imageUrl", "scoreDetails", "preset", "format", "qualityScore", "createdAt", "updatedAt"
+       ) VALUES (
+         'e2e-creative-image', 'e2e-creative-page', 'E2E creative image', 'E2E creative image', 'mock://creative-gallery', '[]',
+         'educational', 'square', 88, NOW() - INTERVAL '1 hour', NOW()
+       )`,
+    );
+    await pool.query(
+      `INSERT INTO "VideoProject" (
+         "id", "facebookPageId", "name", "brief", "status", "approvalStatus", "sourcePostId", "createdAt", "updatedAt"
+       ) VALUES (
+         'e2e-creative-video', 'e2e-creative-page', 'Video peel E2E', 'Video fixture cho Creative', 'draft', 'draft',
+         'e2e-creative-draft', NOW() - INTERVAL '1 hour', NOW()
+       )`,
+    );
+    await pool.query(
+      `INSERT INTO "IntelligenceSignal" ("id", "source", "topic", "volume", "trend", "fetchedAt") VALUES
+       ('e2e-creative-signal-old', 'google_trends', 'peel da an toàn E2E', 100, 'stable', NOW() - INTERVAL '7 day'),
+       ('e2e-creative-signal-new', 'google_trends', 'peel da an toàn E2E', 180, 'rising', NOW() - INTERVAL '1 hour')`,
+    );
+    await pool.query(
+      `INSERT INTO "JobRun" ("id", "name", "status", "trigger", "summary", "startedAt", "completedAt")
+       VALUES ('e2e-creative-job', 'daily_report', 'success', 'e2e', 'Đồng bộ Creative fixture', NOW() - INTERVAL '1 hour', NOW() - INTERVAL '59 minute')`,
+    );
+    await pool.query("COMMIT");
+  } catch (error) {
+    await pool.query("ROLLBACK");
+    throw error;
+  }
+
+  console.log(`Seeded owner, viewer, Brain, and Creative fixtures in ${databaseName}`);
 } finally {
   await pool.end();
 }

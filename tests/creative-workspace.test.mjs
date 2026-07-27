@@ -25,7 +25,8 @@ test("Creative dispatcher resolves URL scope and checks record ownership server-
 
   assert.match(workspace, /parseWorkspaceUrl\(params, \{/);
   assert.match(workspace, /await resolveWorkspaceAccess\(route, state\)/);
-  assert.match(workspace, /where: \{ id: access\.state\.id \}/);
+  assert.match(workspace, /const recordId = creativeRecordIdForView\(routeId, access\.state\.view, access\.state\.id\)/);
+  assert.match(workspace, /where: \{ id: recordId \}/);
   assert.match(workspace, /prisma\.videoProject\.findUnique\(\{/);
   assert.match(workspace, /prisma\.post\.findUnique\(\{/);
   assert.match(workspace, /record\.facebookPageId !== pageId/);
@@ -89,6 +90,8 @@ test("canonical Library and Calendar keep Page filters and view state in the URL
   assert.match(library, /if \(status\) params\.set\("status", status\)/);
   assert.match(library, /if \(nextQuery\.trim\(\)\) params\.set\("q", nextQuery\.trim\(\)\)/);
   assert.match(library, /signal: controller\.signal/);
+  assert.match(library, /if \(!response\.ok \|\| !payload\?\.success\) throw new Error/);
+  assert.match(library, /setError\(cause instanceof Error \? cause\.message : "Không tải được thư viện nội dung"\)/);
   assert.match(route, /caption: \{ contains: query, mode: "insensitive" \}/);
   assert.match(calendar, /if \(facebookPageId\) params\.set\("facebookPageId", facebookPageId\)/);
   assert.match(calendar, /params\.set\("month", `\$\{nextYear\}-\$\{String\(nextMonth \+ 1\)\.padStart\(2, "0"\)\}`\)/);
@@ -166,13 +169,20 @@ test("canonical Images serves server-loaded galleries to viewers and keeps mutat
   assert.match(library, /canReview &&/);
 });
 
-test("canonical Content opens Page-scoped experiments and review while Bulk stays fail-closed", async () => {
+test("canonical Content opens Page-scoped Bulk, experiments, and review", async () => {
   const workspace = await source("src/components/modules/creative/CreativeWorkspace.tsx");
+  const bulk = await source("src/components/modules/bulk/BulkGenerator.tsx");
+  const route = await source("src/app/api/bulk/route.ts");
 
-  assert.match(workspace, /if \(view === "bulk"\) return <PageOwnershipMessage \/>/);
+  assert.match(workspace, /await getBulkPlans\(pageId\)/);
+  assert.match(workspace, /<BulkGenerator facebookPageId=\{pageId\} canMutate=\{canMutate\} initialPlans=\{bulkPlans\} \/>/);
+  assert.match(bulk, /facebookPageId: providedPageId/);
+  assert.match(bulk, /initialPlans\?: BulkPlanData\[\]/);
+  assert.match(bulk, /canMutate \? \(/);
+  assert.match(route, /requireExplicitPageAccess\(input\.facebookPageId, \{ owner: true \}\)/);
+  assert.match(route, /parseGeneratedBulkPosts\(result, input\)/);
   assert.match(workspace, /<AbTestView facebookPageId=\{pageId\} canMutate=\{canMutate\} \/>/);
   assert.match(workspace, /canMutate \? \([\s\S]*?<QualityChecker[\s\S]*?facebookPageId=\{pageId\}[\s\S]*?postId=\{postId\}[\s\S]*?initialCaption=\{post\?\.caption\}[\s\S]*?\) : <ReadOnlyMessage \/>/);
-  assert.equal(workspace.includes("<BulkGenerator"), false);
 });
 
 test("A/B experiments authorize Page reads and owner mutations", async () => {
@@ -202,6 +212,17 @@ test("Quality review authorizes the selected Page and rejects foreign Posts", as
   // condition may also disable for other reasons (empty caption, in flight).
   assert.match(view, /disabled=\{[^}]*!facebookPageId[^}]*\}/);
   assert.match(view, /if \(!caption\.trim\(\) \|\| !facebookPageId\) return;/, "the handler itself also refuses");
+});
+
+test("Creative navigation drops stale record identity outside record views", async () => {
+  const workspace = await source("src/components/modules/creative/CreativeWorkspace.tsx");
+  const shell = await source("src/components/workspace/WorkspaceShell.tsx");
+
+  assert.match(workspace, /const recordId = creativeRecordIdForView\(routeId, access\.state\.view, access\.state\.id\)/);
+  assert.match(workspace, /routeId === "creative-content"\) return view === "editor" \|\| view === "review" \? id : undefined/);
+  assert.match(shell, /pageId: page\.id, id: undefined, step: undefined/);
+  assert.match(shell, /workspaceViewState\(route, \{ \.\.\.state, view: view\.id, scope, pageId \}\)/);
+  assert.match(shell, /month: state\.view === "calendar" \? state\.month : undefined/);
 });
 
 test("Creative mutations are owner-only and library reads do not delete retained data", async () => {

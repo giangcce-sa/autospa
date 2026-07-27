@@ -72,11 +72,18 @@ export function LibraryView({
     if (activeTab) params.set("status", activeTab);
     if (query) params.set("q", query);
     if (facebookPageId) params.set("facebookPageId", facebookPageId);
+    setError("");
     fetch(`/api/content/list${params.size ? `?${params.toString()}` : ""}`, { signal: controller.signal })
-      .then((r) => r.json())
-      .then((res) => res.data && setPosts(res.data))
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.success) throw new Error(payload?.error ?? "Không tải được thư viện nội dung");
+        return payload;
+      })
+      .then((payload) => setPosts(payload.data ?? []))
       .catch((cause) => {
-        if (!(cause instanceof DOMException && cause.name === "AbortError")) throw cause;
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          setError(cause instanceof Error ? cause.message : "Không tải được thư viện nội dung");
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);

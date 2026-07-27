@@ -1,9 +1,9 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Brand logos are user-configured remote URLs. */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   CalendarBlank,
@@ -27,6 +27,7 @@ import {
   VideoCamera,
 } from "@phosphor-icons/react";
 import { countWords } from "@/lib/channel-fit";
+import { MediaThumbnail } from "@/components/media/MediaThumbnail";
 import type { CreativeIdeasData } from "@/lib/creative-ideas";
 import {
   briefIsEmpty,
@@ -130,17 +131,30 @@ export function CreativeIdeasWorkspace({
   drafts,
   data,
   selectedId,
+  canMutate,
 }: {
   facebookPageId: string;
   drafts: Draft[];
   data: CreativeIdeasData;
   selectedId?: string;
+  canMutate: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [filter, setFilter] = useState<"all" | FeedKind>("all");
   const [query, setQuery] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | undefined>(selectedId ? `draft:${selectedId}` : undefined);
+  const lastPageId = useRef(facebookPageId);
+  const lastSelectedId = useRef(selectedId);
+
+  useEffect(() => {
+    const pageChanged = lastPageId.current !== facebookPageId;
+    const draftChanged = !!selectedId && lastSelectedId.current !== selectedId;
+    if (pageChanged || draftChanged) setSelectedKey(selectedId ? `draft:${selectedId}` : undefined);
+    lastPageId.current = facebookPageId;
+    lastSelectedId.current = selectedId;
+  }, [facebookPageId, selectedId]);
 
   const feed = useMemo<FeedItem[]>(() => {
     const items: FeedItem[] = [
@@ -193,11 +207,13 @@ export function CreativeIdeasWorkspace({
 
   function select(item: FeedItem) {
     setSelectedKey(item.key);
-    // Drafts are real Post rows, so keep them deep-linkable via ?id=
-    if (item.kind === "draft" && item.draft) {
-      const params = new URLSearchParams({ view: "overview", scope: "current", pageId: facebookPageId, id: item.draft.id });
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", "overview");
+    params.set("scope", "current");
+    params.set("pageId", facebookPageId);
+    if (item.kind === "draft" && item.draft) params.set("id", item.draft.id);
+    else params.delete("id");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
   const counts = useMemo(() => ({
@@ -303,7 +319,7 @@ export function CreativeIdeasWorkspace({
       {/* ── Center: detail ──────────────────────────────── */}
       <section className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]">
         {selected?.kind === "draft" && selected.draft ? (
-          <DraftDetail draft={selected.draft} facebookPageId={facebookPageId} data={data} />
+          <DraftDetail draft={selected.draft} facebookPageId={facebookPageId} data={data} canMutate={canMutate} />
         ) : selected ? (
           <SignalDetail item={selected} facebookPageId={facebookPageId} />
         ) : (
@@ -425,7 +441,17 @@ function TrendPill({ deltaPct }: { deltaPct: number }) {
   );
 }
 
-function DraftDetail({ draft, facebookPageId, data }: { draft: Draft; facebookPageId: string; data: CreativeIdeasData }) {
+function DraftDetail({
+  draft,
+  facebookPageId,
+  data,
+  canMutate,
+}: {
+  draft: Draft;
+  facebookPageId: string;
+  data: CreativeIdeasData;
+  canMutate: boolean;
+}) {
   const router = useRouter();
   const scope = `scope=current&pageId=${facebookPageId}`;
   const wordCount = countWords(draft.caption);
@@ -578,32 +604,40 @@ function DraftDetail({ draft, facebookPageId, data }: { draft: Draft; facebookPa
         <MeasuredBenchmark benchmarks={data.benchmarks} postType={draft.postType} channels={benchmarkChannels} />
       </section>
 
-      <div className="mt-6 flex flex-wrap gap-2 border-t border-[var(--border)] pt-4">
-        <Link
-          href={`/creative/content?view=editor&${scope}&id=${draft.id}`}
-          className="flex min-h-11 items-center gap-2 rounded-[9px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--accent-foreground)] transition-colors hover:bg-[var(--accent-hover)]"
-        >
-          <ArrowRight size={16} weight="bold" aria-hidden="true" />Chuyển sang biên tập
-        </Link>
-        <Link
-          href={`/creative/images?view=create&${scope}&id=${draft.id}`}
-          className="flex min-h-11 items-center gap-2 rounded-[9px] border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
-        >
-          <Sparkle size={16} aria-hidden="true" />Tạo ảnh AI
-        </Link>
-        <button
-          type="button"
-          onClick={createVideoProject}
-          disabled={videoPending}
-          aria-busy={videoPending}
-          className="flex min-h-11 items-center gap-2 rounded-[9px] border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--premium)] hover:text-[var(--premium)] disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <VideoCamera size={16} aria-hidden="true" />{videoPending ? "Đang tạo dự án video…" : "Tạo dự án video"}
-        </button>
-      </div>
-      {videoError && (
-        <p role="alert" className="mt-3 rounded-[9px] bg-[var(--danger-light)] px-3 py-2 text-[12.5px] font-semibold text-[var(--danger)]">
-          {videoError}
+      {canMutate ? (
+        <>
+          <div className="mt-6 flex flex-wrap gap-2 border-t border-[var(--border)] pt-4">
+            <Link
+              href={`/creative/content?view=editor&${scope}&id=${draft.id}`}
+              className="flex min-h-11 items-center gap-2 rounded-[9px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--accent-foreground)] transition-colors hover:bg-[var(--accent-hover)]"
+            >
+              <ArrowRight size={16} weight="bold" aria-hidden="true" />Chuyển sang biên tập
+            </Link>
+            <Link
+              href={`/creative/images?view=create&${scope}&id=${draft.id}`}
+              className="flex min-h-11 items-center gap-2 rounded-[9px] border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+            >
+              <Sparkle size={16} aria-hidden="true" />Tạo ảnh AI
+            </Link>
+            <button
+              type="button"
+              onClick={createVideoProject}
+              disabled={videoPending}
+              aria-busy={videoPending}
+              className="flex min-h-11 items-center gap-2 rounded-[9px] border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--premium)] hover:text-[var(--premium)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <VideoCamera size={16} aria-hidden="true" />{videoPending ? "Đang tạo dự án video…" : "Tạo dự án video"}
+            </button>
+          </div>
+          {videoError && (
+            <p role="alert" className="mt-3 rounded-[9px] bg-[var(--danger-light)] px-3 py-2 text-[12.5px] font-semibold text-[var(--danger)]">
+              {videoError}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="mt-6 rounded-[10px] border border-[var(--border)] bg-[var(--bg-subtle)] p-3 text-[12.5px] text-[var(--text-secondary)]">
+          Bạn có thể xem brief và bằng chứng của ý tưởng này. Chỉ chủ sở hữu mới chuyển ý tưởng sang biên tập, hình ảnh hoặc video.
         </p>
       )}
     </div>
@@ -618,10 +652,14 @@ function AssetCard({ asset }: { asset: DraftAsset }) {
   const meta = [format, size].filter(Boolean).join(" · ");
   return (
     <li className="overflow-hidden rounded-[11px] border border-[var(--border)] bg-[var(--bg-card)]">
-      <div className="relative flex aspect-[4/3] items-center justify-center bg-[var(--bg-subtle)]">
-        {isVideo
-          ? <VideoCamera size={22} className="text-[var(--text-muted)]" aria-hidden="true" />
-          : <ImageIcon size={22} className="text-[var(--text-muted)]" aria-hidden="true" />}
+      <div className="relative aspect-[4/3] bg-[var(--bg-subtle)]">
+        <MediaThumbnail
+          src={asset.url}
+          alt={asset.name}
+          kind={isVideo ? "video" : "image"}
+          aspectRatio="4:3"
+          className="h-full w-full"
+        />
         {duration && (
           <span className="absolute bottom-1.5 right-1.5 rounded-[5px] bg-[var(--side)]/85 px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums text-white">
             {duration}

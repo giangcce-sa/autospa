@@ -46,15 +46,15 @@ test("Bulk GET requires an explicit authorized Page and reads only its plans", a
   const get = handler(route, "GET", "POST");
 
   assert.match(get, /requireExplicitPageAccess\(facebookPageId\)/);
-  assert.match(get, /prisma\.bulkPlan\.findMany\(\{[\s\S]*?where: \{ facebookPageId: page!\.id \}/);
-  assert.match(get, /accessErrorResponse\(error\)/);
-  assert.equal(get.includes("prisma.bulkPlan.findMany({\n      include:"), false);
+  assert.match(get, /getBulkPlans\(page!\.id\)/);
+  assert.match(get, /routeErrorResponse\(error, "Lỗi khi tải"\)/);
+  assert.equal(get.includes("prisma.bulkPlan.findMany"), false);
 });
 
 test("Bulk POST authorizes before generation and persists one Page on plan and posts", async () => {
   const route = await source("src/app/api/bulk/route.ts");
   const post = handler(route, "POST", "DELETE");
-  const authorizeAt = post.indexOf("requireExplicitPageAccess(facebookPageId, { owner: true })");
+  const authorizeAt = post.indexOf("requireExplicitPageAccess(input.facebookPageId, { owner: true })");
   const generateAt = post.indexOf("generateContent(prompt, systemPrompt)");
 
   assert.notEqual(authorizeAt, -1);
@@ -62,20 +62,22 @@ test("Bulk POST authorizes before generation and persists one Page on plan and p
   assert.match(post, /prisma\.service\.findMany\(\{ where: \{ facebookPageId: pageId, active: true \}/);
   assert.match(post, /prisma\.bulkPlan\.create\(\{[\s\S]*?facebookPageId: pageId,[\s\S]*?posts: \{[\s\S]*?facebookPageId: pageId/);
   assert.match(post, /getStyleProfile\(pageId\)/);
-  assert.match(post, /accessErrorResponse\(err\)/);
+  assert.match(post, /routeErrorResponse\(err, "Không tạo được kế hoạch"\)/);
 });
 
 test("Bulk DELETE derives owner authorization from stored plan ownership", async () => {
   const route = await source("src/app/api/bulk/route.ts");
   const remove = handler(route, "DELETE");
+  const ownerGateAt = remove.indexOf("requireUser({ owner: true })");
   const loadAt = remove.indexOf("prisma.bulkPlan.findUnique");
   const authorizeAt = remove.indexOf("requirePageAccess(plan.facebookPageId, { owner: true })");
   const transactionAt = remove.indexOf("prisma.$transaction");
 
-  assert.ok(loadAt >= 0 && authorizeAt > loadAt, "stored ownership must be loaded before authorization");
+  assert.ok(ownerGateAt >= 0 && loadAt > ownerGateAt, "owner authorization must happen before stored plan lookup");
+  assert.ok(authorizeAt > loadAt, "stored ownership must still be verified after lookup");
   assert.ok(transactionAt > authorizeAt, "authorization must happen before deletion");
   assert.match(remove, /if \(!plan\.facebookPageId\) throw new AccessError\("Kế hoạch chưa xác định được Facebook Page", 409\)/);
   assert.match(remove, /prisma\.post\.deleteMany\(\{ where: \{ bulkPlanId: id, facebookPageId: plan\.facebookPageId \} \}\)/);
   assert.match(remove, /prisma\.bulkPlan\.delete\(\{ where: \{ id \} \}\)/);
-  assert.match(remove, /accessErrorResponse\(error\)/);
+  assert.match(remove, /routeErrorResponse\(error, "Lỗi khi xóa"\)/);
 });

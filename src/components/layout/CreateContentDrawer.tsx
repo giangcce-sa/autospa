@@ -4,18 +4,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ImageSquare, Megaphone, NotePencil, Sparkle, VideoCamera, X } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
+import { getCanonicalRouteHref } from "@/config/routes";
 import { cn } from "@/lib/utils";
 
 const OPTIONS: Array<{ id: string; label: string; description: string; href: string; icon: Icon }> = [
-  { id: "post", label: "Bài viết", description: "Nội dung bài đăng và thẻ chủ đề", href: "/content", icon: NotePencil },
-  { id: "image", label: "Hình ảnh", description: "Ảnh dịch vụ hoặc nhân viên", href: "/images", icon: ImageSquare },
-  { id: "video", label: "Video", description: "Kịch bản, giọng đọc và dựng video", href: "/video-studio", icon: VideoCamera },
-  { id: "campaign", label: "Bộ nội dung", description: "Nhiều bài theo cùng một mục tiêu", href: "/bulk", icon: Megaphone },
+  { id: "post", label: "Bài viết", description: "Nội dung bài đăng và thẻ chủ đề", href: getCanonicalRouteHref("content"), icon: NotePencil },
+  { id: "image", label: "Hình ảnh", description: "Ảnh dịch vụ hoặc nhân viên", href: getCanonicalRouteHref("images"), icon: ImageSquare },
+  { id: "video", label: "Video", description: "Kịch bản, giọng đọc và dựng video", href: getCanonicalRouteHref("video-studio"), icon: VideoCamera },
+  { id: "campaign", label: "Bộ nội dung", description: "Nhiều bài theo cùng một mục tiêu", href: getCanonicalRouteHref("bulk"), icon: Megaphone },
 ];
 
 export function CreateContentDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
-  const [selected, setSelected] = useState("video");
+  const [selected, setSelected] = useState("post");
   const current = OPTIONS.find((item) => item.id === selected)!;
   const launch = () => { onClose(); router.push(current.href); };
   return (

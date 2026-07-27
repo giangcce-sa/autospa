@@ -8,13 +8,14 @@ import {
 } from "@phosphor-icons/react";
 
 const APPROVALS_HREF = getCanonicalRouteHref("automation", "approvals");
+const CONTENT_HREF = getCanonicalRouteHref("content");
 
 const ACTIONS = [
   { label: "Duyệt việc", href: APPROVALS_HREF, icon: CheckCircle, color: "var(--premium)", premium: true },
   { label: "Chăm lead", href: "/sale", icon: Flame, color: "var(--rose)" },
-  { label: "Viết bài AI", href: "/content", icon: PencilSimple, color: "var(--accent)" },
+  { label: "Viết bài AI", href: CONTENT_HREF, icon: PencilSimple, color: "var(--accent)" },
   { label: "Tạo khuyến mãi", href: "/promotions", icon: Tag, color: "var(--amber)" },
-  { label: "Tạo ảnh", href: "/images", icon: ImageIcon, color: "var(--blue)" },
+  { label: "Tạo ảnh", href: getCanonicalRouteHref("images"), icon: ImageIcon, color: "var(--blue)" },
   { label: "Run AI team", href: getCanonicalRouteHref("orchestrator"), icon: Robot, color: "var(--premium)", premium: true },
   { label: "Sync đối thủ", href: "/competitors", icon: ArrowsClockwise, color: "var(--text-secondary)" },
   { label: "Backup", href: "/settings", icon: FloppyDisk, color: "var(--text-secondary)" },
@@ -22,7 +23,7 @@ const ACTIONS = [
 
 export function QuickActions({ simple = false }: { simple?: boolean }) {
   const actions = simple
-    ? ACTIONS.filter((action) => [APPROVALS_HREF, "/sale", "/content", "/promotions"].includes(action.href))
+    ? ACTIONS.filter((action) => [APPROVALS_HREF, "/sale", CONTENT_HREF, "/promotions"].includes(action.href))
     : ACTIONS;
 
   return (
