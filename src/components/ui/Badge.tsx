@@ -3,11 +3,16 @@ import { mediaStatusPresentation } from "@/lib/media-gallery";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info" | "neutral";
 
+/**
+ * `default` is the brand accent; `success` must stay green and `danger` red.
+ * Both used to borrow the accent/rose brand hues, which read as "on brand"
+ * rather than "good"/"bad" now that the accent is purple and rose is a chart hue.
+ */
 const styles: Record<BadgeVariant, { background: string; color: string }> = {
   default: { background: "var(--accent-light)", color: "var(--accent)" },
-  success: { background: "var(--accent-light)", color: "var(--accent)" },
+  success: { background: "var(--green-light)", color: "var(--green)" },
   warning: { background: "var(--amber-light)", color: "var(--amber)" },
-  danger: { background: "var(--rose-light)", color: "var(--rose)" },
+  danger: { background: "var(--danger-light)", color: "var(--danger)" },
   info: { background: "var(--blue-light)", color: "var(--blue)" },
   neutral: { background: "var(--bg-subtle)", color: "var(--text-secondary)" },
 };
@@ -21,7 +26,7 @@ interface BadgeProps {
 export function Badge({ children, variant = "default", className }: BadgeProps) {
   return (
     <span
-      className={cn("inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold", className)}
+      className={cn("chip-tone inline-flex items-center rounded-[6px] px-2 py-0.5 text-[11px] font-bold", className)}
       style={styles[variant]}
     >
       {children}

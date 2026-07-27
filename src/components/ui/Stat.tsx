@@ -56,7 +56,7 @@ export function Stat({
   const content = (
     <div
       className={cn(
-        "rounded-lg p-4 transition-all duration-200",
+        "rounded-[11px] p-4 transition-all duration-200",
         href && "card-hover",
         className
       )}
@@ -69,7 +69,7 @@ export function Stat({
       <div className="flex items-start justify-between mb-2">
         {Icon && (
           <div
-            className="w-8 h-8 rounded-md flex items-center justify-center shrink-0"
+            className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
             style={{ background: iconBg }}
           >
             <Icon size={13} style={{ color: iconColor }} weight="fill" />
@@ -106,7 +106,7 @@ function TrendIndicator({ deltaPct }: { deltaPct: number }) {
   const Icon = neutral ? Minus : positive ? TrendUp : TrendDown;
   return (
     <span
-      className="inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-md"
+      className="inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-[9px]"
       style={{ background: softTone(color), color }}
     >
       <Icon size={9} weight="bold" />

@@ -479,7 +479,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
               {equipment.map((eq) => <option key={eq.value} value={eq.value}>{eq.label}</option>)}
             </Select>
           </div>
-          <div className="rounded-xl p-3 space-y-3" style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)" }}>
+          <div className="rounded-[11px] p-3 space-y-3" style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)" }}>
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs font-semibold inline-flex items-center gap-1.5" style={{ color: "var(--text)" }}>
@@ -522,7 +522,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
                   <img
                     src={staffVisuals.find((s) => s.id === form.staffProfileId)?.referenceImageUrl ?? ""}
                     alt=""
-                    className="w-14 h-14 rounded-lg object-cover"
+                    className="w-14 h-14 rounded-[11px] object-cover"
                   />
                 )}
                 <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
@@ -587,9 +587,9 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
                     )}
                   </div>
                   {staffForm.referenceImageUrl && (
-                    <div className="flex items-center gap-2 rounded-lg p-2" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                    <div className="flex items-center gap-2 rounded-[11px] p-2" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={staffForm.referenceImageUrl} alt="" className="w-14 h-14 rounded-lg object-cover" />
+                      <img src={staffForm.referenceImageUrl} alt="" className="w-14 h-14 rounded-[11px] object-cover" />
                       <Input
                         label="URL ảnh mẫu"
                         value={staffForm.referenceImageUrl}
@@ -654,7 +654,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
               <option value="3">3 ảnh</option>
               <option value="4">4 ảnh</option>
             </Select>
-            <label className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+            <label className="flex items-center gap-2 rounded-[11px] px-3 py-2 text-xs" style={{ background: "var(--bg-subtle)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
               <input
                 type="checkbox"
                 checked={form.autoQualityCheck}
@@ -686,7 +686,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
             onChange={(e) => setForm({ ...form, customPrompt: e.target.value })}
           />
           {visualProfile && (
-            <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: "var(--accent-light)" }}>
+            <div className="flex items-center justify-between rounded-[11px] px-3 py-2" style={{ background: "var(--accent-light)" }}>
               <span className="text-xs inline-flex items-center gap-1.5" style={{ color: "var(--accent)" }}>
                 <MagicWand size={13} weight="fill" />
                 Visual memory: {visualProfile.approvedImages} đúng style · {Math.round(visualProfile.confidence * 100)}%
@@ -695,7 +695,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
             </div>
           )}
           {/* Brand overlay */}
-          <div className="rounded-xl p-3 space-y-2" style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)" }}>
+          <div className="rounded-[11px] p-3 space-y-2" style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)" }}>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -771,7 +771,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
             )}
           </div>
 
-          {error && <p role="alert" className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
+          {error && <p role="alert" className="text-xs p-2 rounded" style={{ background: "var(--danger-light)", color: "var(--danger)" }}>{error}</p>}
           <Button onClick={handleGenerate} loading={loading} className="w-full">
             <Sparkle size={14} weight="fill" /> Tạo hình ảnh
           </Button>
@@ -791,7 +791,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
                       key={variant.generationId}
                       type="button"
                       onClick={() => setActiveVariant(index)}
-                      className="relative aspect-square overflow-hidden rounded-md"
+                      className="relative aspect-square overflow-hidden rounded-[9px]"
                       style={{ border: activeVariant === index ? "2px solid var(--accent)" : "1px solid var(--border)" }}
                       title={`Phương án ${index + 1}`}
                       aria-pressed={activeVariant === index}
@@ -799,7 +799,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={variant.imageUrl} alt="" className="h-full w-full object-cover" />
-                      <span className="absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "rgba(15,23,18,.78)", color: "white" }}>
+                      <span className="absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "var(--side)", color: "white" }}>
                         {variant.vision?.score ?? "–"}
                       </span>
                     </button>
@@ -807,9 +807,9 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
                 </div>
               )}
               {displayVision && (
-                <div className="rounded-lg p-3" style={{ background: displayVision.score >= 80 ? "var(--success-light)" : displayVision.score >= 60 ? "var(--amber-light)" : "var(--rose-light)" }}>
+                <div className="rounded-[11px] p-3" style={{ background: displayVision.score >= 80 ? "var(--success-light)" : displayVision.score >= 60 ? "var(--amber-light)" : "var(--danger-light)" }}>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-semibold inline-flex items-center gap-1.5" style={{ color: displayVision.score >= 80 ? "var(--success)" : displayVision.score >= 60 ? "var(--amber)" : "var(--rose)" }}>
+                    <span className="text-xs font-semibold inline-flex items-center gap-1.5" style={{ color: displayVision.score >= 80 ? "var(--success)" : displayVision.score >= 60 ? "var(--amber)" : "var(--danger)" }}>
                       {displayVision.score >= 80 ? <CheckCircle size={14} weight="fill" /> : <WarningCircle size={14} weight="fill" />}
                       Chất lượng ảnh {displayVision.score}/100
                     </span>
@@ -824,7 +824,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
                 </div>
               )}
               {result.quality && (
-                <div className="rounded-lg p-3" style={{ background: result.quality.score >= 80 ? "var(--success-light)" : "var(--amber-light)" }}>
+                <div className="rounded-[11px] p-3" style={{ background: result.quality.score >= 80 ? "var(--success-light)" : "var(--amber-light)" }}>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-xs font-semibold inline-flex items-center gap-1.5" style={{ color: result.quality.score >= 80 ? "var(--success)" : "var(--amber)" }}>
                       {result.quality.score >= 80 ? <CheckCircle size={14} weight="fill" /> : <WarningCircle size={14} weight="fill" />}
@@ -860,7 +860,7 @@ export function ImageGenerator({ postId, facebookPageId: providedPageId, showHis
                   {onGoToPublish ? "Gắn vào bài đăng →" : "Gắn ảnh vào bài"}
                 </Button>
               ) : (
-                <p className="rounded-md border border-[var(--border)] bg-[var(--bg-subtle)] p-3 text-xs text-[var(--text-muted)]">
+                <p className="rounded-[9px] border border-[var(--border)] bg-[var(--bg-subtle)] p-3 text-xs text-[var(--text-muted)]">
                   Mở Xưởng hình ảnh từ một bài viết đã lưu để gắn ảnh vào đúng bài.
                 </p>
               )}

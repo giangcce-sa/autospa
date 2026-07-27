@@ -28,7 +28,7 @@ export function PublishPageClient({ initialPostId, initialImageUrl }: Props) {
           <button
             key={id}
             onClick={() => setTab(id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-[11px] text-xs font-medium transition-all"
             style={
               tab === id
                 ? { background: "var(--accent)", color: "white" }

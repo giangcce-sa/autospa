@@ -22,7 +22,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="space-y-1.5">
         {label && (
-          <label htmlFor={controlId} className="block text-[13px] font-semibold text-[var(--text-secondary)]">
+          <label htmlFor={controlId} className="block text-[12px] font-bold text-[var(--text-secondary)]">
             {label}
           </label>
         )}
@@ -32,15 +32,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           aria-describedby={describedBy(ariaDescribedBy, hintId, errorId)}
           aria-invalid={error ? true : undefined}
           className={cn(
-            "min-h-11 w-full rounded-md border bg-[var(--bg-elevated)] px-3 py-2.5 text-sm text-[var(--text)] outline-none transition-[border-color,box-shadow,background-color] duration-150",
-            "placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-light)]",
+            "min-h-11 w-full rounded-[9px] border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none transition-[border-color,box-shadow,background-color] duration-150",
+            "placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--brand-ring)]",
             className,
           )}
           style={{ borderColor: error ? "var(--danger)" : undefined, ...style }}
           {...props}
         />
-        {error && <p id={errorId} className="text-xs text-[var(--danger)]">{error}</p>}
-        {hint && !error && <p id={hintId} className="text-xs text-[var(--text-muted)]">{hint}</p>}
+        {error && <p id={errorId} className="text-[11.5px] font-semibold text-[var(--danger)]">{error}</p>}
+        {hint && !error && <p id={hintId} className="text-[11.5px] text-[var(--text-muted)]">{hint}</p>}
       </div>
     );
   },
@@ -63,7 +63,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div className="space-y-1.5">
         {label && (
-          <label htmlFor={controlId} className="block text-[13px] font-semibold text-[var(--text-secondary)]">
+          <label htmlFor={controlId} className="block text-[12px] font-bold text-[var(--text-secondary)]">
             {label}
           </label>
         )}
@@ -73,15 +73,15 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           aria-describedby={describedBy(ariaDescribedBy, hintId, errorId)}
           aria-invalid={error ? true : undefined}
           className={cn(
-            "min-h-24 w-full resize-y rounded-md border bg-[var(--bg-elevated)] px-3 py-2.5 text-sm text-[var(--text)] outline-none transition-[border-color,box-shadow,background-color] duration-150",
-            "placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-light)]",
+            "min-h-24 w-full resize-y rounded-[9px] border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2.5 text-[13.5px] leading-relaxed text-[var(--text)] outline-none transition-[border-color,box-shadow,background-color] duration-150",
+            "placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--brand-ring)]",
             className,
           )}
           style={{ borderColor: error ? "var(--danger)" : undefined, ...style }}
           {...props}
         />
-        {error && <p id={errorId} className="text-xs text-[var(--danger)]">{error}</p>}
-        {hint && !error && <p id={hintId} className="text-xs text-[var(--text-muted)]">{hint}</p>}
+        {error && <p id={errorId} className="text-[11.5px] font-semibold text-[var(--danger)]">{error}</p>}
+        {hint && !error && <p id={hintId} className="text-[11.5px] text-[var(--text-muted)]">{hint}</p>}
       </div>
     );
   },

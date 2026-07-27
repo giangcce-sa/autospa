@@ -338,7 +338,7 @@ export function PublishManager({ initialPostId, initialPost, initialReview, init
             <div className="space-y-1.5 max-h-56 overflow-y-auto">
               {drafts.map((d) => (
                 <button key={d.id} onClick={() => pickDraft(d)}
-                  className="w-full text-left p-2.5 rounded-lg transition-colors hover:opacity-80"
+                  className="w-full text-left p-2.5 rounded-[11px] transition-colors hover:opacity-80"
                   style={{ background: "var(--bg-subtle)" }}>
                   <p className="text-xs font-medium line-clamp-1" style={{ color: "var(--text)" }}>{d.caption || "(Không có caption)"}</p>
                   <div className="flex gap-2 mt-0.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
@@ -387,7 +387,7 @@ export function PublishManager({ initialPostId, initialPost, initialReview, init
                 <input
                   type="url"
                   placeholder="https://... hoặc dán URL ảnh vào đây"
-                  className="flex-1 px-3 py-2 text-xs rounded-lg border outline-none"
+                  className="flex-1 px-3 py-2 text-xs rounded-[11px] border outline-none"
                   style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
                   value={imageUrl}
                   onChange={(e) => {
@@ -402,7 +402,7 @@ export function PublishManager({ initialPostId, initialPost, initialReview, init
                       resetReviewState();
                     }}
                     aria-label="Xóa media đính kèm"
-                    className="min-h-11 min-w-11 rounded-lg px-2 text-xs"
+                    className="min-h-11 min-w-11 rounded-[11px] px-2 text-xs"
                     style={{ color: "var(--text-muted)", background: "var(--bg-subtle)" }}
                   >
                     Xóa
@@ -430,7 +430,7 @@ export function PublishManager({ initialPostId, initialPost, initialReview, init
               </div>
               <input
                 type="datetime-local"
-                className="w-full px-3 py-2 text-sm rounded-lg border outline-none"
+                className="w-full px-3 py-2 text-sm rounded-[11px] border outline-none"
                 style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
@@ -450,7 +450,7 @@ export function PublishManager({ initialPostId, initialPost, initialReview, init
                   <FacebookLogo size={11} color="#1877F2" className="inline mr-1" /> Đăng lên page
                 </label>
                 <select
-                  className="w-full px-3 py-2 text-sm rounded-lg border outline-none"
+                  className="w-full px-3 py-2 text-sm rounded-[11px] border outline-none"
                   style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
                   value={selectedPageId}
                   onChange={(e) => setSelectedPageId(e.target.value)}
@@ -469,7 +469,7 @@ export function PublishManager({ initialPostId, initialPost, initialReview, init
             )}
 
             {error === "FB_NO_MANAGE_POSTS" ? (
-              <div className="rounded-lg overflow-hidden text-xs" style={{ border: "1px solid var(--amber)", background: "var(--amber-light)" }}>
+              <div className="rounded-[11px] overflow-hidden text-xs" style={{ border: "1px solid var(--amber)", background: "var(--amber-light)" }}>
                 <div className="px-3 py-2 font-medium" style={{ color: "var(--amber)" }}>
                   Token thiếu quyền <code>pages_manage_posts</code>
                 </div>
@@ -513,7 +513,7 @@ export function PublishManager({ initialPostId, initialPost, initialReview, init
                 {publishOperation && (
                   <div className="grid gap-1 sm:grid-cols-3">
                     {publishOperation.channelAttempts.map((attempt) => (
-                      <div key={`${attempt.channel}-${attempt.status}`} className="rounded-md border px-2 py-1.5 text-[11px]" style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}>
+                      <div key={`${attempt.channel}-${attempt.status}`} className="rounded-[9px] border px-2 py-1.5 text-[11px]" style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}>
                         <strong className="capitalize">{attempt.channel}</strong>: {attempt.status}
                         {attempt.error ? <p className="mt-0.5" style={{ color: "var(--rose)" }}>{attempt.error}</p> : null}
                       </div>
@@ -556,7 +556,7 @@ export function PublishManager({ initialPostId, initialPost, initialReview, init
             </div>
 
             {postType === "video" && (
-              <div className="rounded-lg border p-3 text-xs" style={{ borderColor: "var(--amber)", background: "var(--amber-light)", color: "var(--text-secondary)" }}>
+              <div className="rounded-[11px] border p-3 text-xs" style={{ borderColor: "var(--amber)", background: "var(--amber-light)", color: "var(--text-secondary)" }}>
                 Video cần được render, kiểm tra QA và duyệt đúng phiên bản trong Xưởng video trước khi xuất bản.
                 <Button size="sm" variant="secondary" className="mt-2" onClick={() => router.push("/creative/video")}>
                   Mở Xưởng video

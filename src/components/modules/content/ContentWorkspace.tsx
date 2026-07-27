@@ -87,7 +87,7 @@ export function ContentWorkspace({
         <div className="flex gap-1 p-1 rounded-xl" style={{ background: "var(--bg-subtle)" }}>
           {TABS.map((t) => (
             <button key={t.id} type="button" onClick={() => navigate(t.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[11px] text-xs font-medium transition-all"
               style={{
                 background: tab === t.id ? "var(--bg-card)" : "transparent",
                 color: tab === t.id ? "var(--text)" : "var(--text-muted)",

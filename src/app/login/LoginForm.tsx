@@ -24,7 +24,9 @@ export function LoginForm() {
     try {
       const res = await signIn("credentials", { email, password, redirect: false });
       if (res?.error) {
-        setError("Email hoặc mật khẩu không đúng");
+        setError(res.code === "locked"
+          ? "Tài khoản tạm khóa do nhập sai nhiều lần — thử lại sau khoảng 15 phút"
+          : "Email hoặc mật khẩu không đúng");
         return;
       }
       router.push(from);
@@ -40,7 +42,7 @@ export function LoginForm() {
             className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center mb-3 logo-icon"
             style={{
               background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)",
-              boxShadow: "0 4px 12px rgba(45,106,79,0.35)",
+              boxShadow: "0 4px 12px color-mix(in srgb, var(--accent) 32%, transparent)",
             }}
           >
             <Sparkle size={22} weight="fill" color="white" />

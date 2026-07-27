@@ -3,121 +3,152 @@
 /* AutoSpa UI foundation. Spacing grid: 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48 */
 
 @layer base {
+  /* ═══ Amethyst identity ═══════════════════════════════════
+     Indigo-violet primary, pastel status chips, dark violet nav shell.
+     Every surface/content/status token is repointed here, so the whole
+     app follows this palette without per-screen edits. */
   :root {
     /* Semantic surfaces */
-    --surface-page: #f4f5f1;
+    --surface-page: #f4f5fb;
     --surface-card: #ffffff;
-    --surface-subtle: #eceee8;
-    --surface-elevated: #fafbf8;
+    --surface-subtle: #f7f7fc;
+    --surface-elevated: #fbfbfe;
     --bg: var(--surface-page);
     --bg-card: var(--surface-card);
     --bg-subtle: var(--surface-subtle);
     --bg-elevated: var(--surface-elevated);
 
     /* Semantic borders */
-    --border-subtle: #e8ebe5;
-    --border: #dde2d9;
-    --border-strong: #c6cec1;
+    --border-subtle: #f2f3f8;
+    --border: #ecedf4;
+    --border-strong: #e1e3ee;
+    --brand-ring: #d7d0fb;
+    --row-hover: #f7f7fc;
 
     /* Semantic content */
-    --content-primary: #171b16;
-    --content-secondary: #525b50;
-    --content-muted: #788174;
+    --content-primary: #191c2b;
+    --content-secondary: #5c6274;
+    --content-muted: #9297ab;
     --text: var(--content-primary);
     --text-secondary: var(--content-secondary);
     --text-muted: var(--content-muted);
 
-    /* Spa accent (primary) — wellness green */
-    --accent: #2f6f54;
-    --accent-light: #e5f1ea;
-    --accent-soft: #f2f8f4;
-    --accent-hover: #245a43;
+    /* Primary accent — amethyst */
+    --accent: #6c5ce7;
+    --accent-light: #eeebfd;
+    --accent-soft: #f6f4fe;
+    --accent-hover: #5a48d6;
     --accent-foreground: #ffffff;
 
-    /* Premium accent — AI strategic agents (gold/champagne) */
-    --premium: #a3762c;
-    --premium-light: #f4ecd9;
-    --premium-hover: #835d21;
+    /* Nav shell (dark violet) */
+    --side: #1e1b34;
+    --side-2: #252140;
+    --side-ink: #b9b6d6;
+    --side-ink-2: #7c7899;
+    --side-plan-from: #3a2f6e;
+    --side-plan-to: #2a2350;
+
+    /* Premium accent — AI strategic surfaces (gold against violet) */
+    --premium: #a97526;
+    --premium-light: #f7efdd;
+    --premium-hover: #8a5f1d;
 
     /* Status colors (semantic) */
-    --success: #2d6a4f;
-    --success-light: #edf7f0;
-    --warning: #d97706;
-    --warning-light: #fffbeb;
-    --danger: #dc2626;
-    --danger-light: #fef2f2;
+    --success: #10b981;
+    --success-light: #e3f7ef;
+    --warning: #f59e0b;
+    --warning-light: #fef3e0;
+    --danger: #ef4444;
+    --danger-light: #fdecec;
     --danger-foreground: #ffffff;
-    --info: #2563eb;
-    --info-light: #eff6ff;
+    --info: #3b82f6;
+    --info-light: #e6f0fe;
 
-    /* Legacy aliases (keep until full migration) */
-    --rose: #c95a5a;
-    --rose-light: #faeeee;
-    --amber: #bd720f;
-    --amber-light: #fbf2df;
-    --blue: #2f6da8;
-    --blue-light: #e7eff7;
+    /* Categorical chip tones */
+    --purple: #6c5ce7;
+    --purple-light: #eeebfd;
+    --rose: #f43f6e;
+    --rose-light: #fde9ef;
+    --amber: #f59e0b;
+    --amber-light: #fef3e0;
+    --blue: #3b82f6;
+    --blue-light: #e6f0fe;
+    --green: #10b981;
+    --green-light: #e3f7ef;
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px rgba(24, 36, 26, 0.035), 0 1px 6px rgba(24, 36, 26, 0.04);
-    --shadow-md: 0 10px 28px rgba(24, 36, 26, 0.07);
-    --shadow-lg: 0 18px 44px rgba(24, 36, 26, 0.1);
-    --shadow-premium: 0 10px 28px rgba(163, 118, 44, 0.16);
+    --shadow-sm: 0 1px 2px rgba(24, 28, 45, 0.04), 0 6px 20px rgba(24, 28, 45, 0.05);
+    --shadow-md: 0 4px 10px rgba(24, 28, 45, 0.06), 0 18px 40px rgba(108, 92, 231, 0.14);
+    --shadow-lg: 0 10px 24px rgba(24, 28, 45, 0.08), 0 28px 60px rgba(108, 92, 231, 0.18);
+    --shadow-premium: 0 10px 28px rgba(169, 117, 38, 0.16);
 
     /* Layout */
-    --sidebar-width: 232px;
+    --sidebar-width: 238px;
     --sidebar-width-collapsed: 64px;
-    --radius-sm: 6px;
-    --radius-md: 8px;
-    --radius-lg: 10px;
-    --radius-xl: 12px;
+    --radius-sm: 7px;
+    --radius-md: 9px;
+    --radius-lg: 11px;
+    --radius-xl: 14px;
   }
 
   .dark {
-    --surface-page: #0d100d;
-    --surface-card: #171b17;
-    --surface-subtle: #20261f;
-    --surface-elevated: #1c211b;
+    --surface-page: #14121f;
+    --surface-card: #1c1930;
+    --surface-subtle: #231f38;
+    --surface-elevated: #201d34;
 
-    --border-subtle: #222a21;
-    --border: #293127;
-    --border-strong: #3a4637;
+    --border-subtle: #241f3a;
+    --border: #2a2740;
+    --border-strong: #332f4c;
+    --brand-ring: #3b3568;
+    --row-hover: #231f38;
 
-    --content-primary: #f4f7f0;
-    --content-secondary: #c2cabd;
-    --content-muted: #8e9989;
+    --content-primary: #eceaf6;
+    --content-secondary: #a6a3c0;
+    --content-muted: #6e6b8c;
 
-    --accent: #65c08b;
-    --accent-light: #183125;
-    --accent-soft: #12251c;
-    --accent-hover: #7ad69f;
-    --accent-foreground: #0d100d;
+    --accent: #8b7bf2;
+    --accent-light: #241f45;
+    --accent-soft: #1d1935;
+    --accent-hover: #9d90f5;
+    --accent-foreground: #14121f;
 
-    --premium: #d4a554;
-    --premium-light: #2a2010;
-    --premium-hover: #b88f44;
+    --side: #100e1b;
+    --side-2: #1b182c;
+    --side-ink: #9a96bc;
+    --side-ink-2: #6a668a;
+    --side-plan-from: #2e2657;
+    --side-plan-to: #211c40;
 
-    --success: #40c074;
-    --success-light: #142b1f;
-    --warning: #f0a040;
-    --warning-light: #2a2010;
-    --danger: #f08080;
-    --danger-light: #2a1818;
-    --danger-foreground: #0d100d;
-    --info: #60a5fa;
-    --info-light: #0f1f3a;
+    --premium: #d9ae5c;
+    --premium-light: #2c2210;
+    --premium-hover: #c1974a;
 
-    --rose: #e18181;
-    --rose-light: #2a1818;
-    --amber: #f0a040;
-    --amber-light: #2a2010;
-    --blue: #7eb0e6;
-    --blue-light: #0f1f3a;
+    --success: #34d399;
+    --success-light: #12291f;
+    --warning: #fbbf45;
+    --warning-light: #2c2210;
+    --danger: #f87171;
+    --danger-light: #341a1a;
+    --danger-foreground: #14121f;
+    --info: #5b9bf8;
+    --info-light: #142440;
 
-    --shadow-sm: 0 1px 4px rgba(0,0,0,0.32);
-    --shadow-md: 0 12px 30px rgba(0,0,0,0.42);
-    --shadow-lg: 0 20px 52px rgba(0,0,0,0.52);
-    --shadow-premium: 0 12px 30px rgba(212,165,84,0.18);
+    --purple: #8b7bf2;
+    --purple-light: #241f45;
+    --rose: #f76a8e;
+    --rose-light: #341825;
+    --amber: #fbbf45;
+    --amber-light: #2c2210;
+    --blue: #5b9bf8;
+    --blue-light: #142440;
+    --green: #34d399;
+    --green-light: #12291f;
+
+    --shadow-sm: 0 1px 4px rgba(0,0,0,0.34);
+    --shadow-md: 0 6px 16px rgba(0,0,0,0.42), 0 22px 46px rgba(139,123,242,0.24);
+    --shadow-lg: 0 10px 26px rgba(0,0,0,0.5), 0 30px 64px rgba(139,123,242,0.28);
+    --shadow-premium: 0 12px 30px rgba(217,174,92,0.18);
   }
 
   * { box-sizing: border-box; border-color: var(--border); }
@@ -127,8 +158,7 @@
   }
 
   body {
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--accent-light) 42%, var(--bg)) 0%, var(--bg) 260px);
+    background: var(--bg);
     color: var(--text);
     font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
     font-size: 15px;
@@ -191,16 +221,53 @@
   animation: fadeInUp 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
-/* ═══ Card hover (subtler) ════════════════════════════════ */
+/* ═══ Card hover ══════════════════════════════════════════ */
 
 .card-hover {
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease !important;
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease !important;
   cursor: pointer;
 }
 .card-hover:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   box-shadow: var(--shadow-md) !important;
+  border-color: var(--brand-ring) !important;
 }
+
+/* Surface that lifts its shadow on hover without moving (panels, lists) */
+.surface-hover {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.surface-hover:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--brand-ring);
+}
+
+/* Row hover inside panels */
+.row-hover {
+  transition: background 0.14s ease;
+}
+.row-hover:hover {
+  background: var(--row-hover);
+}
+
+/* Chip: pastel tone badge with an inner hairline for depth */
+.chip-tone {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 16%, transparent);
+  transition: transform 0.18s ease;
+}
+.card-hover:hover .chip-tone,
+.surface-hover:hover .chip-tone {
+  transform: scale(1.06);
+}
+
+/* Staggered entrance for card grids */
+.rise {
+  animation: fadeInUp 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.rise-1 { animation-delay: 0.04s; }
+.rise-2 { animation-delay: 0.08s; }
+.rise-3 { animation-delay: 0.12s; }
+.rise-4 { animation-delay: 0.16s; }
 
 /* ═══ Badge pulse — only "Mới" badges ═════════════════════ */
 
@@ -222,6 +289,21 @@
 .nav-item[aria-current="page"]:hover {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%) !important;
   color: white !important;
+}
+
+/* ═══ Nav shell items (dark violet sidebar) ═══════════════ */
+
+.shell-nav-item {
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.shell-nav-item:hover {
+  background: var(--side-2);
+  color: #fff;
+}
+.shell-nav-item[aria-current="page"] {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(108, 92, 231, 0.4);
 }
 
 /* Premium nav item (Orchestrator, Council, CEO Memory) */
@@ -431,6 +513,7 @@ button, a {
   }
 
   .page-enter,
+  .rise,
   .ceo-orb,
   .ceo-orb-2,
   .ceo-orb-3,
@@ -443,6 +526,8 @@ button, a {
   }
 
   .card-hover:hover,
+  .surface-hover:hover .chip-tone,
+  .card-hover:hover .chip-tone,
   .ceo-kpi-card:hover {
     transform: none !important;
   }

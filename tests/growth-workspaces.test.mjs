@@ -122,11 +122,14 @@ test("Promotions persists a Page-owned draft and hands off to Publishing", async
 
 test("Flash Deal detection uses business dates and cannot publish directly", async () => {
   const engine = await source("src/lib/flash-deal-engine.ts");
+  // Gap detection math now lives in the pure policy module the engine delegates to.
+  const policy = await source("src/lib/flash-deal-policy.ts");
   const cron = await source("src/app/api/cron/flash-deal/route.ts");
   const executor = await source("src/lib/approval-executor.ts");
 
-  assert.match(engine, /businessDateKey\(appointment\)/);
-  assert.match(engine, /T09:00:00\+07:00/);
+  assert.match(engine, /computeSlotGaps\(appts, now\)/);
+  assert.match(policy, /businessDateKey\(appointment\)/);
+  assert.match(policy, /T09:00:00\+07:00/);
   assert.equal(engine.includes("export async function postFlashDeal"), false);
   assert.equal(cron.includes("postFlashDeal"), false);
   assert.match(cron, /persist Post draft và phân phối qua canonical Publishing/);

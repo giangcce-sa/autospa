@@ -1,14 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CheckCircle, Lightbulb, ListChecks, Sparkle, Warning, XCircle } from "@phosphor-icons/react";
 import { useActivePage } from "@/contexts/ActivePageContext";
-import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Textarea } from "@/components/ui/Input";
-import { CheckCircle, XCircle, Warning, Sparkle } from "@phosphor-icons/react";
 
 interface CheckItem { label: string; pass: boolean; note: string; }
 interface QualityResult { score: number; checks: CheckItem[]; suggestions: string[]; summary: string; }
+
+/** Bands match the library's score colouring so one number reads the same everywhere. */
+function band(score: number) {
+  if (score >= 80) return { color: "var(--green)", light: "var(--green-light)", Icon: CheckCircle, text: "Đạt" };
+  if (score >= 60) return { color: "var(--amber)", light: "var(--amber-light)", Icon: Warning, text: "Cần xem lại" };
+  return { color: "var(--danger)", light: "var(--danger-light)", Icon: XCircle, text: "Nên sửa trước khi đăng" };
+}
+
+const fieldClass =
+  "w-full resize-y rounded-[9px] border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2.5 text-[13.5px] leading-relaxed text-[var(--text)] outline-none transition-colors placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--brand-ring)]";
 
 export function QualityChecker({
   facebookPageId: providedPageId,
@@ -41,104 +48,168 @@ export function QualityChecker({
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/quality", {
+      const response = await fetch("/api/quality", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ caption, hashtags, postId, facebookPageId }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.error ?? "Không kiểm tra được nội dung");
+        return;
+      }
       setResult(data.data);
-    } finally { setLoading(false); }
+    } catch {
+      setError("Không kiểm tra được nội dung");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const scoreColor = result
-    ? result.score >= 80 ? "var(--accent)" : result.score >= 60 ? "var(--amber)" : "var(--rose)"
-    : "var(--text-muted)";
+  const failed = result?.checks.filter((check) => !check.pass).length ?? 0;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-5xl">
-      <Card>
-        <CardHeader><CardTitle>Nội dung cần kiểm tra</CardTitle></CardHeader>
-        <div className="space-y-3">
-          <Textarea
-            label="Caption"
-            placeholder="Paste nội dung bài viết vào đây..."
-            rows={8}
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-          />
-          <Textarea
-            label="Hashtags (tùy chọn)"
-            placeholder="#spa #lamdep ..."
-            rows={2}
-            value={hashtags}
-            onChange={(e) => setHashtags(e.target.value)}
-          />
-          {error && <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
-          <Button onClick={handleCheck} loading={loading} disabled={!facebookPageId} className="w-full">
-            <Sparkle size={14} weight="fill" /> Kiểm tra chất lượng
-          </Button>
-        </div>
-      </Card>
+    <div className="grid max-w-6xl items-start gap-4 lg:grid-cols-2">
+      <section className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-[16px] font-extrabold tracking-tight">Nội dung cần kiểm tra</h2>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
+          Kiểm tra trước khi đăng: từ ngữ phóng đại, ngôn ngữ y tế, ảnh trước/sau và độ dài theo từng kênh.
+        </p>
 
-      <div className="space-y-3">
+        <div className="mt-4 space-y-3">
+          <label className="block space-y-1.5">
+            <span className="text-[12px] font-bold text-[var(--text-secondary)]">Caption</span>
+            <textarea
+              rows={10}
+              placeholder="Dán nội dung bài viết vào đây…"
+              value={caption}
+              onChange={(event) => setCaption(event.target.value)}
+              className={fieldClass}
+            />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-[12px] font-bold text-[var(--text-secondary)]">Hashtags (tùy chọn)</span>
+            <textarea
+              rows={2}
+              placeholder="#spa #chamsocda"
+              value={hashtags}
+              onChange={(event) => setHashtags(event.target.value)}
+              className={`${fieldClass} text-[13px] text-[var(--accent)]`}
+            />
+          </label>
+        </div>
+
+        {error && (
+          <p role="alert" className="mt-3 rounded-[9px] bg-[var(--danger-light)] px-3 py-2 text-[12.5px] font-semibold text-[var(--danger)]">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={handleCheck}
+          disabled={loading || !caption.trim() || !facebookPageId}
+          aria-busy={loading}
+          className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-[9px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--accent-foreground)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Sparkle size={16} weight="fill" aria-hidden="true" />
+          {loading ? "Đang kiểm tra…" : "Kiểm tra chất lượng"}
+        </button>
+      </section>
+
+      <div className="space-y-4">
         {result ? (
           <>
-            <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Điểm chất lượng</p>
-                  <p className="text-3xl font-bold" style={{ color: scoreColor }}>{result.score}<span className="text-sm font-normal" style={{ color: "var(--text-muted)" }}>/100</span></p>
-                </div>
-                <div className="w-16 h-16 rounded-full border-4 flex items-center justify-center" style={{ borderColor: scoreColor }}>
-                  {result.score >= 80 ? <CheckCircle size={24} weight="fill" color={scoreColor} /> : result.score >= 60 ? <Warning size={24} weight="fill" color={scoreColor} /> : <XCircle size={24} weight="fill" color={scoreColor} />}
-                </div>
-              </div>
-              <p className="text-xs mt-2" style={{ color: "var(--text-secondary)" }}>{result.summary}</p>
-            </Card>
+            <section className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]">
+              <ScorePanel score={result.score} summary={result.summary} failed={failed} total={result.checks.length} />
+            </section>
 
-            <Card>
-              <CardHeader><CardTitle>Chi tiết kiểm tra</CardTitle></CardHeader>
-              <div className="space-y-2">
-                {result.checks.map((check, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    {check.pass
-                      ? <CheckCircle size={14} className="shrink-0 mt-0.5" weight="fill" color="var(--accent)" />
-                      : <XCircle size={14} className="shrink-0 mt-0.5" weight="fill" color="var(--rose)" />}
-                    <div>
-                      <span className="text-xs font-medium" style={{ color: "var(--text)" }}>{check.label}</span>
-                      {check.note && <p className="text-xs" style={{ color: "var(--text-muted)" }}>{check.note}</p>}
+            <section className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-[18px] shadow-[var(--shadow-sm)]">
+              <h3 className="flex items-center gap-2 text-[14px] font-bold">
+                <ListChecks size={15} weight="bold" className="text-[var(--text-muted)]" aria-hidden="true" />
+                Chi tiết kiểm tra
+              </h3>
+              <ul className="mt-2.5 space-y-2">
+                {result.checks.map((check, index) => (
+                  <li key={`${index}-${check.label}`} className="flex items-start gap-2">
+                    {check.pass ? (
+                      <CheckCircle size={15} weight="fill" className="mt-px shrink-0 text-[var(--green)]" aria-hidden="true" />
+                    ) : (
+                      <XCircle size={15} weight="fill" className="mt-px shrink-0 text-[var(--danger)]" aria-hidden="true" />
+                    )}
+                    <div className="min-w-0">
+                      <p className={`text-[12.5px] font-semibold ${check.pass ? "text-[var(--text-secondary)]" : "text-[var(--text)]"}`}>
+                        {check.label}
+                      </p>
+                      {check.note && <p className="mt-0.5 text-[11.5px] leading-relaxed text-[var(--text-muted)]">{check.note}</p>}
                     </div>
-                  </div>
+                  </li>
                 ))}
-              </div>
-            </Card>
+              </ul>
+            </section>
 
             {result.suggestions.length > 0 && (
-              <Card>
-                <CardHeader><CardTitle>Gợi ý cải thiện</CardTitle></CardHeader>
-                <ul className="space-y-1.5">
-                  {result.suggestions.map((s, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
-                      <span className="font-bold shrink-0" style={{ color: "var(--accent)" }}>{i + 1}.</span>
-                      {s}
+              <section className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-[18px] shadow-[var(--shadow-sm)]">
+                <h3 className="flex items-center gap-2 text-[14px] font-bold">
+                  <Lightbulb size={15} weight="bold" className="text-[var(--accent)]" aria-hidden="true" />
+                  Gợi ý cải thiện
+                </h3>
+                <ol className="mt-2.5 space-y-2">
+                  {result.suggestions.map((suggestion, index) => (
+                    <li key={`${index}-${suggestion}`} className="flex gap-2.5 text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent-light)] text-[11px] font-bold text-[var(--accent)]">
+                        {index + 1}
+                      </span>
+                      <span>{suggestion}</span>
                     </li>
                   ))}
-                </ul>
-              </Card>
+                </ol>
+              </section>
             )}
           </>
         ) : (
-          <Card className="h-full min-h-[200px]">
-            <div className="flex flex-col items-center justify-center h-full py-12 text-center">
-              <CheckCircle size={32} className="mb-2 opacity-20" style={{ color: "var(--text-secondary)" }} />
-              <p className="text-sm font-medium" style={{ color: "var(--text)" }}>Kết quả kiểm tra</p>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Nhập nội dung và nhấn Kiểm tra</p>
-            </div>
-          </Card>
+          <section className="flex min-h-[16rem] flex-col items-center justify-center gap-2 rounded-[var(--radius-xl)] border border-dashed border-[var(--border-strong)] bg-[var(--bg-card)] p-8 text-center">
+            <ListChecks size={28} className="text-[var(--text-muted)]" aria-hidden="true" />
+            <p className="text-[13.5px] font-semibold">Kết quả kiểm tra</p>
+            <p className="max-w-xs text-[12.5px] text-[var(--text-muted)]">
+              Nhập caption rồi nhấn “Kiểm tra chất lượng”. Kết quả gồm điểm, từng mục kiểm tra và gợi ý sửa.
+            </p>
+          </section>
         )}
       </div>
     </div>
+  );
+}
+
+function ScorePanel({ score, summary, failed, total }: { score: number; summary: string; failed: number; total: number }) {
+  const { color, light, Icon, text } = band(score);
+  return (
+    <>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[11.5px] text-[var(--text-muted)]">Điểm chất lượng</p>
+          <p className="mt-0.5 flex items-baseline gap-1">
+            <span className="text-[34px] font-extrabold leading-none tabular-nums tracking-tight" style={{ color }}>
+              {score}
+            </span>
+            <span className="text-[13px] text-[var(--text-muted)]">/100</span>
+          </p>
+          <p className="mt-1.5 text-[12px] font-bold" style={{ color }}>{text}</p>
+        </div>
+        <span
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full"
+          style={{ background: light, color }}
+        >
+          <Icon size={26} weight="fill" aria-hidden="true" />
+        </span>
+      </div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--bg-subtle)]">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, score))}%`, background: color }} />
+      </div>
+      <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--text-secondary)]">{summary}</p>
+      <p className="mt-2 text-[11.5px] tabular-nums text-[var(--text-muted)]">
+        {failed === 0 ? `Cả ${total} mục kiểm tra đều đạt.` : `${failed}/${total} mục chưa đạt.`}
+      </p>
+    </>
   );
 }

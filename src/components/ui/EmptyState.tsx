@@ -36,7 +36,7 @@ function StateLayout({ icon, title, description, action, role, tone = "neutral" 
 
   return (
     <div className="flex min-h-48 flex-col items-center justify-center px-4 py-12 text-center" role={role}>
-      {icon && <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-lg ${colors[tone]}`}>{icon}</div>}
+      {icon && <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-[11px] ${colors[tone]}`}>{icon}</div>}
       <p className="text-sm font-semibold text-[var(--text)]">{title}</p>
       {description && <p className="mt-1 max-w-md text-[13px] leading-5 text-[var(--text-muted)]">{description}</p>}
       {action && <div className="mt-5">{action}</div>}

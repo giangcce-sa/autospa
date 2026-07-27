@@ -111,7 +111,7 @@ export function CalendarView({
       >
         <button
           onClick={prevMonth}
-          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:opacity-70"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[11px] hover:opacity-70"
           style={{ background: "var(--bg-subtle)" }}
           aria-label="Tháng trước"
         >
@@ -122,7 +122,7 @@ export function CalendarView({
         </p>
         <button
           onClick={nextMonth}
-          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:opacity-70"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[11px] hover:opacity-70"
           style={{ background: "var(--bg-subtle)" }}
           aria-label="Tháng sau"
         >
@@ -152,7 +152,7 @@ export function CalendarView({
           return (
             <div
               key={idx}
-              className="min-h-[80px] p-1.5 border-r border-b last:border-r-0"
+              className="min-h-[84px] p-1.5 border-r border-b last:border-r-0"
               style={{
                 borderColor: "var(--border)",
                 background: day ? "var(--bg-card)" : "var(--bg-subtle)",
@@ -177,11 +177,11 @@ export function CalendarView({
                                 ? `/creative/publishing?view=composer&scope=current${facebookPageId ? `&pageId=${encodeURIComponent(facebookPageId)}` : ""}&id=${encodeURIComponent(post.id)}`
                                 : `/publish?postId=${post.id}`
                               }
-                        className="block text-[9px] leading-tight px-1 py-0.5 rounded truncate hover:opacity-80 transition-opacity"
+                        className="block truncate rounded-[5px] px-1 py-0.5 text-[9.5px] font-semibold leading-tight transition-opacity hover:opacity-80"
                         style={
                           post.status === "published"
-                            ? { background: "rgba(45,106,79,0.12)", color: "var(--accent)" }
-                            : { background: "rgba(217,119,6,0.12)", color: "var(--amber)" }
+                            ? { background: "var(--green-light)", color: "var(--green)" }
+                            : { background: "var(--amber-light)", color: "var(--amber)" }
                         }
                         title={post.caption}
                       >
@@ -211,7 +211,7 @@ export function CalendarView({
           <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Lên lịch</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full" style={{ background: "var(--accent)" }} />
+          <div className="w-2 h-2 rounded-full" style={{ background: "var(--green)" }} />
           <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Đã đăng</span>
         </div>
       </div>

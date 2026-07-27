@@ -18,7 +18,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <div className="space-y-1.5">
         {label && (
-          <label htmlFor={controlId} className="block text-[13px] font-semibold text-[var(--text-secondary)]">
+          <label htmlFor={controlId} className="block text-[12px] font-bold text-[var(--text-secondary)]">
             {label}
           </label>
         )}
@@ -28,8 +28,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           aria-describedby={description}
           aria-invalid={error ? true : undefined}
           className={cn(
-            "min-h-11 w-full cursor-pointer rounded-md border bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)] outline-none transition-[border-color,box-shadow,background-color] duration-150",
-            "focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-light)]",
+            "min-h-11 w-full cursor-pointer rounded-[9px] border border-[var(--border-strong)] bg-[var(--bg)] px-3 py-2 text-[13px] text-[var(--text)] outline-none transition-[border-color,box-shadow,background-color] duration-150",
+            "focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--brand-ring)]",
             className,
           )}
           style={{ borderColor: error ? "var(--danger)" : undefined, ...style }}
@@ -37,8 +37,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         >
           {children}
         </select>
-        {error && <p id={errorId} className="text-xs text-[var(--danger)]">{error}</p>}
-        {hint && !error && <p id={hintId} className="text-xs text-[var(--text-muted)]">{hint}</p>}
+        {error && <p id={errorId} className="text-[11.5px] font-semibold text-[var(--danger)]">{error}</p>}
+        {hint && !error && <p id={hintId} className="text-[11.5px] text-[var(--text-muted)]">{hint}</p>}
       </div>
     );
   },

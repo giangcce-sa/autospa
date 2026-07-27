@@ -69,7 +69,7 @@ export function ReviewBadge({ review }: { review: Review | null | undefined }) {
             return (
               <div
                 key={idx}
-                className="rounded-lg p-2 text-xs"
+                className="rounded-[11px] p-2 text-xs"
                 style={{ background: "var(--bg-card)", borderLeft: `2px solid ${sevColor}` }}
               >
                 <div className="flex items-center gap-2 mb-0.5">

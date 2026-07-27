@@ -538,7 +538,7 @@ export function SettingsForm() {
                 href="/api/backup"
                 download
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
-                style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)", color: "white", boxShadow: "0 1px 6px rgba(45,106,79,0.22)" }}
+                style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)", color: "white", boxShadow: "0 1px 6px color-mix(in srgb, var(--accent) 24%, transparent)" }}
               >
                 <DownloadSimple size={13} weight="bold" /> Download backup ngay
               </a>

@@ -18,6 +18,9 @@ export function WorkspaceShell({
   pages,
   effectiveScope = route.scope,
   visibleViewIds,
+  header,
+  topNav,
+  wide = false,
   children,
 }: {
   route: AppRoute;
@@ -25,20 +28,29 @@ export function WorkspaceShell({
   pages: WorkspacePageOption[];
   effectiveScope?: RouteScope;
   visibleViewIds?: string[];
+  /** Replaces the default eyebrow/title/description block (the page keeps its own h1). */
+  header?: ReactNode;
+  /** Section-level tab strip rendered above the workspace header. */
+  topNav?: ReactNode;
+  /** Command-center screens need the full content width instead of the reading-width default. */
+  wide?: boolean;
   children?: ReactNode;
 }) {
   const views = (route.views ?? []).filter((view) => !visibleViewIds || visibleViewIds.includes(view.id));
   const currentView = views.find((view) => view.id === state.view) ?? views[0];
 
   return (
-    <div className="max-w-6xl space-y-6">
-      <header className="border-b border-[var(--border)] pb-5">
+    <div className={`space-y-5 ${wide ? "max-w-none" : "max-w-6xl space-y-6"}`}>
+      {topNav}
+      <header className={wide ? "" : "border-b border-[var(--border)] pb-5"}>
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-[13px] font-semibold text-[var(--accent)]">Phần mềm chức năng</p>
-            <h1 className="mt-1 text-[30px] font-extrabold">{route.label}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{route.description}</p>
-          </div>
+          {header ?? (
+            <div>
+              <p className="text-[13px] font-semibold text-[var(--accent)]">Phần mềm chức năng</p>
+              <h1 className="mt-1 text-[30px] font-extrabold">{route.label}</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{route.description}</p>
+            </div>
+          )}
           <WorkspaceScopeControl route={route} state={state} pages={pages} effectiveScope={effectiveScope} />
         </div>
         <WorkspaceNav route={route} views={views} state={state} pages={pages} />

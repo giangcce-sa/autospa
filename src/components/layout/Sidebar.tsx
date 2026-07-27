@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkle } from "@phosphor-icons/react";
+import { CaretRight, Sparkle } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
 import { useSession } from "next-auth/react";
 import { ROUTE_ICONS } from "@/config/route-icons";
@@ -33,45 +33,67 @@ export function Sidebar() {
 
   return (
     <>
-      <div className="hidden w-[15rem] shrink-0 md:block" />
-      <aside data-app-sidebar className="fixed inset-y-0 left-0 z-30 hidden w-[15rem] flex-col border-r border-[var(--border)] bg-[var(--bg-card)] px-3 py-4 md:flex">
-        <Link href="/" className="flex h-11 items-center gap-3 px-2" aria-label="AutoSpa — Hôm nay">
-          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--accent-foreground)] shadow-[0_8px_18px_rgba(47,111,84,.18)]"><Sparkle size={17} weight="fill" /></span>
-          <span><span className="block text-base font-extrabold leading-tight">AutoSpa</span><span className="block text-xs font-medium text-[var(--text-muted)]">Trợ lý cho spa</span></span>
+      <div className="hidden w-[var(--sidebar-width)] shrink-0 md:block" />
+      <aside
+        data-app-sidebar
+        className="fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-width)] flex-col bg-[var(--side)] px-3.5 py-4 md:flex"
+      >
+        <Link href="/" className="flex items-center gap-2.5 px-2 pb-3.5" aria-label="AutoSpa — Hôm nay">
+          <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] text-white">
+            <Sparkle size={19} weight="fill" />
+          </span>
+          <span className="text-[19px] font-extrabold leading-none tracking-tight text-white">AutoSpa</span>
         </Link>
 
-        <label className="mt-5 block">
-          <span className="mb-1.5 block text-xs font-semibold text-[var(--text-muted)]">Trang Facebook</span>
+        <nav className="space-y-0.5" aria-label="Điều hướng chính">
+          {PRIMARY_NAV.map((item, index) => (
+            <SidebarLink key={item.href} item={item} index={index + 1} pathname={pathname} />
+          ))}
+        </nav>
+
+        <p className="mt-5 px-2.5 pb-2 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[var(--side-ink-2)]">
+          Trang Facebook
+        </p>
+        <label className="block px-0.5">
+          <span className="sr-only">Trang Facebook đang chọn</span>
           <select
             value={selectedPageId}
             onChange={(event) => setSelectedPageId(event.target.value)}
-            className="h-11 w-full rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 text-[13px] font-semibold text-[var(--text)] shadow-[var(--shadow-sm)]"
+            className="h-10 w-full rounded-[10px] border-0 bg-[var(--side-2)] px-3 text-[13px] font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
           >
             <option value="">{pages.length === 0 ? selectedPage?.pageName || "Chưa kết nối Trang" : "Tất cả Trang"}</option>
-            {pages.map((page) => <option key={page.id} value={page.id}>{page.pageName}</option>)}
+            {pages.map((page) => (
+              <option key={page.id} value={page.id}>{page.pageName}</option>
+            ))}
           </select>
         </label>
 
-        <nav className="mt-7 space-y-1" aria-label="Điều hướng chính">
-          {PRIMARY_NAV.slice(0, 4).map((item) => <SidebarLink key={item.href} item={item} pathname={pathname} />)}
-        </nav>
-
-        <div className="mt-auto border-t border-[var(--border)] pt-4">
-          <SidebarLink item={PRIMARY_NAV[4]} pathname={pathname} />
-          <div className="mt-3 flex items-center gap-3 px-3 py-2"><UserMenu /><div className="min-w-0"><p className="truncate text-[13px] font-semibold">{name}</p><p className="text-xs text-[var(--text-muted)]">{roleLabel}</p></div></div>
+        <div className="mt-auto space-y-3 pt-4">
+          <div className="flex items-center gap-2.5 rounded-[11px] bg-[var(--side-2)] p-2.5">
+            <UserMenu />
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-bold text-white">{name}</p>
+              <p className="text-[11px] text-[var(--side-ink-2)]">{roleLabel}</p>
+            </div>
+          </div>
         </div>
       </aside>
     </>
   );
 }
 
-function SidebarLink({ item, pathname }: { item: NavItem; pathname: string }) {
+function SidebarLink({ item, index, pathname }: { item: NavItem; index: number; pathname: string }) {
   const IconComponent = item.icon;
   const active = navIsActive(pathname, item);
   return (
-    <Link href={item.href} aria-current={active ? "page" : undefined} className={`flex h-11 items-center gap-3 rounded-md px-3 text-[15px] font-semibold transition-colors ${active ? "bg-[var(--accent-light)] text-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text)]"}`}>
-      <IconComponent size={19} weight={active ? "fill" : "regular"} />
-      {item.label}
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      className={`shell-nav-item flex h-11 items-center gap-2.5 rounded-[10px] px-3 text-[14px] font-semibold ${active ? "" : "text-[var(--side-ink)]"}`}
+    >
+      <IconComponent size={19} weight={active ? "fill" : "regular"} aria-hidden="true" />
+      <span className="truncate">{index}. {item.label}</span>
+      {!active && <CaretRight size={14} className="ml-auto shrink-0 opacity-50" aria-hidden="true" />}
     </Link>
   );
 }

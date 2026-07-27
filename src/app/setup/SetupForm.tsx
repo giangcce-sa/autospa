@@ -20,8 +20,8 @@ export function SetupForm() {
       setError("Mật khẩu nhập lại không khớp");
       return;
     }
-    if (form.password.length < 6) {
-      setError("Mật khẩu tối thiểu 6 ký tự");
+    if (form.password.length < 8) {
+      setError("Mật khẩu tối thiểu 8 ký tự");
       return;
     }
 
@@ -55,7 +55,7 @@ export function SetupForm() {
             className="w-12 h-12 rounded-2xl mx-auto flex items-center justify-center mb-3"
             style={{
               background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)",
-              boxShadow: "0 4px 12px rgba(45,106,79,0.35)",
+              boxShadow: "0 4px 12px color-mix(in srgb, var(--accent) 32%, transparent)",
             }}
           >
             <Sparkle size={22} weight="fill" color="white" />
@@ -83,7 +83,7 @@ export function SetupForm() {
               required
             />
             <Input
-              label="Mật khẩu (tối thiểu 6 ký tự)"
+              label="Mật khẩu (tối thiểu 8 ký tự)"
               type="password"
               placeholder="••••••••"
               value={form.password}

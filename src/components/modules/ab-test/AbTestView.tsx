@@ -1,19 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ArrowsSplit, CaretDown, ChatsTeardrop, Trophy } from "@phosphor-icons/react";
 import { useActivePage } from "@/contexts/ActivePageContext";
-import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { truncate } from "@/lib/utils";
-import { Trophy, ArrowsSplit, ChatsTeardrop, CaretDown } from "@phosphor-icons/react";
 
 interface Analytics { likes: number; comments: number; shares: number; reach: number; }
 interface Post { id: string; caption: string; status: string; qualityNotes: string | null; analytics: Analytics | null; }
 interface Group { abGroupId: string; posts: Post[]; createdAt: string; }
 
-function engagementScore(a: Analytics | null) {
-  if (!a) return 0;
-  return (a.likes ?? 0) + (a.comments ?? 0) * 2 + (a.shares ?? 0) * 3;
+/**
+ * Weighted engagement: a comment counts twice a like, a share three times.
+ * The weights are shown to the user rather than hidden behind a bare "điểm",
+ * so the ranking is checkable against the three measured counts beside it.
+ */
+const WEIGHTS = { likes: 1, comments: 2, shares: 3 } as const;
+
+function engagementScore(analytics: Analytics | null) {
+  if (!analytics) return 0;
+  return (
+    (analytics.likes ?? 0) * WEIGHTS.likes +
+    (analytics.comments ?? 0) * WEIGHTS.comments +
+    (analytics.shares ?? 0) * WEIGHTS.shares
+  );
 }
 
 interface JudgeTurn { speaker: string; provider: "claude" | "openai"; content: string; }
@@ -34,6 +43,7 @@ export function AbTestView({
   const [judging, setJudging] = useState<string | null>(null);
   const [judgeResults, setJudgeResults] = useState<Record<string, JudgeResult>>({});
   const [expandedDebate, setExpandedDebate] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     if (!facebookPageId) {
@@ -43,205 +53,272 @@ export function AbTestView({
     }
     setLoading(true);
     try {
-      const params = new URLSearchParams({ facebookPageId });
-      const res = await fetch(`/api/ab-test?${params.toString()}`);
-      const data = await res.json();
+      const response = await fetch(`/api/ab-test?${new URLSearchParams({ facebookPageId })}`);
+      const data = await response.json();
       if (data.success) setGroups(data.data);
-    } finally { setLoading(false); }
+      else setError(data.error ?? "Không tải được danh sách A/B test");
+    } catch {
+      setError("Không tải được danh sách A/B test");
+    } finally {
+      setLoading(false);
+    }
   }, [facebookPageId]);
 
   useEffect(() => { load(); }, [load]);
 
   const runJudge = async (abGroupId: string) => {
     setJudging(abGroupId);
+    setError("");
     try {
-      const res = await fetch("/api/ab-test", {
+      const response = await fetch("/api/ab-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "judge", abGroupId, facebookPageId }),
       });
-      const data = await res.json();
+      const data = await response.json();
       if (data.success) {
         setJudgeResults((prev) => ({ ...prev, [abGroupId]: { synthesis: data.data.synthesis, turns: data.data.turns } }));
         setExpandedDebate((prev) => ({ ...prev, [abGroupId]: false }));
+      } else {
+        setError(data.error ?? "Không chạy được AI Council");
       }
-    } finally { setJudging(null); }
+    } catch {
+      setError("Không chạy được AI Council");
+    } finally {
+      setJudging(null);
+    }
   };
 
   const declareWinner = async (winnerId: string, abGroupId: string) => {
     setDeclaring(winnerId);
+    setError("");
     try {
-      await fetch("/api/ab-test", {
+      const response = await fetch("/api/ab-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "declare-winner", winnerId, abGroupId, facebookPageId }),
       });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || data?.success === false) setError(data?.error ?? "Không chốt được kết quả");
       await load();
-    } finally { setDeclaring(null); }
+    } catch {
+      setError("Không chốt được kết quả");
+    } finally {
+      setDeclaring(null);
+    }
   };
 
   if (loading) {
     return (
-      <div className="space-y-4 max-w-4xl">
-        {[1,2].map(i => <div key={i} className="skeleton h-48 rounded-xl" />)}
+      <div className="max-w-4xl space-y-4">
+        {[1, 2].map((key) => <div key={key} className="skeleton h-56 rounded-[var(--radius-xl)]" />)}
       </div>
     );
   }
 
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center max-w-sm mx-auto">
-        <ArrowsSplit size={36} className="mb-3 opacity-20" style={{ color: "var(--text-secondary)" }} />
-        <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>Chưa có A/B test nào</p>
-        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-          Viết bài trong Viết bài → nhấn nút <strong>A/B Test</strong> để tạo hai phiên bản caption.
+      <div className="mx-auto flex max-w-md flex-col items-center gap-2 rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] py-16 text-center">
+        <ArrowsSplit size={28} className="text-[var(--text-muted)]" aria-hidden="true" />
+        <p className="text-[13.5px] font-semibold">Chưa có A/B test nào</p>
+        <p className="max-w-xs text-[12.5px] leading-relaxed text-[var(--text-muted)]">
+          Soạn bài ở tab Biên tập rồi tạo <b className="text-[var(--text-secondary)]">A/B Test</b> để sinh hai phiên bản caption cho cùng một nội dung.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="max-w-4xl space-y-4">
+      {error && (
+        <p role="alert" className="rounded-[9px] bg-[var(--danger-light)] px-3 py-2 text-[12.5px] font-semibold text-[var(--danger)]">
+          {error}
+        </p>
+      )}
+
       {groups.map((group) => {
         const [postA, postB] = group.posts;
         if (!postA || !postB) return null;
 
         const scoreA = engagementScore(postA.analytics);
         const scoreB = engagementScore(postB.analytics);
-        const hasAnalytics = postA.analytics || postB.analytics;
-        const winner = hasAnalytics ? (scoreA >= scoreB ? postA.id : postB.id) : null;
-        const isDeclared = group.posts.some((p) => p.qualityNotes?.includes("Thắng") || p.qualityNotes?.includes("Thua"));
+        const hasAnalytics = Boolean(postA.analytics || postB.analytics);
+        const leader = hasAnalytics ? (scoreA >= scoreB ? postA.id : postB.id) : null;
+        const isDeclared = group.posts.some((post) => post.qualityNotes?.includes("Thắng") || post.qualityNotes?.includes("Thua"));
+        const judged = judgeResults[group.abGroupId];
 
         return (
-          <Card key={group.abGroupId}>
-            <CardHeader>
-              <div>
-                <CardTitle>A/B Test #{group.abGroupId.slice(0, 6)}</CardTitle>
-                <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {new Date(group.createdAt).toLocaleDateString("vi-VN")}
+          <section
+            key={group.abGroupId}
+            className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-sm)]"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-[16px] font-extrabold tracking-tight">A/B Test #{group.abGroupId.slice(0, 6)}</h2>
+                <p className="mt-0.5 text-[11.5px] text-[var(--text-muted)]">
+                  Tạo {new Date(group.createdAt).toLocaleDateString("vi-VN")}
+                  {isDeclared && " · đã chốt kết quả"}
                 </p>
               </div>
               {canMutate && (
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
                     onClick={() => runJudge(group.abGroupId)}
-                    loading={judging === group.abGroupId}
+                    disabled={judging === group.abGroupId}
+                    aria-busy={judging === group.abGroupId}
+                    className="flex min-h-10 items-center gap-1.5 rounded-[8px] border border-[var(--border-strong)] px-3 text-[12.5px] font-bold text-[var(--text-secondary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <ChatsTeardrop size={12} weight="fill" /> AI Council Judge
-                  </Button>
-                  {!isDeclared && winner && (
-                    <Button
-                      size="sm"
-                      onClick={() => declareWinner(winner, group.abGroupId)}
-                      loading={declaring === winner}
+                    <ChatsTeardrop size={14} weight="fill" aria-hidden="true" />
+                    {judging === group.abGroupId ? "Đang phân tích…" : "AI Council phân tích"}
+                  </button>
+                  {!isDeclared && leader && (
+                    <button
+                      type="button"
+                      onClick={() => declareWinner(leader, group.abGroupId)}
+                      disabled={declaring === leader}
+                      className="flex min-h-10 items-center gap-1.5 rounded-[8px] bg-[var(--accent)] px-3 text-[12.5px] font-bold text-[var(--accent-foreground)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      <Trophy size={12} weight="fill" /> Chốt thắng
-                    </Button>
+                      <Trophy size={14} weight="fill" aria-hidden="true" />
+                      {declaring === leader ? "Đang chốt…" : "Chốt phiên bản thắng"}
+                    </button>
                   )}
                 </div>
               )}
-            </CardHeader>
+            </div>
 
-            {judgeResults[group.abGroupId] && (
-              <div className="mx-5 mb-4 rounded-xl p-4" style={{ background: "var(--accent-light)", border: "1px solid var(--accent)" }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <ChatsTeardrop size={14} weight="fill" style={{ color: "var(--accent)" }} />
-                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--accent)" }}>
-                    Phán quyết của AI Council
-                  </p>
-                </div>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text)" }}>
-                  {judgeResults[group.abGroupId].synthesis}
+            {judged && (
+              <div className="mt-4 rounded-[12px] border border-[var(--accent)]/35 bg-[var(--accent-soft)] p-4">
+                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--accent)]">
+                  <ChatsTeardrop size={13} weight="fill" aria-hidden="true" />
+                  Phán quyết của AI Council
                 </p>
+                <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--text)]">{judged.synthesis}</p>
                 <button
+                  type="button"
                   onClick={() => setExpandedDebate((prev) => ({ ...prev, [group.abGroupId]: !prev[group.abGroupId] }))}
-                  className="flex items-center gap-1 mt-3 text-[11px] font-medium transition-opacity hover:opacity-80"
-                  style={{ color: "var(--accent)" }}
+                  aria-expanded={Boolean(expandedDebate[group.abGroupId])}
+                  className="mt-3 flex items-center gap-1 text-[11.5px] font-bold text-[var(--accent)] transition-opacity hover:opacity-70"
                 >
                   {expandedDebate[group.abGroupId] ? "Ẩn" : "Xem"} cuộc tranh luận đầy đủ
-                  <CaretDown size={10} style={{ transform: expandedDebate[group.abGroupId] ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
+                  <CaretDown
+                    size={11}
+                    weight="bold"
+                    aria-hidden="true"
+                    className={`transition-transform ${expandedDebate[group.abGroupId] ? "rotate-180" : ""}`}
+                  />
                 </button>
                 {expandedDebate[group.abGroupId] && (
-                  <div className="mt-3 space-y-2">
-                    {judgeResults[group.abGroupId].turns.map((t, i) => (
-                      <div
-                        key={i}
-                        className="rounded-lg p-2.5 text-xs"
-                        style={{
-                          background: "var(--bg-card)",
-                          borderLeft: `3px solid ${t.provider === "claude" ? "var(--accent)" : "var(--blue)"}`,
-                        }}
+                  <ul className="mt-3 space-y-2">
+                    {judged.turns.map((turn, index) => (
+                      <li
+                        key={`${index}-${turn.speaker}`}
+                        className="rounded-[9px] border-l-[3px] bg-[var(--bg-card)] p-2.5"
+                        style={{ borderLeftColor: turn.provider === "claude" ? "var(--accent)" : "var(--blue)" }}
                       >
-                        <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: t.provider === "claude" ? "var(--accent)" : "var(--blue)" }}>
-                          {t.speaker}
+                        <p
+                          className="text-[10.5px] font-bold uppercase tracking-[0.07em]"
+                          style={{ color: turn.provider === "claude" ? "var(--accent)" : "var(--blue)" }}
+                        >
+                          {turn.speaker}
                         </p>
-                        <p className="leading-snug" style={{ color: "var(--text-secondary)" }}>{t.content}</p>
-                      </div>
+                        <p className="mt-1 text-[12px] leading-relaxed text-[var(--text-secondary)]">{turn.content}</p>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
               </div>
             )}
 
-            <div className="px-5 pb-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[postA, postB].map((post, idx) => {
-                const score = engagementScore(post.analytics);
-                const isWinner = winner === post.id && hasAnalytics;
-                const isDeclaredWinner = post.qualityNotes?.includes("Thắng");
-                const isDeclaredLoser = post.qualityNotes?.includes("Thua");
-
-                return (
-                  <div
-                    key={post.id}
-                    className="rounded-xl p-4 border"
-                    style={{
-                      borderColor: isDeclaredWinner ? "var(--accent)" : isDeclaredLoser ? "var(--border)" : isWinner ? "var(--accent)" : "var(--border)",
-                      background: isDeclaredWinner ? "rgba(45,106,79,0.06)" : "var(--bg-subtle)",
-                      opacity: isDeclaredLoser ? 0.6 : 1,
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold" style={{ color: isDeclaredWinner || isWinner ? "var(--accent)" : "var(--text-secondary)" }}>
-                        Phiên bản {String.fromCharCode(65 + idx)}
-                        {isDeclaredWinner && " 🏆"}
-                      </span>
-                      {hasAnalytics && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                          style={{ background: isWinner ? "var(--accent)" : "var(--bg-card)", color: isWinner ? "white" : "var(--text-muted)" }}>
-                          {score} điểm
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs leading-relaxed mb-3" style={{ color: "var(--text)" }}>
-                      {truncate(post.caption, 150)}
-                    </p>
-                    {post.analytics ? (
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        {[
-                          { label: "Thích", value: post.analytics.likes },
-                          { label: "Bình luận", value: post.analytics.comments },
-                          { label: "Chia sẻ", value: post.analytics.shares },
-                        ].map(({ label, value }) => (
-                          <div key={label} className="rounded-lg p-2" style={{ background: "var(--bg-card)" }}>
-                            <p className="text-sm font-bold" style={{ color: "var(--text)" }}>{value}</p>
-                            <p className="text-[9px]" style={{ color: "var(--text-muted)" }}>{label}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-center py-2" style={{ color: "var(--text-muted)" }}>
-                        {post.status === "published" ? "Chưa có dữ liệu analytics" : "Chưa đăng"}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {[postA, postB].map((post, index) => (
+                <VariantCard
+                  key={post.id}
+                  post={post}
+                  letter={String.fromCharCode(65 + index)}
+                  score={engagementScore(post.analytics)}
+                  leading={leader === post.id && hasAnalytics}
+                  hasAnalytics={hasAnalytics}
+                />
+              ))}
             </div>
-          </Card>
+
+            {hasAnalytics && (
+              <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
+                Điểm tương tác = thích ×{WEIGHTS.likes} + bình luận ×{WEIGHTS.comments} + chia sẻ ×{WEIGHTS.shares}, tính
+                trên số đo thật của từng bài.
+              </p>
+            )}
+          </section>
         );
       })}
+    </div>
+  );
+}
+
+function VariantCard({
+  post,
+  letter,
+  score,
+  leading,
+  hasAnalytics,
+}: {
+  post: Post;
+  letter: string;
+  score: number;
+  leading: boolean;
+  hasAnalytics: boolean;
+}) {
+  const declaredWinner = post.qualityNotes?.includes("Thắng");
+  const declaredLoser = post.qualityNotes?.includes("Thua");
+  const highlighted = declaredWinner || leading;
+
+  return (
+    <div
+      className={`rounded-[12px] border p-4 transition-colors ${
+        declaredWinner
+          ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+          : highlighted
+            ? "border-[var(--accent)] bg-[var(--bg-subtle)]"
+            : "border-[var(--border)] bg-[var(--bg-subtle)]"
+      } ${declaredLoser ? "opacity-60" : ""}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className={`flex items-center gap-1.5 text-[12.5px] font-bold ${highlighted ? "text-[var(--accent)]" : "text-[var(--text-secondary)]"}`}>
+          Phiên bản {letter}
+          {declaredWinner && <Trophy size={13} weight="fill" aria-label="Phiên bản đã chốt thắng" />}
+        </span>
+        {hasAnalytics && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums ${
+              leading ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "bg-[var(--bg-card)] text-[var(--text-muted)]"
+            }`}
+          >
+            {score} điểm
+          </span>
+        )}
+      </div>
+
+      <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--text)]">{truncate(post.caption, 180)}</p>
+
+      {post.analytics ? (
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {[
+            { label: "Thích", value: post.analytics.likes },
+            { label: "Bình luận", value: post.analytics.comments },
+            { label: "Chia sẻ", value: post.analytics.shares },
+          ].map((metric) => (
+            <div key={metric.label} className="rounded-[9px] bg-[var(--bg-card)] p-2 text-center">
+              <p className="text-[15px] font-extrabold tabular-nums leading-none">{metric.value}</p>
+              <p className="mt-1 text-[10px] text-[var(--text-muted)]">{metric.label}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-[9px] bg-[var(--bg-card)] py-2 text-center text-[11px] text-[var(--text-muted)]">
+          {post.status === "published" ? "Đã đăng, chưa đồng bộ số liệu" : "Chưa đăng nên chưa có số liệu"}
+        </p>
+      )}
     </div>
   );
 }

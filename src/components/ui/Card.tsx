@@ -42,7 +42,7 @@ function variantStyle(variant: CardVariant): React.CSSProperties {
 export function Card({ className, padding = "md", variant = "default", children, style, ...props }: CardProps) {
   return (
     <div
-      className={cn("rounded-lg border", PADDING_MAP[padding], className)}
+      className={cn("rounded-[var(--radius-xl)] border", PADDING_MAP[padding], className)}
       style={{
         ...variantStyle(variant),
         transition: "box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease",
@@ -57,7 +57,7 @@ export function Card({ className, padding = "md", variant = "default", children,
 
 export function CardHeader({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("flex items-center justify-between gap-3 mb-4", className)} {...props}>
+    <div className={cn("mb-3.5 flex items-center justify-between gap-3", className)} {...props}>
       {children}
     </div>
   );
@@ -65,7 +65,7 @@ export function CardHeader({ className, children, ...props }: HTMLAttributes<HTM
 
 export function CardTitle({ className, children, ...props }: HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h3 className={cn("font-semibold text-[15px]", className)} style={{ color: "var(--text)" }} {...props}>
+    <h3 className={cn("text-[15px] font-bold tracking-tight text-[var(--text)]", className)} {...props}>
       {children}
     </h3>
   );

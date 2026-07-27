@@ -61,7 +61,8 @@ test("canonical Content restores persisted Posts and preserves lifecycle while e
   const publish = await source("src/app/api/publish/route.ts");
 
   assert.match(workspace, /select: \{[\s\S]*?caption: true,[\s\S]*?hashtags: true,[\s\S]*?postType: true,/);
-  assert.match(workspace, /<CreativeContentEditor facebookPageId=\{pageId\} post=\{post\} canMutate=\{canMutate\} \/>/);
+  // Props are asserted individually so formatting can change but the wiring cannot.
+  assert.match(workspace, /<CreativeContentEditor[\s\S]{0,240}?facebookPageId=\{pageId\}[\s\S]{0,240}?post=\{post\}[\s\S]{0,240}?canMutate=\{canMutate\}/);
   assert.match(workspace, /initialCaption=\{post\?\.caption\}/);
   assert.match(workspace, /initialHashtags=\{post\?\.hashtags \?\? undefined\}/);
   assert.equal(quality.includes("/api/publish?postId="), false);
@@ -197,7 +198,10 @@ test("Quality review authorizes the selected Page and rejects foreign Posts", as
   assert.match(route, /Bài viết không thuộc Facebook Page đang chọn/);
   assert.match(view, /facebookPageId: providedPageId/);
   assert.match(view, /body: JSON\.stringify\(\{ caption, hashtags, postId, facebookPageId \}\)/);
-  assert.match(view, /disabled=\{!facebookPageId\}/);
+  // The guarantee is that the request cannot fire without a selected Page; the
+  // condition may also disable for other reasons (empty caption, in flight).
+  assert.match(view, /disabled=\{[^}]*!facebookPageId[^}]*\}/);
+  assert.match(view, /if \(!caption\.trim\(\) \|\| !facebookPageId\) return;/, "the handler itself also refuses");
 });
 
 test("Creative mutations are owner-only and library reads do not delete retained data", async () => {

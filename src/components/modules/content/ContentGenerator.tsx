@@ -243,7 +243,7 @@ export function ContentGenerator({ facebookPageId, onGoToImage, onGoToPublish }:
       <Card>
         <CardHeader><CardTitle>Tùy chọn nội dung</CardTitle></CardHeader>
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-1 p-1 rounded-md" style={{ background: "var(--bg-subtle)" }}>
+          <div className="grid grid-cols-3 gap-1 p-1 rounded-[9px]" style={{ background: "var(--bg-subtle)" }}>
             {[
               { value: "quick", label: "Nhanh" },
               { value: "material", label: "Có chất liệu" },
@@ -265,7 +265,7 @@ export function ContentGenerator({ facebookPageId, onGoToImage, onGoToPublish }:
             ))}
           </div>
           {styleSampleCount > 0 && (
-            <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg" style={{ background: "var(--accent-light)", color: "var(--accent)" }}>
+            <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-[11px]" style={{ background: "var(--accent-light)", color: "var(--accent)" }}>
               <Sparkle size={12} weight="fill" />
               Dùng {styleSampleCount} bài mẫu Style Training để tạo content
             </div>
@@ -359,7 +359,7 @@ export function ContentGenerator({ facebookPageId, onGoToImage, onGoToPublish }:
                   </p>
                 ) : (
                   <select
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border outline-none"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-[11px] border outline-none"
                     style={{ background: "var(--bg-card)", borderColor: "var(--border)", color: "var(--text)" }}
                     value={selectedStoryId}
                     onChange={(e) => setSelectedStoryId(e.target.value)}
@@ -411,7 +411,7 @@ export function ContentGenerator({ facebookPageId, onGoToImage, onGoToPublish }:
               </div>
             </div>
 
-            <div className="rounded-md border p-3 space-y-2" style={{ borderColor: "var(--border)" }}>
+            <div className="rounded-[9px] border p-3 space-y-2" style={{ borderColor: "var(--border)" }}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold" style={{ color: "var(--text)" }}>Human Writing Score</span>
                 <strong style={{ color: result.humanScore.score >= 80 ? "var(--success)" : "var(--warning)" }}>{result.humanScore.score}/100</strong>

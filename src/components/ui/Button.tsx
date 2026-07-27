@@ -11,19 +11,23 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", size = "md", loading, loadingLabel = "Đang xử lý", disabled, children, type = "button", style, ...props }, ref) => {
     const base =
-      "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-150 disabled:cursor-not-allowed disabled:opacity-50";
+      "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[9px] font-bold transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] disabled:cursor-not-allowed disabled:opacity-50";
 
     const variants = {
-      primary: "bg-[var(--accent)] text-[var(--accent-foreground)] shadow-[0_6px_16px_rgba(47,111,84,0.16)] hover:bg-[var(--accent-hover)] active:translate-y-px",
-      secondary: "border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)] shadow-[var(--shadow-sm)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-subtle)] active:translate-y-px",
+      // The primary lift is derived from the accent so it follows the palette.
+      // It used to be a hardcoded rgba of the previous green brand colour.
+      primary:
+        "bg-[var(--accent)] text-[var(--accent-foreground)] shadow-[0_6px_16px_color-mix(in_srgb,var(--accent)_28%,transparent)] hover:bg-[var(--accent-hover)] active:translate-y-px",
+      secondary:
+        "border border-[var(--border-strong)] bg-[var(--bg-card)] text-[var(--text)] hover:border-[var(--accent)] hover:text-[var(--accent)] active:translate-y-px",
       ghost: "text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text)] active:translate-y-px",
-      danger: "bg-[var(--danger)] text-[var(--danger-foreground)] hover:brightness-90 active:translate-y-px",
+      danger: "bg-[var(--danger)] text-[var(--danger-foreground)] hover:brightness-95 active:translate-y-px",
     };
 
     const sizes = {
-      sm: "min-h-9 px-3 text-xs",
-      md: "min-h-11 px-4 text-sm",
-      lg: "min-h-12 px-5 text-sm",
+      sm: "min-h-9 px-3 text-[12.5px]",
+      md: "min-h-11 px-4 text-[13px]",
+      lg: "min-h-12 px-5 text-[13.5px]",
     };
 
     return (

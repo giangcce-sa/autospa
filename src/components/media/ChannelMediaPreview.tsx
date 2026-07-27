@@ -36,13 +36,13 @@ export function ChannelMediaPreview({
             type="button"
             aria-pressed={channel === item.id}
             onClick={() => setChannel(item.id)}
-            className={cn("flex min-h-11 items-center gap-1.5 rounded-md px-3 text-xs font-semibold", channel === item.id ? "bg-[var(--accent-light)] text-[var(--accent)]" : "text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]")}
+            className={cn("flex min-h-11 items-center gap-1.5 rounded-[9px] px-3 text-xs font-semibold", channel === item.id ? "bg-[var(--accent-light)] text-[var(--accent)]" : "text-[var(--text-muted)] hover:bg-[var(--bg-subtle)]")}
           >
             {item.icon}{item.label}
           </button>
         ))}
       </div>
-      <div className={cn("mx-auto flex max-h-[32rem] w-full max-w-sm items-center justify-center overflow-hidden rounded-lg bg-black", selected.aspect)}>
+      <div className={cn("mx-auto flex max-h-[32rem] w-full max-w-sm items-center justify-center overflow-hidden rounded-[11px] bg-[var(--side)]", selected.aspect)}>
         {kind === "video" && mediaUrl && !mediaUrl.startsWith("mock://") ? (
           <video src={mediaUrl} poster={posterUrl ?? undefined} controls preload="metadata" className="h-full w-full object-contain" />
         ) : (

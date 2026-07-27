@@ -179,7 +179,7 @@ export function GoogleBusinessSettings({ initialAccounts }: { initialAccounts?: 
       ) : null}
 
       {authUrl && (
-        <a href={authUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-2 rounded-md bg-[var(--accent)] px-3 text-xs font-semibold text-[var(--accent-foreground)] shadow-[0_6px_16px_rgba(47,111,84,0.16)] hover:bg-[var(--accent-hover)]">
+        <a href={authUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-2 rounded-md bg-[var(--accent)] px-3 text-xs font-semibold text-[var(--accent-foreground)] shadow-[0_6px_16px_color-mix(in_srgb,var(--accent)_28%,transparent)] hover:bg-[var(--accent-hover)]">
           <LinkSimple size={13} aria-hidden="true" /> Kết nối Google Business
         </a>
       )}
