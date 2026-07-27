@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { adsReadinessBlockReason } from "@/lib/ads-readiness-policy";
+import { decryptSecret } from "@/lib/secrets-crypto";
 
 const FB = "https://graph.facebook.com/v21.0";
 const REQUIRED_SCOPES = ["ads_read", "ads_management", "pages_read_engagement", "pages_manage_posts"];
@@ -122,9 +123,12 @@ export async function probeAdsReadiness(page: PageCredentials): Promise<AdsReadi
   let currency: string | null = null;
   let timezone: string | null = null;
 
+  const pageAccessToken = decryptSecret(page.accessToken);
+
   try {
     if (!page.adAccountId) throw new Error("Chưa cấu hình Ad Account ID");
-    const token = await debugToken(page.accessToken);
+    if (!pageAccessToken) throw new Error("Access Token không đọc được — nhập lại trong Cài đặt");
+    const token = await debugToken(pageAccessToken);
     tokenExpiresAt = timestampDate(token.expires_at);
     dataAccessExpiresAt = timestampDate(token.data_access_expires_at);
     permissions = tokenPermissionsForPage({
@@ -134,7 +138,7 @@ export async function probeAdsReadiness(page: PageCredentials): Promise<AdsReadi
     });
     const missingPermissions = REQUIRED_SCOPES.filter((scope) => !permissions.includes(scope));
 
-    const pageIdentity = await graphGet<{ id?: string; tasks?: string[] }>(page.fbPageId, page.accessToken, {
+    const pageIdentity = await graphGet<{ id?: string; tasks?: string[] }>(page.fbPageId, pageAccessToken, {
       fields: "id,tasks",
     });
     if (pageIdentity.id !== page.fbPageId) throw new Error("Token không thuộc Facebook Page đã cấu hình");
@@ -148,7 +152,7 @@ export async function probeAdsReadiness(page: PageCredentials): Promise<AdsReadi
       currency?: string;
       timezone_name?: string;
       promote_pages?: { data?: Array<{ id?: string }> };
-    }>(actId, page.accessToken, {
+    }>(actId, pageAccessToken, {
       fields: "account_id,account_status,disable_reason,currency,timezone_name,promote_pages.limit(100){id}",
     });
     if (normalizeAccountId(account.account_id ?? "") !== normalizeAccountId(page.adAccountId)) {

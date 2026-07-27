@@ -1,21 +1,7 @@
 import { prisma } from "./db";
 import { postToZalo } from "./zalo";
 import { replyToFbConversation } from "./facebook";
-
-// Days to wait between nurture steps
-const STEP_DELAYS = [1, 3, 7];
-
-function buildMessage(step: number, name: string, service: string | null): string {
-  const svc = service ?? "dịch vụ spa";
-  const n = name && name !== "Khách Facebook" && name !== "Khách Zalo" ? name : "bạn";
-  if (step === 0) {
-    return `Xin chào ${n}! Spa muốn hỏi thăm xem bạn có muốn đặt lịch ${svc} không ạ? Mình sẵn sàng hỗ trợ bạn ngay 😊`;
-  }
-  if (step === 1) {
-    return `Chào ${n}! Spa đang có ưu đãi đặc biệt cho dịch vụ ${svc} tuần này. Đặt lịch ngay để không bỏ lỡ nhé 🌟`;
-  }
-  return `Chào ${n}! Đây là tin nhắn cuối từ spa. Khi nào bạn cần ${svc} thì cứ nhắn mình, spa luôn sẵn sàng hỗ trợ 💜`;
-}
+import { buildMessage, isNurtureDue } from "./lead-nurture-policy";
 
 export async function runLeadNurture(): Promise<{ sent: number; skipped: number; errors: number }> {
   const now = new Date();
@@ -31,11 +17,7 @@ export async function runLeadNurture(): Promise<{ sent: number; skipped: number;
   });
 
   for (const lead of leads) {
-    const delay = STEP_DELAYS[lead.nurtureStep] ?? 7;
-    const threshold = new Date(now.getTime() - delay * 24 * 60 * 60 * 1000);
-    const lastContact = lead.nurtureSentAt ?? lead.createdAt;
-
-    if (lastContact > threshold) { skipped++; continue; }
+    if (!isNurtureDue(lead, now)) { skipped++; continue; }
 
     const message = buildMessage(lead.nurtureStep, lead.name, lead.service ?? null);
 

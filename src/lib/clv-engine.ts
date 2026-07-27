@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
+import { churnRisk, clvTier, rfmScore, upsellSuggestion, type ChurnRisk, type CLVTier } from "@/lib/clv-policy";
 
-export type CLVTier = "low" | "mid" | "high" | "premium";
-export type ChurnRisk = "low" | "medium" | "high";
+export type { CLVTier, ChurnRisk } from "@/lib/clv-policy";
 
 export interface CustomerCLV {
   customerId: string;
@@ -20,44 +20,6 @@ export interface CustomerCLV {
   lastBookingAt: Date | null;
   services: string[];        // danh sách dịch vụ đã dùng
   upsellSuggestion: string | null;
-}
-
-function clvTier(total: number): CLVTier {
-  if (total >= 5_000_000) return "premium";
-  if (total >= 2_000_000) return "high";
-  if (total >= 500_000)   return "mid";
-  return "low";
-}
-
-function churnRisk(daysSince: number, avgVisit: number): ChurnRisk {
-  if (avgVisit === 0) return "low"; // chưa đủ data → không alert
-  const ratio = daysSince / avgVisit;
-  if (ratio >= 2.0) return "high";
-  if (ratio >= 1.4) return "medium";
-  return "low";
-}
-
-// RFM score 1-5 per dimension
-function rfmScore(daysSince: number, count: number, total: number, maxDays: number, maxCount: number, maxTotal: number) {
-  const r = Math.ceil(5 - (daysSince / Math.max(maxDays, 1)) * 4); // recent = high score
-  const f = Math.ceil((count / Math.max(maxCount, 1)) * 5);
-  const m = Math.ceil((total / Math.max(maxTotal, 1)) * 5);
-  return {
-    r: Math.min(5, Math.max(1, r)),
-    f: Math.min(5, Math.max(1, f)),
-    m: Math.min(5, Math.max(1, m)),
-  };
-}
-
-// Simple rule-based upsell suggestion
-function upsellSuggestion(services: string[]): string | null {
-  const s = services.map(x => x.toLowerCase()).join(" ");
-  if (s.includes("facial") && !s.includes("dermapen")) return "Dermapen — phù hợp sau liệu trình facial";
-  if (s.includes("massage") && !s.includes("body wrap")) return "Body Wrap — combo tốt sau massage";
-  if (s.includes("nail") && !s.includes("facial")) return "Facial — combo nail + facial được yêu thích";
-  if (s.includes("wax") && !s.includes("kem dưỡng")) return "Liệu trình dưỡng ẩm sau wax";
-  if (services.length === 1) return "Thử thêm dịch vụ mới — khách dùng 2+ dịch vụ giữ lâu hơn 3x";
-  return null;
 }
 
 export async function computeAllCLV(): Promise<CustomerCLV[]> {

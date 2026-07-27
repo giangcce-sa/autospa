@@ -2,68 +2,10 @@ import { prisma } from "./db";
 import { generateContent } from "./claude";
 import { replyToFbConversation } from "./facebook";
 import { postToZalo } from "./zalo";
-
-type TriggerType = "cold_reactivation" | "birthday" | "vip_loyal" | "post_nps";
-
-interface Customer {
-  id: string;
-  name: string;
-  phone: string | null;
-  fbId: string | null;
-  birthday: string | null;
-  segment: string;
-  lastContact: Date | null;
-  npsScore: number | null;
-}
-
-interface Trigger {
-  type: TriggerType;
-  reason: string;
-}
+import { pickTrigger, type Customer, type Trigger, type TriggerType } from "./proactive-sales-policy";
 
 const MAX_PER_RUN = 30;            // tránh spam Zalo/FB
 const COOLDOWN_DAYS_DEFAULT = 30;  // 1 customer / 30 ngày max
-
-function pickTrigger(customer: Customer): Trigger | null {
-  const now = new Date();
-  const daysSinceContact = customer.lastContact
-    ? (now.getTime() - customer.lastContact.getTime()) / 86400000
-    : 999;
-
-  // 4. Post-NPS upsell — high NPS + chưa quay lại 45 ngày
-  if (customer.npsScore !== null && customer.npsScore >= 4 && daysSinceContact > 45) {
-    return { type: "post_nps", reason: `Khách yêu thích (${customer.npsScore}⭐) — ${Math.round(daysSinceContact)} ngày chưa quay lại` };
-  }
-
-  // 1. Cold reactivation — > 60 ngày
-  if (daysSinceContact > 60) {
-    return { type: "cold_reactivation", reason: `${Math.round(daysSinceContact)} ngày chưa liên hệ` };
-  }
-
-  // 2. Birthday — trong 7 ngày tới
-  if (customer.birthday) {
-    try {
-      // birthday format: "MM-DD" or "YYYY-MM-DD"
-      const parts = customer.birthday.split("-");
-      const month = parts.length === 3 ? parseInt(parts[1]) - 1 : parseInt(parts[0]) - 1;
-      const day = parts.length === 3 ? parseInt(parts[2]) : parseInt(parts[1]);
-
-      const thisYearBday = new Date(now.getFullYear(), month, day);
-      if (thisYearBday < now) thisYearBday.setFullYear(thisYearBday.getFullYear() + 1);
-      const daysToBday = (thisYearBday.getTime() - now.getTime()) / 86400000;
-      if (daysToBday >= 0 && daysToBday <= 7) {
-        return { type: "birthday", reason: `Sinh nhật trong ${Math.round(daysToBday)} ngày` };
-      }
-    } catch { /* invalid birthday format */ }
-  }
-
-  // 3. VIP loyal — segment vip + > 30 ngày
-  if (customer.segment === "vip" && daysSinceContact > 30) {
-    return { type: "vip_loyal", reason: `Khách VIP — ${Math.round(daysSinceContact)} ngày chưa chăm sóc` };
-  }
-
-  return null;
-}
 
 const SYSTEM_PROMPT = `Bạn là nhân viên chăm sóc khách hàng của spa Việt Nam. Viết tin nhắn cá nhân hóa cho khách, ngắn (3-5 câu), thân thiện như bạn bè, không quá thương mại. Mục tiêu là tái kết nối, không phải bán hàng ngay.`;
 
@@ -132,7 +74,7 @@ export async function runProactiveOutreach(): Promise<{
   for (const customer of customers) {
     if (cooldownSet.has(customer.id)) { skipped++; continue; }
 
-    const trigger = pickTrigger(customer);
+    const trigger = pickTrigger(customer, new Date());
     if (!trigger) continue;
 
     candidates++;

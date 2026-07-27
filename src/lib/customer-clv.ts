@@ -1,6 +1,7 @@
 import "server-only";
 
 import { computeAllCLV, type ChurnRisk, type CLVTier } from "@/lib/clv-engine";
+import { summarizeClv } from "@/lib/clv-policy";
 
 export interface CustomerCLVData {
   customerId: string;
@@ -48,21 +49,5 @@ export async function getCustomerCLVSummary(): Promise<CustomerCLVSummaryData> {
     services: customer.services,
     upsellSuggestion: customer.upsellSuggestion,
   }));
-  return {
-    total: serializable.length,
-    avgCLV: serializable.length ? Math.round(serializable.reduce((sum, customer) => sum + customer.clvTotal, 0) / serializable.length) : 0,
-    tiers: {
-      premium: serializable.filter((customer) => customer.clvTier === "premium").length,
-      high: serializable.filter((customer) => customer.clvTier === "high").length,
-      mid: serializable.filter((customer) => customer.clvTier === "mid").length,
-      low: serializable.filter((customer) => customer.clvTier === "low").length,
-    },
-    churn: {
-      high: serializable.filter((customer) => customer.churnRisk === "high").length,
-      medium: serializable.filter((customer) => customer.churnRisk === "medium").length,
-      low: serializable.filter((customer) => customer.churnRisk === "low").length,
-    },
-    atRisk: serializable.filter((customer) => customer.churnRisk === "high").slice(0, 10),
-    topCustomers: serializable.slice(0, 10),
-  };
+  return summarizeClv(serializable);
 }
