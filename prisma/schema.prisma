@@ -289,6 +289,14 @@ model StaffVisualSample {
 
 model Post {
   id                String               @id @default(cuid())
+  // Structured brief. Arrays are JSON strings to match the rest of the schema
+  // (styleSkillIds, scopes, adsPermissions…) rather than Postgres arrays.
+  title             String?
+  summary           String?
+  outline           String               @default("[]") // JSON: string[]
+  hooks             String               @default("[]") // JSON: string[]
+  topicTags         String               @default("[]") // JSON: string[]
+  targetChannels    String               @default("[]") // JSON: PublishChannel[]
   caption           String
   hashtags          String?
   imageUrl          String?
@@ -320,8 +328,31 @@ model Post {
   imageGenerations  ImageGeneration[]
   adsOperations     AdsCreateOperation[]
   publishOperations PublishOperation[]
+  assets            PostAsset[]
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
+}
+
+/// Ordered media attached to a post. File metadata is denormalised here so a
+/// mixed image/video attachment strip can render size, format and duration
+/// without joining the three existing media silos.
+model PostAsset {
+  id          String   @id @default(cuid())
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  kind        String   @default("image") // image | video
+  name        String
+  url         String
+  storageKey  String?
+  mimeType    String?
+  sizeBytes   Int?
+  durationSec Int?
+  position    Int      @default(0)
+  source      String   @default("upload") // upload | image_generation | video_project
+  sourceId    String? // originating ImageGeneration / VideoAsset id when known
+  createdAt   DateTime @default(now())
+
+  @@index([postId, position])
 }
 
 model AdsCreateOperation {
@@ -1262,6 +1293,7 @@ model VideoProject {
   approvedBy       String?
   approvedAt       DateTime?
   publishedPostId  String?
+  sourcePostId     String? // content idea/draft this project was created from
   createdById      String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
