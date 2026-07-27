@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { matchesPublicPath } from "@/lib/public-paths";
 
-// Paths that bypass auth — webhooks (have their own verify_token / Bearer auth) + setup flow + auth API
+// Paths that bypass auth — webhooks (have their own verify_token / Bearer auth) + setup flow + auth API.
+// Matched per segment (exact or "<p>/..."), never by loose prefix.
 const PUBLIC_PATHS = [
   "/login",
   "/setup",
@@ -13,18 +15,15 @@ const PUBLIC_PATHS = [
   "/api/webhook",           // FB/Zalo webhooks have verify_token
   "/api/spa",               // spa software webhook
   "/api/zalo/webhook",
+  "/api/media-public",      // HMAC-signed URLs with expiry
   "/_next",
-  "/favicon",
+  "/favicon.ico",
 ];
-
-function isPublic(pathname: string): boolean {
-  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
-}
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (isPublic(pathname)) return NextResponse.next();
+  if (matchesPublicPath(pathname, PUBLIC_PATHS)) return NextResponse.next();
 
   const token = await getToken({
     req,

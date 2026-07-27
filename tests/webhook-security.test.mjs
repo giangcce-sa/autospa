@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
-import { verifyWebhookSignature } from "../src/lib/webhook-security.ts";
+import { secureCompare, verifyWebhookSignature } from "../src/lib/webhook-security.ts";
+
+test("secureCompare: equal, unequal, length mismatch, empty", () => {
+  assert.equal(secureCompare("verify-token-1", "verify-token-1"), true);
+  assert.equal(secureCompare("verify-token-1", "verify-token-2"), false);
+  assert.equal(secureCompare("short", "much-longer-value"), false);
+  assert.equal(secureCompare("", ""), true);
+  assert.equal(secureCompare("x", ""), false);
+});
 
 const rawBody = Buffer.from('{"object":"page","entry":[]}');
 const secret = "test-app-secret";

@@ -1,7 +1,39 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { headers } from "next/headers";
 import { prisma } from "./db";
+import { checkAndIncrement, getQuotaStatus, resetBucket } from "./rate-limiter";
+import {
+  firstForwardedIp,
+  isLockedOut,
+  loginEmailKey,
+  loginIpKey,
+  LOGIN_FAIL_LIMIT,
+  LOGIN_IP_FAIL_LIMIT,
+  LOGIN_IP_WINDOW_SEC,
+  LOGIN_WINDOW_SEC,
+} from "./login-rate-policy";
+
+class LoginLockedError extends CredentialsSignin {
+  code = "locked";
+}
+
+// Fixed hash compared when the user does not exist, so both failure paths
+// cost one bcrypt round — no email enumeration via response timing.
+const DUMMY_HASH = "$2b$10$t3yFG5OsGhGwbIdEUeNQdeSADlcFzSUNkgCu5gAA8FmjiZc9/91aW";
+
+async function requestIp(): Promise<string | null> {
+  const h = await headers();
+  return firstForwardedIp(h.get("x-forwarded-for"));
+}
+
+async function recordLoginFailure(email: string, ip: string | null) {
+  await Promise.all([
+    checkAndIncrement(loginEmailKey(email), LOGIN_FAIL_LIMIT, LOGIN_WINDOW_SEC),
+    checkAndIncrement(loginIpKey(ip), LOGIN_IP_FAIL_LIMIT, LOGIN_IP_WINDOW_SEC),
+  ]);
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
@@ -19,13 +51,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = String(creds?.password ?? "");
         if (!email || !password) return null;
 
+        const ip = await requestIp();
+        const [emailQuota, ipQuota] = await Promise.all([
+          getQuotaStatus(loginEmailKey(email)),
+          getQuotaStatus(loginIpKey(ip)),
+        ]);
+        if (isLockedOut(emailQuota) || isLockedOut(ipQuota)) {
+          throw new LoginLockedError();
+        }
+
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) return null;
+        if (!user) {
+          await bcrypt.compare(password, DUMMY_HASH);
+          await recordLoginFailure(email, ip);
+          return null;
+        }
 
         const ok = await bcrypt.compare(password, user.hashedPwd);
-        if (!ok) return null;
+        if (!ok) {
+          await recordLoginFailure(email, ip);
+          return null;
+        }
 
-        await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+        await Promise.all([
+          resetBucket(loginEmailKey(email)),
+          prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
+        ]);
 
         return {
           id: user.id,

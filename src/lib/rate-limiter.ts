@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { quotaFromBucket, retryAfterDelaySec } from "./rate-limit-policy";
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -9,8 +10,11 @@ export interface RateLimitResult {
 }
 
 /**
- * Check + increment a rate-limit bucket atomically (best-effort with read-then-write).
- * Returns whether request is allowed and how many used/remaining.
+ * Check + increment a rate-limit bucket in a single atomic statement.
+ * Every request gets a unique count within the window, so exactly `limit`
+ * concurrent requests are admitted — no read-then-write race.
+ * A blocked request still increments `count` (never `windowStart`), so
+ * `used` can exceed `limit` under pressure while the window expiry is unchanged.
  *
  * @param key - bucket identifier like "fb:page_123" or "zalo:oa_456"
  * @param limit - max requests per window
@@ -22,56 +26,44 @@ export async function checkAndIncrement(
   windowSec: number
 ): Promise<RateLimitResult> {
   const now = new Date();
+  const expiredBefore = new Date(now.getTime() - windowSec * 1000);
 
-  const existing = await prisma.rateLimit.findUnique({ where: { id: key } });
+  const rows = await prisma.$queryRaw<Array<{ count: number; windowStart: Date }>>`
+    INSERT INTO "RateLimit" ("id", "count", "windowStart", "limit", "windowSec", "updatedAt")
+    VALUES (${key}, 1, ${now}, ${limit}, ${windowSec}, ${now})
+    ON CONFLICT ("id") DO UPDATE SET
+      "count" = CASE
+        WHEN "RateLimit"."windowStart" <= ${expiredBefore} THEN 1
+        ELSE "RateLimit"."count" + 1
+      END,
+      "windowStart" = CASE
+        WHEN "RateLimit"."windowStart" <= ${expiredBefore} THEN ${now}
+        ELSE "RateLimit"."windowStart"
+      END,
+      "limit" = ${limit},
+      "windowSec" = ${windowSec},
+      "updatedAt" = ${now}
+    RETURNING "count", "windowStart"
+  `;
 
-  let count = 0;
-  let windowStart = now;
-
-  if (existing) {
-    const ageSec = (now.getTime() - existing.windowStart.getTime()) / 1000;
-    if (ageSec >= windowSec) {
-      // Window expired — reset
-      count = 0;
-      windowStart = now;
-    } else {
-      count = existing.count;
-      windowStart = existing.windowStart;
-    }
-  }
-
-  if (count >= limit) {
-    const ageSec = (now.getTime() - windowStart.getTime()) / 1000;
-    const retryAfterSec = Math.max(1, Math.ceil(windowSec - ageSec));
-    return { allowed: false, remaining: 0, retryAfterSec, used: count, limit };
-  }
-
-  const newCount = count + 1;
-
-  await prisma.rateLimit.upsert({
-    where: { id: key },
-    create: {
-      id: key,
-      count: newCount,
-      windowStart,
-      limit,
-      windowSec,
-    },
-    update: {
-      count: newCount,
-      windowStart,
-      limit,
-      windowSec,
-    },
-  });
+  const row = rows[0];
+  const used = Number(row.count);
+  const allowed = used <= limit;
 
   return {
-    allowed: true,
-    remaining: limit - newCount,
-    retryAfterSec: 0,
-    used: newCount,
+    allowed,
+    remaining: Math.max(0, limit - used),
+    retryAfterSec: allowed ? 0 : retryAfterDelaySec(row.windowStart, windowSec, now),
+    used,
     limit,
   };
+}
+
+/**
+ * Clear a bucket entirely (e.g. reset login-failure counters after success).
+ */
+export async function resetBucket(key: string): Promise<void> {
+  await prisma.rateLimit.deleteMany({ where: { id: key } });
 }
 
 /**
@@ -116,24 +108,7 @@ export async function getQuotaStatus(key: string): Promise<{
   const record = await prisma.rateLimit.findUnique({ where: { id: key } });
   if (!record) return null;
 
-  const ageSec = (Date.now() - record.windowStart.getTime()) / 1000;
-  if (ageSec >= record.windowSec) {
-    return {
-      used: 0,
-      limit: record.limit,
-      remaining: record.limit,
-      windowEndsIn: 0,
-      pct: 0,
-    };
-  }
-
-  return {
-    used: record.count,
-    limit: record.limit,
-    remaining: Math.max(0, record.limit - record.count),
-    windowEndsIn: Math.ceil(record.windowSec - ageSec),
-    pct: Math.round((record.count / record.limit) * 100),
-  };
+  return quotaFromBucket(record, new Date());
 }
 
 /**
@@ -141,18 +116,15 @@ export async function getQuotaStatus(key: string): Promise<{
  */
 export async function getAllQuotas(): Promise<Array<{ key: string; used: number; limit: number; pct: number; windowEndsIn: number }>> {
   const records = await prisma.rateLimit.findMany({ orderBy: { updatedAt: "desc" }, take: 20 });
-  const now = Date.now();
-  return records
-    .map((r) => {
-      const ageSec = (now - r.windowStart.getTime()) / 1000;
-      const active = ageSec < r.windowSec;
-      const used = active ? r.count : 0;
-      return {
-        key: r.id,
-        used,
-        limit: r.limit,
-        pct: Math.round((used / r.limit) * 100),
-        windowEndsIn: active ? Math.ceil(r.windowSec - ageSec) : 0,
-      };
-    });
+  const now = new Date();
+  return records.map((r) => {
+    const quota = quotaFromBucket(r, now);
+    return {
+      key: r.id,
+      used: quota.used,
+      limit: quota.limit,
+      pct: quota.pct,
+      windowEndsIn: quota.windowEndsIn,
+    };
+  });
 }

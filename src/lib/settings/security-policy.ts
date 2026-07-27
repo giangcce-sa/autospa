@@ -99,7 +99,7 @@ export function buildSecurityConfiguration(input: SecuritySettingsInput) {
       configured: input.deployment.authSecret,
       detail: input.deployment.authSecret
         ? "Phiên JWT và signed media URL có khóa ký từ deployment."
-        : "Thiếu AUTH_SECRET; đăng nhập, mã hóa Video key và signed media URL không an toàn để chạy production.",
+        : "Thiếu AUTH_SECRET; đăng nhập, mã hóa secrets trong DB (khi chưa đặt SECRETS_ENCRYPTION_KEY) và signed media URL không an toàn để chạy production.",
     },
     {
       id: "cron-secret",
