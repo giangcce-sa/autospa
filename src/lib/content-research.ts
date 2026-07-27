@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "./db";
+import { readPostBrief } from "./creative-brief";
 import { generateContent, getBrandContext } from "./claude";
 import { generateChatCompletion } from "./openai";
 import { getTopCompetitorPosts } from "./competitor-research";
@@ -254,6 +255,12 @@ export async function getResearchDrafts(facebookPageId: string, limit = 30) {
     take: limit,
     select: {
       id: true,
+      title: true,
+      summary: true,
+      outline: true,
+      hooks: true,
+      topicTags: true,
+      targetChannels: true,
       caption: true,
       hashtags: true,
       postType: true,
@@ -261,10 +268,23 @@ export async function getResearchDrafts(facebookPageId: string, limit = 30) {
       scheduledAt: true,
       qualityNotes: true,
       createdAt: true,
+      assets: {
+        orderBy: { position: "asc" },
+        select: {
+          id: true,
+          kind: true,
+          name: true,
+          url: true,
+          mimeType: true,
+          sizeBytes: true,
+          durationSec: true,
+        },
+      },
     },
   });
-  return drafts.map((draft) => ({
+  return drafts.map(({ outline, hooks, topicTags, targetChannels, ...draft }) => ({
     ...draft,
+    brief: readPostBrief({ title: draft.title, summary: draft.summary, outline, hooks, topicTags, targetChannels }),
     scheduledAt: draft.scheduledAt?.toISOString() ?? null,
     createdAt: draft.createdAt.toISOString(),
   }));
