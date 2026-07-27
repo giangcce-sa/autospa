@@ -2,6 +2,12 @@
 
 Marketing automation và AI operations cho spa. Xem tài liệu [AI Video Studio](docs/AI_VIDEO_STUDIO.md) cho module tạo video, voice, lip-sync và học từ video thật.
 
+## Bảo mật & vận hành
+
+- **Mã hóa secrets trong DB**: API key và access token lưu trong database được mã hóa AES-256-GCM (`enc:v2`). Khóa lấy từ `SECRETS_ENCRYPTION_KEY` (khuyến nghị đặt riêng), fallback `AUTH_SECRET`. Dữ liệu plaintext cũ vẫn đọc được (lazy migration — mã hóa dần khi lưu lại); chạy backfill một lần bằng `node --experimental-strip-types scripts/encrypt-secrets.mjs` (backup trước bằng `npm run db:backup`). Xoay khóa: đặt khóa mới, blob cũ vẫn giải mã được qua chuỗi fallback, chạy lại backfill.
+- **Chống brute-force đăng nhập**: chỉ đếm lần thất bại (10 lần/15 phút mỗi email, 30 lần/15 phút mỗi IP); đăng nhập thành công tự reset. Bootstrap giới hạn 5 lần/giờ mỗi IP.
+- **Known issue (dev-only)**: `npm audit` báo 9 high đều quy về advisory `brace-expansion <=5.0.7` (GHSA-mh99-v99m-4gvg) trong chuỗi ESLint devDependencies; bản vá chỉ có ở 5.0.8 (major mới) nên chưa override được. Không ảnh hưởng production (`npm audit --omit=dev` sạch); sẽ tự hết khi nâng ESLint major.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

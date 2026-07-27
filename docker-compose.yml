@@ -24,9 +24,10 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
-      AUTH_URL: "https://autospa.somail.us"
-      NEXTAUTH_URL: "https://autospa.somail.us"
-      NEXT_PUBLIC_APP_URL: "https://autospa.somail.us"
+      # Domain comes from .env (compose reads it for substitution); fail fast if missing.
+      AUTH_URL: "${AUTH_URL:?AUTH_URL is required in .env}"
+      NEXTAUTH_URL: "${NEXTAUTH_URL:-${AUTH_URL}}"
+      NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:?NEXT_PUBLIC_APP_URL is required in .env}"
       AUTH_TRUST_HOST: "true"
     expose:
       - "3000"

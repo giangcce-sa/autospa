@@ -12,7 +12,7 @@ AI Video Studio biến brief thành storyboard, tạo video/voice/lip-sync theo 
 - PostgreSQL: project, scene, asset, job, consent, skill, version và performance.
 - Media storage: local hoặc S3/R2 thông qua `src/lib/media-storage.ts`.
 
-Frontend không nhận API key. Key lưu trong database được mã hóa AES-256-GCM bằng `AUTH_SECRET`; tất cả provider được gọi từ server adapter trong `src/lib/video-studio/providers`.
+Frontend không nhận API key. Key lưu trong database được mã hóa AES-256-GCM bằng `SECRETS_ENCRYPTION_KEY` (fallback `AUTH_SECRET`, đọc được cả blob `enc:v1` cũ) qua `src/lib/secrets-crypto.ts`; tất cả provider được gọi từ server adapter trong `src/lib/video-studio/providers`.
 
 ## Chế độ local
 
