@@ -4,6 +4,7 @@ import { verifyCronAuth } from "@/lib/cron-auth";
 import { reviewContent } from "@/lib/reviewer";
 import { executePublishOperation } from "@/lib/publishing/service";
 import { finishJobRun, logActivity, startJobRun } from "@/lib/activity-log";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
@@ -120,16 +121,16 @@ export async function GET(req: NextRequest) {
         if (["completed", "partial"].includes(operation.status)) published++;
         else failed++;
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        console.error("auto-publish failed:", post.id, err);
         failed++;
         await prisma.post.update({
           where: { id: post.id },
-          data: { status: "publish_failed", qualityNotes: `Auto-publish failed: ${message}` },
+          data: { status: "publish_failed", qualityNotes: "Auto-publish thất bại" },
         });
         await logActivity({
           type: "publish_failed",
           title: "Auto-publish failed",
-          detail: message,
+          detail: "Thất bại",
           href: `/publish?postId=${post.id}`,
           severity: "danger",
           source: "auto_publish",
@@ -169,22 +170,21 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ published, failed, blocked, checked: posts.length });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     if (job) {
       await finishJobRun(job.id, {
         status: "failed",
         summary: "Auto-publish failed before completion",
-        error: message,
+        error: "Thất bại",
       }).catch(() => null);
     }
     await logActivity({
       type: "job_run",
       title: "Auto-publish failed",
-      detail: message,
+      detail: "Thất bại",
       href: "/publish",
       severity: "danger",
       source: "cron",
     }).catch(() => null);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi khi tự động đăng bài");
   }
 }

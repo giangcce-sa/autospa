@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
 import { approveVideoSkill } from "@/lib/video-studio/learning";
 import { parseJson } from "@/lib/video-studio/types";
 
@@ -12,9 +13,7 @@ export async function GET(req: NextRequest) {
     const data = await prisma.videoSkill.findMany({ where: { facebookPageId }, orderBy: { updatedAt: "desc" }, take: 120 });
     return NextResponse.json({ success: true, data: data.map((skill) => ({ ...skill, rules: parseJson(skill.rules, []), evidence: parseJson(skill.evidence, []) })) });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }
 
@@ -30,8 +29,6 @@ export async function PATCH(req: NextRequest) {
     const skill = input.action === "approve" ? await approveVideoSkill(input.id, user.id) : await prisma.videoSkill.update({ where: { id: input.id }, data: { status: "rejected", approvedBy: user.id, approvedAt: new Date() } });
     return NextResponse.json({ success: true, data: skill });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return settingsErrorResponse(error);
   }
 }

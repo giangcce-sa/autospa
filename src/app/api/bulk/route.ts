@@ -1,6 +1,7 @@
 import { generateContent, getBrandContext, getStyleProfile } from "@/lib/claude";
 import { prisma } from "@/lib/db";
 import { AccessError, accessErrorResponse, requireExplicitPageAccess, requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { reviewContent } from "@/lib/reviewer";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
-    return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -107,8 +108,7 @@ Chỉ trả về JSON, không thêm gì khác.`;
   } catch (err) {
     const access = accessErrorResponse(err);
     if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi không xác định");
   }
 }
 
@@ -130,6 +130,6 @@ export async function DELETE(req: NextRequest) {
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
-    return NextResponse.json({ error: "Lỗi khi xóa", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi xóa");
   }
 }

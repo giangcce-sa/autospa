@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
 import { requirePageAccess } from "@/lib/page-access";
 import { createHash } from "crypto";
 
@@ -29,9 +30,7 @@ export async function GET(req: NextRequest) {
     const data = await prisma.videoConsent.findMany({ where: { facebookPageId, ...(subjectId ? { subjectId } : {}) }, orderBy: { updatedAt: "desc" }, take: 100 });
     return NextResponse.json({ success: true, data: data.map((item) => ({ ...item, scopes: JSON.parse(item.scopes) })) });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }
 
@@ -82,9 +81,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ success: true, data: consent }, { status: 201 });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return settingsErrorResponse(error);
   }
 }
 
@@ -105,8 +102,6 @@ export async function DELETE(req: NextRequest) {
     if (projectIds.length) await prisma.videoProject.updateMany({ where: { id: { in: projectIds } }, data: { approvalStatus: "draft", approvedRevision: null, approvedAt: null, approvedBy: null, status: "review" } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }

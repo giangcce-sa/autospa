@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { exchangeTikTokCode, getTikTokUser } from "@/lib/tiktok";
 import { auth } from "@/lib/auth";
+import { encryptSecret } from "@/lib/secrets-crypto";
 import { clearOAuthStateCookie, isValidOAuthState, TIKTOK_OAUTH_STATE_COOKIE } from "@/lib/oauth-state";
 
 function appUrl(path: string) {
@@ -44,11 +45,13 @@ export async function GET(req: NextRequest) {
 
     const expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
 
+    const storedAccessToken = encryptSecret(tokens.accessToken);
+    const storedRefreshToken = tokens.refreshToken ? encryptSecret(tokens.refreshToken) : tokens.refreshToken;
     await prisma.tikTokAccount.upsert({
       where: { openId: tokens.openId },
       update: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: storedAccessToken,
+        refreshToken: storedRefreshToken,
         expiresAt,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
@@ -58,8 +61,8 @@ export async function GET(req: NextRequest) {
         openId: tokens.openId,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: storedAccessToken,
+        refreshToken: storedRefreshToken,
         expiresAt,
         isActive: true,
       },
@@ -67,7 +70,7 @@ export async function GET(req: NextRequest) {
 
     return redirectAndClearState(`/settings?tiktok=connected&name=${encodeURIComponent(user.displayName)}`);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return redirectAndClearState(`/settings?tiktok=error&reason=${encodeURIComponent(msg)}`);
+    console.error("tiktok oauth exchange failed:", e);
+    return redirectAndClearState("/settings?tiktok=error&reason=exchange_failed");
   }
 }

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { z } from "zod";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
 import { deleteMedia, saveMedia } from "@/lib/media-storage";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
 import { invalidatedProjectRenderData } from "@/lib/video-studio/invalidation";
 import { assertMediaSignature, mediaChecksum, probeMediaBuffer } from "@/lib/video-studio/media-security";
 
@@ -81,9 +82,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ success: true, data: asset }, { status: 201 });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
     if (storedKey) await deleteMedia(storedKey).catch(() => null);
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return settingsErrorResponse(error);
   }
 }

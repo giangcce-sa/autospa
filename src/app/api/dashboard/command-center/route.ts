@@ -1,4 +1,5 @@
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { getTodayData } from "@/lib/today";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -16,9 +17,6 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ data, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof Error ? error.message : "Lỗi khi tải command center";
-    return NextResponse.json({ error: message, success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải command center");
   }
 }

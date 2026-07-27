@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
 import { enqueueInternalVideoJob } from "@/lib/video-studio/worker";
 
 export const maxDuration = 600;
@@ -21,8 +22,6 @@ export async function POST(req: NextRequest) {
     const job = await enqueueInternalVideoJob({ projectId: input.projectId, type: "learning", payload: { assetId: input.assetId, facebookPageId: project.facebookPageId }, idempotencyKey: `learning:${input.projectId}:${input.assetId}` });
     return NextResponse.json({ success: true, data: job }, { status: 202 });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return settingsErrorResponse(error);
   }
 }

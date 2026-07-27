@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
 import { runProjectQuality } from "@/lib/video-studio/service";
 import { enqueueInternalVideoJob } from "@/lib/video-studio/worker";
 
@@ -18,8 +19,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const job = await enqueueInternalVideoJob({ projectId: id, type: "render", payload: { revision: current?.inputRevision }, idempotencyKey: `render:${id}:${current?.inputRevision}` });
     return NextResponse.json({ success: true, data: job }, { status: 202 });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }

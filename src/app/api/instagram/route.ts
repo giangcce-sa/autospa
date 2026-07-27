@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getLinkedIgAccount, fetchIgMedia } from "@/lib/instagram";
-import { accessErrorResponse, getAuthorizedPageIds, requireExplicitPageAccess, requireUser } from "@/lib/page-access";
+import { getAuthorizedPageIds, requireExplicitPageAccess, requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
+import { decryptSecret } from "@/lib/secrets-crypto";
 
 // GET: list IG accounts linked to FB pages, or fetch IG media
 export async function GET(req: NextRequest) {
@@ -19,7 +21,11 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: false, message: "Chưa kết nối Instagram" }, { status: 400 });
       }
 
-      const media = await fetchIgMedia(page.igAccountId, page.accessToken);
+      const mediaToken = decryptSecret(page.accessToken);
+      if (!mediaToken) {
+        return NextResponse.json({ success: false, message: "Access Token không đọc được — nhập lại trong Cài đặt" }, { status: 400 });
+      }
+      const media = await fetchIgMedia(page.igAccountId, mediaToken);
       return NextResponse.json({ success: true, data: media });
     }
 
@@ -30,9 +36,7 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ success: true, data: pages });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi tải");
   }
 }
 
@@ -48,7 +52,11 @@ export async function POST(req: NextRequest) {
       const page = await prisma.facebookPage.findUnique({ where: { id: facebookPageId } });
       if (!page) return NextResponse.json({ success: false, message: "Không tìm thấy Facebook Page" }, { status: 404 });
 
-      const igAccount = await getLinkedIgAccount(page.fbPageId, page.accessToken);
+      const connectToken = decryptSecret(page.accessToken);
+      if (!connectToken) {
+        return NextResponse.json({ success: false, message: "Access Token không đọc được — nhập lại trong Cài đặt" }, { status: 400 });
+      }
+      const igAccount = await getLinkedIgAccount(page.fbPageId, connectToken);
       if (!igAccount) {
         return NextResponse.json({ success: false, message: "Không tìm thấy Instagram Business Account liên kết với trang này. Hãy chắc chắn đã kết nối IG Business trong Facebook Business Manager." }, { status: 400 });
       }
@@ -72,8 +80,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: false, message: "Action không hợp lệ" }, { status: 400 });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi không xác định");
   }
 }

@@ -1,8 +1,10 @@
 import { generateContent } from "@/lib/claude";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser();
     const { caption, hashtags, platform: sourcePlatform, facebookPageId } = await req.json();
     if (!caption) return NextResponse.json({ error: "Thiếu caption gốc", success: false }, { status: 400 });
 
@@ -31,7 +33,9 @@ Trả về chính xác theo định dạng JSON sau (không thêm text ngoài JS
 
     return NextResponse.json({ data: variants, success: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    const access = accessErrorResponse(err);
+    if (access) return access;
+    console.error("repurpose failed:", err);
+    return NextResponse.json({ error: "Không tạo được phiên bản đa nền tảng", success: false }, { status: 500 });
   }
 }

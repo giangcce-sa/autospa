@@ -3,6 +3,7 @@ import { verifyCronAuth } from "@/lib/cron-auth";
 import { prisma } from "@/lib/db";
 import { deleteMedia } from "@/lib/media-storage";
 import { finishJobRun, startJobRun } from "@/lib/activity-log";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
@@ -25,8 +26,7 @@ export async function GET(req: NextRequest) {
     if (job) await finishJobRun(job.id, { status: "completed", summary: `Removed ${stale.length} stale image(s)`, metrics: { removed: stale.length } }).catch(() => null);
     return NextResponse.json({ success: true, removed: stale.length });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (job) await finishJobRun(job.id, { status: "failed", summary: "Image cleanup failed", error: message }).catch(() => null);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    if (job) await finishJobRun(job.id, { status: "failed", summary: "Image cleanup failed", error: "Thất bại" }).catch(() => null);
+    return routeErrorResponse(error, "Lỗi khi dọn dẹp ảnh");
   }
 }

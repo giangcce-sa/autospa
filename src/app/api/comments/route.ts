@@ -1,7 +1,8 @@
 import { generateContent } from "@/lib/claude";
 import { prisma } from "@/lib/db";
 import { fetchFbComments, replyToFbComment } from "@/lib/facebook";
-import { AccessError, accessErrorResponse, requireExplicitPageAccess, requirePageAccess, requireUser } from "@/lib/page-access";
+import { AccessError, requireExplicitPageAccess, requirePageAccess, requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -79,9 +80,7 @@ export async function GET(req: NextRequest) {
     ]);
     return NextResponse.json({ data: { comments, rules, alertCount, posts }, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: "Không thể tải bình luận", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Không thể tải bình luận");
   }
 }
 
@@ -216,10 +215,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: { newCount, total: fbComments.length }, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof Error ? error.message : "Không thể xử lý bình luận";
-    return NextResponse.json({ error: message, success: false }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return routeErrorResponse(error, "Không thể xử lý bình luận");
   }
 }
 
@@ -233,9 +229,6 @@ export async function DELETE(req: NextRequest) {
     await prisma.postComment.delete({ where: { id: comment.id } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof Error ? error.message : "Không thể xóa bình luận";
-    return NextResponse.json({ error: message, success: false }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return routeErrorResponse(error, "Không thể xóa bình luận");
   }
 }

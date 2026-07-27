@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { generateContentPlan, getResearchDrafts } from "@/lib/content-research";
-import { accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
+import { requireExplicitPageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({
@@ -31,9 +32,7 @@ export async function GET(req: NextRequest) {
     const drafts = await getResearchDrafts(page!.id, 30);
     return NextResponse.json({ success: true, data: drafts });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -73,8 +72,6 @@ export async function POST(req: NextRequest) {
     await prisma.post.delete({ where: { id: input.postId } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

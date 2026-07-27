@@ -1,8 +1,9 @@
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
 import { accessErrorResponse, requireUser } from "@/lib/page-access";
-import { assertSafeAiProviderUrl, ProviderUrlError, sameProviderOrigin } from "@/lib/provider-url-security";
+import { assertSafeAiProviderUrl, sameProviderOrigin } from "@/lib/provider-url-security";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { getSecretReplacement, maskSecret, resolveSecretInput } from "@/lib/settings-secrets";
-import { SpaUrlError } from "@/lib/spa-url-security";
 import { parseAutomationSettingsPatch } from "@/lib/settings/automation-policy";
 import { assertAdsThresholdOrder, parseAdsSettingsPatch, toAdsOptimizationSettings } from "@/lib/settings/ads-policy";
 import { prepareConnectionSettingsPatch, testConnectionSettings } from "@/lib/settings/connections";
@@ -13,7 +14,6 @@ import { parseZaloSettingsPatch } from "@/lib/settings/channels-policy";
 import { testZaloSettings } from "@/lib/settings/channels";
 import { persistSettingsPatch, type SettingsScalarPatch } from "@/lib/settings/persistence";
 import { NextRequest, NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 const GATEWAY_CLAUDE_MODEL = "spa-assistant";
@@ -30,13 +30,14 @@ function isAnthropicBaseUrl(url: string) {
 function safeSettings(settings: NonNullable<Awaited<ReturnType<typeof prisma.settings.findFirst>>>) {
   return {
     ...settings,
-    claudeApiKey: maskSecret(settings.claudeApiKey),
-    openaiApiKey: maskSecret(settings.openaiApiKey),
-    zaloToken: maskSecret(settings.zaloToken),
-    spaApiKey: maskSecret(settings.spaApiKey),
-    spaWebhookSecret: maskSecret(settings.spaWebhookSecret),
-    webhookVerifyToken: maskSecret(settings.webhookVerifyToken),
-    telegramBotToken: maskSecret(settings.telegramBotToken),
+    // decrypt-then-mask so the owner still sees a recognizable last-4 suffix
+    claudeApiKey: maskSecret(decryptSecret(settings.claudeApiKey)),
+    openaiApiKey: maskSecret(decryptSecret(settings.openaiApiKey)),
+    zaloToken: maskSecret(decryptSecret(settings.zaloToken)),
+    spaApiKey: maskSecret(decryptSecret(settings.spaApiKey)),
+    spaWebhookSecret: maskSecret(decryptSecret(settings.spaWebhookSecret)),
+    webhookVerifyToken: maskSecret(decryptSecret(settings.webhookVerifyToken)),
+    telegramBotToken: maskSecret(decryptSecret(settings.telegramBotToken)),
     telegramWebhookSecret: maskSecret(settings.telegramWebhookSecret, 0),
     runwayApiKey: maskSecret(settings.runwayApiKey, 0),
     elevenLabsApiKey: maskSecret(settings.elevenLabsApiKey, 0),
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
       const settings = await prisma.settings.findFirst();
 
       if (service === "claude") {
-        const key = resolveSecretInput(apiKey, settings?.claudeApiKey);
+        const key = resolveSecretInput(apiKey, decryptSecret(settings?.claudeApiKey));
         const savedUrl = normalizeBaseUrl(settings?.claudeBaseUrl || ANTHROPIC_BASE_URL);
         const requestedUrl = normalizeBaseUrl((baseUrl && !baseUrl.includes("••")) ? baseUrl : savedUrl);
         const url = await assertSafeAiProviderUrl(requestedUrl, "claude");
@@ -110,12 +111,13 @@ export async function POST(req: NextRequest) {
           const err = await res.json().catch(() => ({}));
           return NextResponse.json({ success: false, message: err.error?.message || `Lỗi ${res.status}` });
         } catch (e) {
-          return NextResponse.json({ success: false, message: "Không thể kết nối: " + String(e) });
+          console.error("provider connection test failed:", e);
+          return NextResponse.json({ success: false, message: "Không thể kết nối — kiểm tra URL và khóa truy cập" });
         }
       }
 
       if (service === "openai") {
-        const key = resolveSecretInput(apiKey, settings?.openaiApiKey);
+        const key = resolveSecretInput(apiKey, decryptSecret(settings?.openaiApiKey));
         const savedOpenAiUrl = settings?.openaiBaseUrl || "https://api.openai.com/v1";
         const requestedOpenAiUrl = (body.openaiBaseUrl && !body.openaiBaseUrl.includes("••"))
           ? body.openaiBaseUrl
@@ -140,7 +142,8 @@ export async function POST(req: NextRequest) {
           const err = await res.json().catch(() => ({}));
           return NextResponse.json({ success: false, message: err.error?.message || `Lỗi ${res.status}` });
         } catch (e) {
-          return NextResponse.json({ success: false, message: "Không thể kết nối: " + String(e) });
+          console.error("provider connection test failed:", e);
+          return NextResponse.json({ success: false, message: "Không thể kết nối — kiểm tra URL và khóa truy cập" });
         }
       }
 
@@ -204,9 +207,6 @@ export async function POST(req: NextRequest) {
       success: true,
     });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: msg, success: false }, { status: e instanceof RangeError || e instanceof ProviderUrlError || e instanceof SpaUrlError || e instanceof ZodError ? 400 : 500 });
+    return settingsErrorResponse(e);
   }
 }

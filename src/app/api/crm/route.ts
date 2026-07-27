@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     const access = accessErrorResponse(e);
     if (access) return access;
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi tải");
   }
 }
 
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const access = accessErrorResponse(e);
     if (access) return access;
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi không xác định");
   }
 }
 
@@ -72,6 +73,6 @@ export async function DELETE(req: NextRequest) {
   } catch (e) {
     const access = accessErrorResponse(e);
     if (access) return access;
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi xóa");
   }
 }

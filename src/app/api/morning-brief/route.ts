@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { generateMorningBrief, getMorningBrief } from "@/lib/morning-brief";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { businessDateKey } from "@/lib/today-policy";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -10,10 +11,7 @@ export async function GET() {
     const brief = await getMorningBrief();
     return NextResponse.json({ data: brief, success: true });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi");
   }
 }
 
@@ -36,9 +34,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi");
   }
 }

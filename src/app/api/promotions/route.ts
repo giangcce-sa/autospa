@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { generateContent } from "@/lib/claude";
-import { accessErrorResponse, AccessError, requirePageAccess } from "@/lib/page-access";
+import { AccessError, requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -16,9 +17,7 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ data: posts, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -78,9 +77,6 @@ Yêu cầu: hấp dẫn, tạo cảm giác cấp bách, kêu gọi hành động
 
     return NextResponse.json({ data: { postId: post.id, caption, hashtags }, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof Error ? error.message : "Lỗi không xác định";
-    return NextResponse.json({ error: message, success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

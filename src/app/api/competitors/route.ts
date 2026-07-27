@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { getCompetitorIntelligence } from "@/lib/growth-intelligence";
 import { learnFromCompetitors } from "@/lib/learning/competitor-learning";
 import { AccessError, accessErrorResponse, requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
+import { encryptSecret } from "@/lib/secrets-crypto";
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,7 +18,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
           fbPageId,
           name,
           notes: optionalText(body.notes),
-          accessToken: optionalText(body.accessToken),
+          accessToken: encryptOptionalToken(body.accessToken),
         },
         select: competitorSafeSelect,
       });
@@ -50,7 +52,7 @@ export async function POST(req: NextRequest) {
         data.name = body.name.trim();
       }
       if (body.notes !== undefined) data.notes = optionalText(body.notes);
-      if (body.accessToken !== undefined) data.accessToken = optionalText(body.accessToken);
+      if (body.accessToken !== undefined) data.accessToken = encryptOptionalToken(body.accessToken);
       if (body.isActive !== undefined) {
         if (typeof body.isActive !== "boolean") throw new AccessError("isActive không hợp lệ", 400);
         data.isActive = body.isActive;
@@ -89,7 +91,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }
 
@@ -164,4 +166,9 @@ function requiredId(value: unknown) {
 
 function optionalText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function encryptOptionalToken(value: unknown) {
+  const text = optionalText(value);
+  return text ? encryptSecret(text) : null;
 }

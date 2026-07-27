@@ -18,7 +18,10 @@ export async function GET(req: NextRequest) {
   });
   const results = [];
   for (const job of jobs) {
-    const result = await pollVideoJob(job.id).catch((error) => ({ id: job.id, status: "error", error: error instanceof Error ? error.message : String(error) }));
+    const result = await pollVideoJob(job.id).catch((error) => {
+      console.error("pollVideoJob failed:", error);
+      return { id: job.id, status: "error", error: "Lỗi xử lý job" };
+    });
     results.push(result);
   }
   return NextResponse.json({ success: true, processed: results.length + internal.length, data: { internal, providers: results } });

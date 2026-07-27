@@ -4,6 +4,7 @@ import { generateContent } from "@/lib/claude";
 import { prisma } from "@/lib/db";
 import { getListeningIntelligence } from "@/lib/growth-intelligence";
 import { AccessError, accessErrorResponse, requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 const ALERT_TYPES = new Set(["review_negative", "crisis", "trending", "mention"]);
 const SEVERITIES = new Set(["low", "medium", "high", "critical"]);
@@ -16,7 +17,7 @@ export async function GET() {
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
-    return NextResponse.json({ error: String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }
 

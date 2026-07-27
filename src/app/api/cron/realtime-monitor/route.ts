@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyCronAuth } from "@/lib/cron-auth";
 import { runRealtimeMonitor } from "@/lib/realtime-monitor";
 import { finishJobRun, logActivity, startJobRun } from "@/lib/activity-log";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
@@ -28,22 +29,21 @@ export async function GET(req: NextRequest) {
     }).catch(() => null);
     return NextResponse.json(result);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi";
     if (job) {
       await finishJobRun(job.id, {
         status: "failed",
         summary: "Realtime monitor failed",
-        error: msg,
+        error: "Thất bại",
       }).catch(() => null);
     }
     await logActivity({
       type: "job_run",
       title: "Realtime monitor failed",
-      detail: msg,
+      detail: "Thất bại",
       href: "/listening",
       severity: "danger",
       source: "cron",
     }).catch(() => null);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi");
   }
 }

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { AccessError, accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
+import { AccessError, requireExplicitPageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -21,9 +22,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: stories, success: true });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -80,9 +79,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
-    const accessResponse = accessErrorResponse(err);
-    if (accessResponse) return accessResponse;
-    const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi không xác định");
   }
 }

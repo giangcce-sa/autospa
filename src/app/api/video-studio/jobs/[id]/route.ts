@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
 import { cancelVideoJob } from "@/lib/video-studio/service";
 
 const safeJobSelect = {
@@ -42,9 +43,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }
 
@@ -63,8 +62,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     await cancelVideoJob(id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }

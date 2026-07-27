@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAllLearningLoops } from "@/lib/learning";
 import { verifyCronAuth } from "@/lib/cron-auth";
+import { routeErrorResponse } from "@/lib/api-response";
 
 // Cron: runs nightly at 02:00 (low-traffic hour)
 export async function GET(req: NextRequest) {
@@ -11,6 +12,6 @@ export async function GET(req: NextRequest) {
     const result = await runAllLearningLoops();
     return NextResponse.json({ success: true, data: result });
   } catch (e) {
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi chạy learning loops");
   }
 }

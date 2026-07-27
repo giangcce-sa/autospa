@@ -1,5 +1,6 @@
 import { getImageHistoryPage } from "@/lib/image-history";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -19,8 +20,6 @@ export async function GET(req: NextRequest) {
       pagination: { nextCursor: page.nextCursor },
     });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }

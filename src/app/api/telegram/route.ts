@@ -7,11 +7,12 @@ import {
   setTelegramWebhook,
   testConnection,
 } from "@/lib/telegram";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
+import { decryptSecret, encryptSecret } from "@/lib/secrets-crypto";
 import { trustedTelegramBaseUrl } from "@/lib/channel-security";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
 import { getTelegramSettings, saveTelegramSettings } from "@/lib/settings/channels";
-import { ZodError } from "zod";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (action === "test") {
       const { token, chatId } = body;
       const settings = await prisma.settings.findFirst();
-      const resolvedToken = token && !String(token).includes("•") ? String(token) : settings?.telegramBotToken;
+      const resolvedToken = token && !String(token).includes("•") ? String(token) : decryptSecret(settings?.telegramBotToken);
       if (!resolvedToken || !chatId) {
         return NextResponse.json({ success: false, message: "Cần nhập Bot Token và Chat ID" });
       }
@@ -55,7 +56,8 @@ export async function POST(req: NextRequest) {
 
     if (action === "register-webhook") {
       const settings = await prisma.settings.findFirst();
-      if (!settings?.telegramBotToken || !settings.telegramChatId) {
+      const botToken = decryptSecret(settings?.telegramBotToken);
+      if (!settings || !botToken || !settings.telegramChatId) {
         return NextResponse.json({ success: false, error: "Cần lưu Bot Token và Chat ID trước" }, { status: 400 });
       }
       if (settings.telegramChatId.startsWith("-") && !settings.telegramAdminUserId) {
@@ -74,23 +76,24 @@ export async function POST(req: NextRequest) {
       }
       const secret = randomBytes(24).toString("hex");
       const webhookUrl = `${baseUrl}/api/webhook/telegram`;
-      const result = await setTelegramWebhook(settings.telegramBotToken, webhookUrl, secret);
+      const result = await setTelegramWebhook(botToken, webhookUrl, secret);
       if (!result.ok) {
         return NextResponse.json({ success: false, error: result.description ?? result.error }, { status: 502 });
       }
       await prisma.settings.update({
         where: { id: settings.id },
-        data: { telegramWebhookSecret: secret, telegramWebhookUrl: webhookUrl, telegramWebhookAt: new Date() },
+        data: { telegramWebhookSecret: encryptSecret(secret), telegramWebhookUrl: webhookUrl, telegramWebhookAt: new Date() },
       });
       return NextResponse.json({ success: true, message: "Đã đăng ký Telegram webhook", data: { webhookUrl } });
     }
 
     if (action === "webhook-status") {
       const settings = await prisma.settings.findFirst();
-      if (!settings?.telegramBotToken) {
+      const botToken = decryptSecret(settings?.telegramBotToken);
+      if (!botToken) {
         return NextResponse.json({ success: false, error: "Telegram chưa cấu hình" }, { status: 400 });
       }
-      const result = await getTelegramWebhookInfo(settings.telegramBotToken);
+      const result = await getTelegramWebhookInfo(botToken);
       return NextResponse.json({
         success: result.ok,
         data: result.result,
@@ -100,10 +103,11 @@ export async function POST(req: NextRequest) {
 
     if (action === "delete-webhook") {
       const settings = await prisma.settings.findFirst();
-      if (!settings?.telegramBotToken) {
+      const botToken = decryptSecret(settings?.telegramBotToken);
+      if (!settings || !botToken) {
         return NextResponse.json({ success: false, error: "Telegram chưa cấu hình" }, { status: 400 });
       }
-      const result = await deleteTelegramWebhook(settings.telegramBotToken);
+      const result = await deleteTelegramWebhook(botToken);
       if (result.ok) {
         await prisma.settings.update({
           where: { id: settings.id },
@@ -115,9 +119,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: false, message: "Action không hợp lệ" });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    const message = e instanceof ZodError ? e.issues[0]?.message ?? "Cấu hình Telegram không hợp lệ" : String(e);
-    return NextResponse.json({ error: message, success: false }, { status: e instanceof ZodError ? 400 : 500 });
+    return settingsErrorResponse(e, "Cấu hình Telegram không hợp lệ");
   }
 }

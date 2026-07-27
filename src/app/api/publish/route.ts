@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db";
 import { reviewContent } from "@/lib/reviewer";
-import { AccessError, accessErrorResponse, requirePageAccess, requireUser } from "@/lib/page-access";
+import { AccessError, requirePageAccess, requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { resolvePostPageId } from "@/lib/page-scope-policy";
+import { briefWriteData } from "@/lib/post-brief-input";
 import {
   executePublishOperation,
   latestPublishChannelAttempts,
@@ -60,9 +62,7 @@ export async function GET(req: NextRequest) {
     }));
     return NextResponse.json({ data: { ...post, publishOperations }, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: "Lỗi khi tải bài", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải bài");
   }
 }
 
@@ -94,6 +94,9 @@ export async function POST(req: NextRequest) {
       if (action === "schedule" && resolvedPostType === "video") {
         return NextResponse.json({ error: "Video phải được xuất bản từ Xưởng video sau khi QA và duyệt", success: false }, { status: 400 });
       }
+      // Validated before any write; only the brief fields the client actually
+      // sent come back, so a partial save never resets a stored value.
+      const briefFields = briefWriteData(body);
 
       if (post) {
         const updated = await prisma.$transaction(async (tx) => {
@@ -110,6 +113,7 @@ export async function POST(req: NextRequest) {
               ...(hashtags !== undefined && { hashtags }),
               ...(imageUrl !== undefined && { imageUrl }),
               ...(postType !== undefined && { postType: resolvedPostType }),
+              ...briefFields,
               ...(post.facebookPageId ? {} : { facebookPageId: resolvedPageId }),
             },
           });
@@ -132,6 +136,7 @@ export async function POST(req: NextRequest) {
           status: action === "schedule" ? "scheduled" : "draft",
           scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
           facebookPageId: resolvedPageId,
+          ...briefFields,
         },
       });
       return NextResponse.json({ data: created, success: true });
@@ -240,9 +245,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-    return NextResponse.json({ error: msg, success: false }, { status: err instanceof PublishConflictError ? err.status : 500 });
+    if (err instanceof PublishConflictError) {
+      return NextResponse.json({ error: err.message, success: false }, { status: err.status });
+    }
+    return routeErrorResponse(err, "Lỗi không xác định");
   }
 }

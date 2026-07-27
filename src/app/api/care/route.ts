@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateContent } from "@/lib/claude";
 import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { businessMonthDay } from "@/lib/today-policy";
 
 export async function GET() {
@@ -22,7 +23,7 @@ export async function GET() {
   } catch (e) {
     const access = accessErrorResponse(e);
     if (access) return access;
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi tải");
   }
 }
 
@@ -69,6 +70,6 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const access = accessErrorResponse(e);
     if (access) return access;
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi không xác định");
   }
 }

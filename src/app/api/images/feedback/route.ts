@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db";
 import { rebuildVisualProfile } from "@/lib/visual-profile";
 import { NextRequest, NextResponse } from "next/server";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 const RATINGS = new Set(["approved", "right_style", "identity_match", "identity_mismatch", "bad_anatomy", "too_ai", "wrong_service", "off_brand", "bad_layout", "unsafe"]);
 
@@ -54,11 +55,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

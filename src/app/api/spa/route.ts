@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { logActivity } from "@/lib/activity-log";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { pullSpaRevenue, pushLeadToSpa, testSpaConnection } from "@/lib/spa-client";
 
 const operationSchema = z.discriminatedUnion("action", [
@@ -22,7 +24,7 @@ function isUniqueConstraintError(error: unknown) {
 
 async function verifySpaWebhook(req: NextRequest) {
   const settings = await prisma.settings.findFirst({ select: { spaWebhookSecret: true } });
-  const configuredSecret = settings?.spaWebhookSecret?.trim();
+  const configuredSecret = decryptSecret(settings?.spaWebhookSecret)?.trim();
   if (!configuredSecret) {
     return NextResponse.json({ error: "Spa webhook secret chưa được cấu hình", success: false }, { status: 403 });
   }
@@ -59,10 +61,7 @@ export async function GET() {
       success: true,
     });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof Error ? error.message : "Không thể tải trạng thái Spa";
-    return NextResponse.json({ error: message, success: false }, { status: 500 });
+    return routeErrorResponse(error, "Không thể tải trạng thái Spa");
   }
 }
 
@@ -170,9 +169,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: result, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof Error ? error.message : "Lỗi không xác định";
-    return NextResponse.json({ error: message, success: false }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

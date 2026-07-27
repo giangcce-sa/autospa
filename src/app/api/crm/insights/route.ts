@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { computeAllCLV, updateCachedCLV } from "@/lib/clv-engine";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET() {
   try {
@@ -27,9 +28,7 @@ export async function GET() {
 
     return NextResponse.json({ success: true, data: { summary, customers: all } });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi tải");
   }
 }
 
@@ -39,8 +38,6 @@ export async function POST() {
     const count = await updateCachedCLV();
     return NextResponse.json({ success: true, data: { updated: count } });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi không xác định");
   }
 }

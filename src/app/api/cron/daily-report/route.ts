@@ -23,43 +23,50 @@ export async function GET(req: NextRequest) {
     await sendDailyReport();
     results.report = true;
   } catch (e) {
-    results.reportError = String(e);
+    console.error("report failed:", e);
+    results.reportError = "Thất bại";
   }
 
   try {
     results.nurture = await runLeadNurture();
   } catch (e) {
-    results.nurtureError = String(e);
+    console.error("nurture failed:", e);
+    results.nurtureError = "Thất bại";
   }
 
   try {
     results.competitorSync = await syncCompetitors();
   } catch (e) {
-    results.competitorSyncError = String(e);
+    console.error("competitorSync failed:", e);
+    results.competitorSyncError = "Thất bại";
   }
 
   try {
     results.adsLibrarySync = await syncAdsLibrary();
   } catch (e) {
-    results.adsLibrarySyncError = String(e);
+    console.error("adsLibrarySync failed:", e);
+    results.adsLibrarySyncError = "Thất bại";
   }
 
   try {
     results.googleTrendsSync = await syncGoogleTrends();
   } catch (e) {
-    results.googleTrendsSyncError = String(e);
+    console.error("googleTrendsSync failed:", e);
+    results.googleTrendsSyncError = "Thất bại";
   }
 
   try {
     results.proactiveSales = await runProactiveOutreach();
   } catch (e) {
-    results.proactiveSalesError = String(e);
+    console.error("proactiveSales failed:", e);
+    results.proactiveSalesError = "Thất bại";
   }
 
   try {
     results.ceoOutcomes = await checkPendingOutcomes();
   } catch (e) {
-    results.ceoOutcomesError = String(e);
+    console.error("ceoOutcomes failed:", e);
+    results.ceoOutcomesError = "Thất bại";
   }
 
   try {
@@ -70,14 +77,16 @@ export async function GET(req: NextRequest) {
       actionsCount: plan.actions.length,
     };
   } catch (e) {
-    results.orchestratorError = String(e);
+    console.error("orchestrator failed:", e);
+    results.orchestratorError = "Thất bại";
   }
 
   // NPS batch-send: trigger for appointments completed in the last 2 hours
   try {
     results.nps = await batchSendNps(2);
   } catch (e) {
-    results.npsError = String(e);
+    console.error("nps failed:", e);
+    results.npsError = "Thất bại";
   }
 
   const errorKeys = Object.keys(results).filter((key) => key.endsWith("Error"));

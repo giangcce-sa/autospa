@@ -2,14 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { contentChangeRatio, scoreHumanWriting } from "@/lib/content-humanizer";
 import { rebuildHumanVoiceProfile } from "@/lib/human-voice";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
+import { briefWriteData } from "@/lib/post-brief-input";
 
 export async function POST(req: NextRequest) {
   try {
-    const { generationId, caption, hashtags, acceptedVoice, persistPost } = await req.json();
+    const body = await req.json();
+    const { generationId, caption, hashtags, acceptedVoice, persistPost } = body;
     if (!generationId || !caption?.trim()) {
       return NextResponse.json({ success: false, error: "Thiếu generationId hoặc caption" }, { status: 400 });
     }
+    // Validated up front so an invalid brief fails with 400 before anything is written.
+    const briefFields = briefWriteData(body, ["title", "summary", "outline", "hooks"]);
     const generation = await prisma.contentGeneration.findUnique({ where: { id: generationId } });
     if (!generation) {
       return NextResponse.json({ success: false, error: "Không tìm thấy phiên bản nội dung" }, { status: 404 });
@@ -45,6 +50,7 @@ export async function POST(req: NextRequest) {
             tone: brief.tone ?? "friendly",
             serviceId: brief.serviceId || null,
             facebookPageId: current.facebookPageId,
+            ...briefFields,
           },
         });
         const linked = await tx.contentGeneration.updateMany({
@@ -140,11 +146,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

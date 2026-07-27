@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateContent } from "@/lib/claude";
-import { AccessError, accessErrorResponse, getAuthorizedPageIds, requirePageAccess, requireUser } from "@/lib/page-access";
+import { AccessError, getAuthorizedPageIds, requirePageAccess, requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET() {
   try {
@@ -20,9 +21,7 @@ export async function GET() {
     };
     return NextResponse.json({ data: { leads, stats } });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi tải");
   }
 }
 
@@ -76,9 +75,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi không xác định");
   }
 }
 

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { deleteMedia } from "@/lib/media-storage";
-import { accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
+import { requireExplicitPageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
 const CONSENT_STATUSES = new Set(["consented", "limited", "blocked"]);
@@ -39,9 +40,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: staff });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -207,8 +206,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: false, error: "Action không hợp lệ" }, { status: 400 });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

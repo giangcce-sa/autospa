@@ -8,23 +8,28 @@ import {
 import { generateChatCompletion } from "@/lib/openai";
 import { createOAuthState, GOOGLE_OAUTH_STATE_COOKIE, setOAuthStateCookie } from "@/lib/oauth-state";
 import { googleReviewResourceName, safeGoogleAccountSelect } from "@/lib/channel-security";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
+import { decryptSecret, encryptSecret } from "@/lib/secrets-crypto";
 
 // Ensure access token is fresh, refresh if needed
 async function getValidToken(accountId: string): Promise<{ token: string; account: { id: string; locationId: string | null; accountId: string | null; locationName: string | null } }> {
   const account = await prisma.googleAccount.findUnique({ where: { id: accountId } });
   if (!account) throw new Error("Google account không tìm thấy");
 
-  if (account.expiresAt && account.expiresAt < new Date(Date.now() + 60000) && account.refreshToken) {
-    const fresh = await refreshGoogleToken(account.refreshToken);
+  const refreshToken = decryptSecret(account.refreshToken);
+  if (account.expiresAt && account.expiresAt < new Date(Date.now() + 60000) && refreshToken) {
+    const fresh = await refreshGoogleToken(refreshToken);
     await prisma.googleAccount.update({
       where: { id: accountId },
-      data: { accessToken: fresh.accessToken, expiresAt: new Date(Date.now() + fresh.expiresIn * 1000) },
+      data: { accessToken: encryptSecret(fresh.accessToken), expiresAt: new Date(Date.now() + fresh.expiresIn * 1000) },
     });
     return { token: fresh.accessToken, account };
   }
 
-  return { token: account.accessToken, account };
+  const accessToken = decryptSecret(account.accessToken);
+  if (!accessToken) throw new Error("Google access token không đọc được — kết nối lại tài khoản");
+  return { token: accessToken, account };
 }
 
 // Get the primary active account's ID
@@ -112,9 +117,7 @@ export async function GET(req: NextRequest) {
       data: { account, reviewCount: reviewStats._count.id, avgRating: reviewStats._avg.rating ?? 0, unreplied },
     });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi tải");
   }
 }
 
@@ -278,8 +281,6 @@ Chỉ trả về phản hồi, không giải thích.`;
 
     return NextResponse.json({ success: false, message: "Action không hợp lệ" }, { status: 400 });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi không xác định");
   }
 }

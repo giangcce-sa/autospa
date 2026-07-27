@@ -1,6 +1,7 @@
 import { generateContent } from "@/lib/claude";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
+import { requireExplicitPageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -63,9 +64,6 @@ Trả về theo đúng format JSON sau (không thêm gì ngoài JSON):
 
     return NextResponse.json({ data: parsed, success: true });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-    return NextResponse.json({ error: msg, success: false }, { status: err instanceof z.ZodError ? 400 : 500 });
+    return routeErrorResponse(err, "Lỗi không xác định");
   }
 }

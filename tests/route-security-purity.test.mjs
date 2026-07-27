@@ -38,7 +38,7 @@ test("Comments GET requires an explicit authorized Page and scopes comments, rul
   assert.match(get, /facebookPageId: null, post: \{ facebookPageId: pageId \}/);
   assert.match(get, /commentRule\.findMany\(\{ where: \{ facebookPageId: pageId \}/);
   assert.match(get, /post\.findMany\(\{[\s\S]*?where: \{ facebookPageId: pageId \}/);
-  assert.match(get, /accessErrorResponse\(error\)/);
+  assert.match(get, /routeErrorResponse\(error/);
 });
 
 test("Comments mutations are owner-only and authorize stored ownership before provider calls", async () => {
@@ -87,7 +87,7 @@ test("Attribution is a validated owner-only account report", async () => {
   assert.match(route, /await requireUser\(\{ owner: true \}\)/);
   assert.match(route, /z\.enum\(\["7", "30", "90"\]\)/);
   assert.match(route, /scope: "account", source: "BookingRevenue", windowDays: days/);
-  assert.match(route, /accessErrorResponse\(error\)/);
+  assert.match(route, /routeErrorResponse\(error/);
   assert.match(view, /Toàn tài khoản · BookingRevenue/);
 });
 

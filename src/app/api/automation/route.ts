@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAutomationOperationsData } from "@/lib/automation-operations";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET() {
   try {
@@ -24,8 +25,6 @@ export async function GET() {
       },
     });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }

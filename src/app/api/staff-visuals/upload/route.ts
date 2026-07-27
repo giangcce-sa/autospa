@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { NextRequest, NextResponse } from "next/server";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { deleteMedia, saveMedia } from "@/lib/media-storage";
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -52,12 +53,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải ảnh lên");
   }
 }
 
@@ -71,8 +67,6 @@ export async function DELETE(req: NextRequest) {
     await deleteMedia(storageKey);
     return NextResponse.json({ success: true });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi xóa");
   }
 }

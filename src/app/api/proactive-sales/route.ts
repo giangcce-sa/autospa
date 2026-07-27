@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db";
 import { runProactiveOutreach } from "@/lib/proactive-sales";
 import { NextRequest, NextResponse } from "next/server";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET() {
   try {
@@ -22,10 +23,7 @@ export async function GET() {
       success: true,
     });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi");
   }
 }
 
@@ -39,9 +37,6 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi");
   }
 }

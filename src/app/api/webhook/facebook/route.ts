@@ -4,7 +4,8 @@ import { generateContent } from "@/lib/claude";
 import { replyToFbComment, replyToFbConversation } from "@/lib/facebook";
 import { getOrCreateConversation, processIncomingMessage, executeHandoff } from "@/lib/lead-agent";
 import { matchMessageRule } from "@/lib/message-rules";
-import { verifyWebhookSignature } from "@/lib/webhook-security";
+import { decryptSecret } from "@/lib/secrets-crypto";
+import { secureCompare, verifyWebhookSignature } from "@/lib/webhook-security";
 
 // Facebook webhook verification (GET)
 export async function GET(req: NextRequest) {
@@ -14,7 +15,8 @@ export async function GET(req: NextRequest) {
   const challenge = searchParams.get("hub.challenge");
 
   const settings = await prisma.settings.findFirst();
-  if (mode === "subscribe" && settings?.webhookVerifyToken && token === settings.webhookVerifyToken) {
+  const verifyToken = decryptSecret(settings?.webhookVerifyToken);
+  if (mode === "subscribe" && verifyToken && token && secureCompare(token, verifyToken)) {
     return new Response(challenge ?? "", { status: 200 });
   }
   return new Response("Forbidden — verify token không khớp", { status: 403 });

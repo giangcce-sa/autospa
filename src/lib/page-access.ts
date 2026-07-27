@@ -2,12 +2,9 @@ import "server-only";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { AccessError, accessErrorResponse } from "@/lib/access-error";
 
-export class AccessError extends Error {
-  constructor(message: string, public readonly status = 403) {
-    super(message);
-  }
-}
+export { AccessError, accessErrorResponse };
 
 export async function requireUser(options: { owner?: boolean } = {}) {
   const session = await auth();
@@ -62,11 +59,4 @@ export async function requirePageAccess(facebookPageId: string | null | undefine
     if (!access) throw new AccessError("Tài khoản không có quyền truy cập Facebook Page này", 403);
   }
   return { user, page };
-}
-
-export function accessErrorResponse(error: unknown) {
-  if (error instanceof AccessError) {
-    return Response.json({ success: false, error: error.message }, { status: error.status });
-  }
-  return null;
 }

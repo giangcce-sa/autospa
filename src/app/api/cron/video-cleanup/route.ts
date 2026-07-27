@@ -3,6 +3,7 @@ import { finishJobRun, startJobRun } from "@/lib/activity-log";
 import { verifyCronAuth } from "@/lib/cron-auth";
 import { prisma } from "@/lib/db";
 import { deleteMedia } from "@/lib/media-storage";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
@@ -28,8 +29,7 @@ export async function GET(req: NextRequest) {
     if (run) await finishJobRun(run.id, { status: "completed", summary: `Removed ${removed} stale video item(s)`, metrics: { removed } }).catch(() => null);
     return NextResponse.json({ success: true, removed });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (run) await finishJobRun(run.id, { status: "failed", summary: "Video cleanup failed", error: message }).catch(() => null);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    if (run) await finishJobRun(run.id, { status: "failed", summary: "Video cleanup failed", error: "Thất bại" }).catch(() => null);
+    return routeErrorResponse(error, "Lỗi khi dọn dẹp video");
   }
 }

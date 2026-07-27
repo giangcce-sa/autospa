@@ -1,6 +1,7 @@
 import { generateContent, getBrandContext } from "@/lib/claude";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { nextAnnualBusinessOccurrence } from "@/lib/today-policy";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -44,10 +45,7 @@ export async function GET() {
     }).sort((left, right) => Number(right.isActive) - Number(left.isActive) || left.daysUntil - right.daysUntil);
     return NextResponse.json({ data, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof Error ? error.message : "Lỗi khi tải dữ liệu";
-    return NextResponse.json({ error: message, success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải dữ liệu");
   }
 }
 
@@ -88,9 +86,6 @@ BÀI 2:
     const updated = await prisma.holidayEvent.update({ where: { id: event.id }, data: { isActive: !event.isActive } });
     return NextResponse.json({ data: updated, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof Error ? error.message : "Lỗi không xác định";
-    return NextResponse.json({ error: message, success: false }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
 import { invalidatedProjectRenderData } from "@/lib/video-studio/invalidation";
 import { generateSceneLipSync, generateSceneVideo, generateSceneVoice } from "@/lib/video-studio/service";
 
@@ -31,8 +32,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const data = action === "generate-video" ? await generateSceneVideo(id) : action === "generate-voice" ? await generateSceneVoice(id) : await generateSceneLipSync(id);
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return settingsErrorResponse(error);
   }
 }

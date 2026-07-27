@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
 import { runProjectQuality } from "@/lib/video-studio/service";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,8 +12,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     await requirePageAccess(project.facebookPageId, { owner: true });
     return NextResponse.json({ success: true, data: await runProjectQuality(id) });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }

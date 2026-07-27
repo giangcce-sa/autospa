@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { generateContent } from "@/lib/claude";
-import { AccessError, accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
+import { AccessError, requireExplicitPageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 async function fetchFbPosts(pageId: string, token: string, limit = 20) {
@@ -34,9 +36,7 @@ export async function GET(req: NextRequest) {
     ]);
     return NextResponse.json({ data: { samples, profile }, success: true });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({ error: "Lỗi khi tải dữ liệu", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải dữ liệu");
   }
 }
 
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       let resolvedPageId: string | undefined = pageId;
       const fbPage = await prisma.facebookPage.findUnique({ where: { id: facebookPageId } });
       if (!fbPage) return NextResponse.json({ error: "Chưa cấu hình Facebook Page trong Cài đặt", success: false }, { status: 400 });
-      const token = fbPage.accessToken;
+      const token = decryptSecret(fbPage.accessToken);
       if (source === "own") {
         resolvedPageId = fbPage.fbPageId;
       }
@@ -66,11 +66,12 @@ export async function POST(req: NextRequest) {
         const filtered = posts.filter((p) => p.message && p.message.length > 30);
         return NextResponse.json({ data: { posts: filtered, count: filtered.length }, success: true });
       } catch (e) {
+        console.error("fetchFbPosts failed:", e);
         const msg = String(e);
         const isPermission = msg.includes("pages_read_engagement") || msg.includes("#10") || msg.includes("permission");
         const isInvalidToken = msg.toLowerCase().includes("invalid") && msg.toLowerCase().includes("token");
         return NextResponse.json({
-          error: isPermission ? "TOKEN_PERMISSION" : isInvalidToken ? "TOKEN_INVALID" : msg,
+          error: isPermission ? "TOKEN_PERMISSION" : isInvalidToken ? "TOKEN_INVALID" : "Không thể tải bài viết từ Facebook",
           success: false,
         }, { status: 400 });
       }
@@ -149,10 +150,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
-    const accessResponse = accessErrorResponse(err);
-    if (accessResponse) return accessResponse;
-    const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi không xác định");
   }
 }
 
@@ -165,8 +163,6 @@ export async function DELETE(req: NextRequest) {
     await prisma.styleSample.delete({ where: { id: sample.id } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({ error: "Lỗi khi xóa", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi xóa");
   }
 }

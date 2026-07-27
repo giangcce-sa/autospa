@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
 import { cloneVoice } from "@/lib/video-studio/providers/elevenlabs";
 import { parseJson } from "@/lib/video-studio/types";
 
@@ -23,9 +24,7 @@ export async function GET(req: NextRequest) {
     const voices = await prisma.videoVoiceProfile.findMany({ where: { facebookPageId, isActive: true }, orderBy: { updatedAt: "desc" } });
     return NextResponse.json({ success: true, data: voices.map((voice) => ({ ...voice, settings: parseJson(voice.settings, {}), pronunciation: parseJson(voice.pronunciation, {}) })) });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }
 
@@ -67,8 +66,6 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ success: true, data: voice }, { status: 201 });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return settingsErrorResponse(error);
   }
 }

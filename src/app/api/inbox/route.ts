@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db";
 import { generateContent, getBrandContext } from "@/lib/claude";
 import { fetchFbConversations, replyToFbConversation } from "@/lib/facebook";
-import { AccessError, accessErrorResponse, requirePageAccess, requireUser } from "@/lib/page-access";
+import { AccessError, requirePageAccess, requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -20,9 +21,7 @@ export async function GET(req: NextRequest) {
       : await prisma.appointmentRequest.findMany({ orderBy: { createdAt: "desc" }, take: 20 });
     return NextResponse.json({ data: { messages, appointments }, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -110,8 +109,8 @@ Quy tắc: Thân thiện, chuyên nghiệp, ngắn gọn. Nếu khách muốn đ
         try {
           conversations = await fetchFbConversations(body.limit ?? 20, page.id);
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          return NextResponse.json({ error: msg, success: false }, { status: 400 });
+          console.error("fetchFbConversations failed:", e);
+          return NextResponse.json({ error: "Không thể tải hội thoại từ Facebook", success: false }, { status: 400 });
         }
         total += conversations.length;
 
@@ -139,10 +138,7 @@ Quy tắc: Thân thiện, chuyên nghiệp, ngắn gọn. Nếu khách muốn đ
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi không xác định");
   }
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runAdsOptimization } from "@/lib/ads-optimizer";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function POST() {
   try {
@@ -12,11 +13,6 @@ export async function POST() {
     });
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+    return routeErrorResponse(error, "Lỗi khi chạy tối ưu quảng cáo");
   }
 }

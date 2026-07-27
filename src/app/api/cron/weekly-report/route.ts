@@ -3,6 +3,7 @@ import { sendWeeklyReport } from "@/lib/weekly-report";
 import { prisma } from "@/lib/db";
 import { verifyCronAuth } from "@/lib/cron-auth";
 import { vietnamClock } from "@/lib/telegram-control";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
     const result = await sendWeeklyReport();
     return NextResponse.json({ success: result.ok, data: result }, { status: result.ok ? 200 : 502 });
   } catch (error) {
-    return NextResponse.json({ error: String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi gửi báo cáo tuần");
   }
 }
 

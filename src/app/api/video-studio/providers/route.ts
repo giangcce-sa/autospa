@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { settingsErrorResponse } from "@/lib/api-response";
+import { requireUser } from "@/lib/page-access";
 import { testVideoProviderSettings } from "@/lib/settings/video";
 import { getVideoProviderConfig } from "@/lib/video-studio/config";
 
@@ -23,9 +24,7 @@ export async function GET() {
     await requireUser();
     return NextResponse.json({ success: true, data: publicStatus(await getVideoProviderConfig()) });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }
 
@@ -38,8 +37,6 @@ export async function POST(req: NextRequest) {
     const result = await testVideoProviderSettings(request);
     return NextResponse.json({ success: true, data: { provider: request.provider, message: result.message } });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: error instanceof z.ZodError ? 400 : 502 });
+    return settingsErrorResponse(error, undefined, 502);
   }
 }

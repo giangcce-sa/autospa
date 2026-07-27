@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/db";
 import { batchSendNps, recordNpsScore, sendNpsSurvey } from "@/lib/feedback";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
   try {
+    await requireUser();
     const { searchParams } = new URL(req.url);
     const page = Number(searchParams.get("page") ?? 1);
     const take = 20;
@@ -25,13 +27,17 @@ export async function GET(req: NextRequest) {
         : null;
 
     return NextResponse.json({ data: { customers, total, avg }, success: true });
-  } catch {
+  } catch (err) {
+    const access = accessErrorResponse(err);
+    if (access) return access;
     return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    // Sends real customer messages / mutates NPS data — owner only
+    await requireUser({ owner: true });
     const body = await req.json();
     const { action } = body;
 
@@ -59,7 +65,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    const access = accessErrorResponse(err);
+    if (access) return access;
+    console.error("feedback action failed:", err);
+    return NextResponse.json({ error: "Lỗi không xác định", success: false }, { status: 500 });
   }
 }

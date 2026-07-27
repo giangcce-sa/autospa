@@ -8,7 +8,8 @@ import { getCompetitorContext } from "@/lib/learning/competitor-learning";
 import { buildStaffReferences } from "@/lib/image-reference";
 import { analyzeGeneratedImage, type ImageVisionResult } from "@/lib/image-vision";
 import { persistImageSource } from "@/lib/media-storage";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 import { finishJobRun, startJobRun } from "@/lib/activity-log";
 
@@ -163,7 +164,8 @@ export async function POST(req: NextRequest) {
               referenceBase64: referenceRecords.map((item) => item.imageBase64),
             });
           } catch (error) {
-            visionError = error instanceof Error ? error.message : String(error);
+            console.error("vision failed:", error);
+            visionError = "Thất bại";
           }
         }
         if (!vision || vision.score >= 60 || retryCount >= maxAutoRetries) break;
@@ -272,12 +274,9 @@ export async function POST(req: NextRequest) {
       await finishJobRun(jobId, {
         status: "failed",
         summary: "Image generation failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: "Thất bại",
       }).catch(() => null);
     }
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    const message = error instanceof Error ? error.message : "Lỗi không xác định";
-    return NextResponse.json({ error: message, success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

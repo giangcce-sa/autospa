@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { checkApproval } from "@/lib/approval-gate";
 import { executeApproval } from "@/lib/approval-executor";
-import { adsMutationErrorResponse } from "@/lib/ads-safety";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET() {
   try {
@@ -16,11 +16,7 @@ export async function GET() {
     const active = approvals.filter((a) => a.timeoutAt >= now);
     return NextResponse.json({ data: active, success: true });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    const blocked = adsMutationErrorResponse(e);
-    if (blocked) return blocked;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi tải");
   }
 }
 
@@ -38,10 +34,6 @@ export async function POST(req: NextRequest) {
     const result = await executeApproval(id, decision);
     return NextResponse.json({ success: true, data: result });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    const blocked = adsMutationErrorResponse(e);
-    if (blocked) return blocked;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi không xác định");
   }
 }

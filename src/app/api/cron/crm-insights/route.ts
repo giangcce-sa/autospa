@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runLoggedJob } from "@/lib/activity-log";
 import { updateCachedCLV } from "@/lib/clv-engine";
 import { verifyCronAuth } from "@/lib/cron-auth";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
@@ -16,7 +17,6 @@ export async function GET(req: NextRequest) {
     );
     return NextResponse.json({ success: true, data: { updated } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message, success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi cập nhật CLV");
   }
 }

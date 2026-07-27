@@ -1,4 +1,5 @@
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { generateAnalyticsReport } from "@/lib/sub-agents/analytics-agent";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -12,9 +13,6 @@ export async function POST(req: NextRequest) {
     const report = await generateAnalyticsReport(timeframe);
     return NextResponse.json({ data: { ...report, provenance: { scope: "account" } }, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof Error ? error.message : "Lỗi";
-    return NextResponse.json({ error: message, success: false }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return routeErrorResponse(error, "Lỗi");
   }
 }

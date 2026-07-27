@@ -4,7 +4,8 @@ import { councilDebate } from "@/lib/ai-council";
 import { reviewContent } from "@/lib/reviewer";
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { accessErrorResponse, requireExplicitPageAccess } from "@/lib/page-access";
+import { requireExplicitPageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   try {
@@ -45,9 +46,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: result, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -183,9 +182,6 @@ Analytics: ${statsB}`;
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi không xác định");
   }
 }

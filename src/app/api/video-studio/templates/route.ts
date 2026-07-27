@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
 import { parseJson } from "@/lib/video-studio/types";
 
 export async function GET(req: NextRequest) {
@@ -11,9 +12,7 @@ export async function GET(req: NextRequest) {
     const data = await prisma.videoTemplate.findMany({ where: { facebookPageId, isActive: true }, orderBy: [{ usageCount: "desc" }, { updatedAt: "desc" }] });
     return NextResponse.json({ success: true, data: data.map((item) => ({ ...item, structure: parseJson(item.structure, {}) })) });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }
 
@@ -26,8 +25,6 @@ export async function POST(req: NextRequest) {
     const template = await prisma.videoTemplate.create({ data: { facebookPageId: project.facebookPageId, name: input.name, description: input.description, platform: project.platform, aspectRatio: project.aspectRatio, durationSec: project.durationSec, thumbnailUrl: project.thumbnailUrl, structure: JSON.stringify({ objective: project.objective, scenes: project.scenes.map(({ title, kind, purpose, durationSec, script, visualPrompt, cameraDirection }) => ({ title, kind, purpose, durationSec, script, visualPrompt, cameraDirection })) }) } });
     return NextResponse.json({ success: true, data: template }, { status: 201 });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return settingsErrorResponse(error);
   }
 }

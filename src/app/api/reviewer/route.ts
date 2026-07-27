@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { reviewContent } from "@/lib/reviewer";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -23,9 +24,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: result, success: true });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi");
   }
 }

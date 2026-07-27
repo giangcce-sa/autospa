@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateContent } from "@/lib/claude";
 import { prisma } from "@/lib/db";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser();
     const body = await req.json();
     const { action } = body;
 
@@ -38,6 +40,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    const access = accessErrorResponse(e);
+    if (access) return access;
+    console.error("skin-ai failed:", e);
+    return NextResponse.json({ error: "Không phân tích được" }, { status: 500 });
   }
 }

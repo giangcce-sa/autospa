@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runFlashDealDetection } from "@/lib/flash-deal-engine";
 import { verifyCronAuth } from "@/lib/cron-auth";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
@@ -23,6 +24,6 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (e) {
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi chạy flash deal");
   }
 }

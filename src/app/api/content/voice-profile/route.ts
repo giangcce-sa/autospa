@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { AccessError, accessErrorResponse, requireExplicitPageAccess, requirePageAccess } from "@/lib/page-access";
+import { AccessError, requireExplicitPageAccess, requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -15,9 +16,7 @@ export async function GET(req: NextRequest) {
     const profile = await prisma.humanVoiceProfile.findUnique({ where: { facebookPageId: page!.id } });
     return NextResponse.json({ success: true, data: profile });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: "Không thể tải Voice Profile" }, { status: 500 });
+    return routeErrorResponse(error, "Không thể tải Voice Profile");
   }
 }
 
@@ -34,9 +33,6 @@ export async function PATCH(req: NextRequest) {
     const updated = await prisma.humanVoiceProfile.update({ where: { id }, data: { autoApply } });
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof Error ? error.message : "Không thể cập nhật Voice Profile";
-    return NextResponse.json({ success: false, error: message }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return routeErrorResponse(error, "Không thể cập nhật Voice Profile");
   }
 }

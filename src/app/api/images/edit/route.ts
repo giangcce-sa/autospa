@@ -3,7 +3,8 @@ import sharp from "sharp";
 import { prisma } from "@/lib/db";
 import { applyOverlay } from "@/lib/image-overlay";
 import { imageSourceToBuffer, persistImageSource } from "@/lib/media-storage";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
 const SIZES: Record<string, { width: number; height: number }> = {
@@ -91,8 +92,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

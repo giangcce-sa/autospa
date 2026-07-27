@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { detectSlotGaps, runFlashDealDetection } from "@/lib/flash-deal-engine";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET() {
   try {
@@ -8,9 +9,7 @@ export async function GET() {
     const gaps = await detectSlotGaps();
     return NextResponse.json({ success: true, data: { gaps } });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -28,8 +27,6 @@ export async function POST(req: NextRequest) {
       message: "Flash Deal chỉ tạo đề xuất; hãy persist draft theo Page và phân phối qua canonical Publishing",
     }, { status: 400 });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

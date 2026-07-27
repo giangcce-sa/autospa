@@ -1,7 +1,9 @@
 import { probeAdsReadiness } from "@/lib/ads-readiness";
 import { prisma } from "@/lib/db";
 import { safeFacebookPage } from "@/lib/facebook-page-response";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
+import { encryptSecret } from "@/lib/secrets-crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 function normalizeAdAccountId(value: unknown) {
@@ -39,9 +41,7 @@ export async function GET() {
     const safe = pages.map(safeFacebookPage);
     return NextResponse.json({ data: safe, success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ error: "Lỗi khi tải", success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -62,7 +62,8 @@ export async function POST(req: NextRequest) {
         if (data.name) return NextResponse.json({ success: true, message: `Kết nối thành công! Page: ${data.name}`, pageName: data.name });
         return NextResponse.json({ success: false, message: data.error?.message || "Token không hợp lệ" });
       } catch (e) {
-        return NextResponse.json({ success: false, message: "Không thể kết nối: " + String(e) });
+        console.error("facebook page test connection failed:", e);
+        return NextResponse.json({ success: false, message: "Không thể kết nối — kiểm tra Page ID và Access Token" });
       }
     }
 
@@ -72,12 +73,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Thiếu Page ID, tên page hoặc Access Token", success: false }, { status: 400 });
       }
       const adActId = normalizeAdAccountId(adAccountId);
+      const storedToken = encryptSecret(accessToken.trim());
       const page = await prisma.facebookPage.upsert({
         where: { fbPageId: fbPageId.trim() },
-        create: { fbPageId: fbPageId.trim(), pageName: pageName.trim(), accessToken: accessToken.trim(), adAccountId: adActId },
+        create: { fbPageId: fbPageId.trim(), pageName: pageName.trim(), accessToken: storedToken, adAccountId: adActId },
         update: {
           pageName: pageName.trim(),
-          accessToken: accessToken.trim(),
+          accessToken: storedToken,
           adAccountId: adActId,
           ...resetReadiness,
         },
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
       if (!id) return NextResponse.json({ error: "Thiếu id", success: false }, { status: 400 });
       const data: Record<string, string | null | number | Date> = {};
       if (pageName?.trim()) data.pageName = pageName.trim();
-      if (accessToken?.trim()) data.accessToken = accessToken.trim();
+      if (accessToken?.trim()) data.accessToken = encryptSecret(accessToken.trim());
       if ("adAccountId" in body) data.adAccountId = normalizeAdAccountId(adAccountId);
       if (accessToken?.trim() || "adAccountId" in body) Object.assign(data, resetReadiness);
       await prisma.facebookPage.update({ where: { id }, data });
@@ -129,12 +131,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    if (e instanceof RangeError) {
-      return NextResponse.json({ error: e.message, success: false }, { status: 400 });
-    }
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi không xác định");
   }
 }
 
@@ -147,8 +144,6 @@ export async function DELETE(req: NextRequest) {
     await prisma.facebookPage.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi xóa");
   }
 }

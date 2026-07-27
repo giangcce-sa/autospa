@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ZodError } from "zod";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { settingsErrorResponse } from "@/lib/api-response";
+import { requireUser } from "@/lib/page-access";
 import { saveAdsSettings } from "@/lib/settings/ads";
 
 export async function PATCH(req: NextRequest) {
@@ -13,14 +13,6 @@ export async function PATCH(req: NextRequest) {
     });
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    const message = error instanceof ZodError
-      ? error.issues[0]?.message ?? "Cấu hình Ads không hợp lệ"
-      : error instanceof Error ? error.message : String(error);
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: error instanceof ZodError ? 400 : 500 },
-    );
+    return settingsErrorResponse(error, "Cấu hình Ads không hợp lệ");
   }
 }

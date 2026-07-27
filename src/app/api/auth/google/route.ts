@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { exchangeGoogleCode, listGbpAccounts, listGbpLocations } from "@/lib/google-business";
 import { auth } from "@/lib/auth";
+import { encryptSecret } from "@/lib/secrets-crypto";
 import { clearOAuthStateCookie, GOOGLE_OAUTH_STATE_COOKIE, isValidOAuthState } from "@/lib/oauth-state";
 
 function appUrl(path: string) {
@@ -62,8 +63,8 @@ export async function GET(req: NextRequest) {
     await prisma.googleAccount.upsert({
       where: { email: tokens.email },
       update: {
-        accessToken: tokens.accessToken,
-        ...(tokens.refreshToken && { refreshToken: tokens.refreshToken }),
+        accessToken: encryptSecret(tokens.accessToken),
+        ...(tokens.refreshToken && { refreshToken: encryptSecret(tokens.refreshToken) }),
         expiresAt,
         displayName: tokens.displayName,
         ...(accountId && { accountId }),
@@ -74,8 +75,8 @@ export async function GET(req: NextRequest) {
       create: {
         email: tokens.email,
         displayName: tokens.displayName,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken || null,
+        accessToken: encryptSecret(tokens.accessToken),
+        refreshToken: tokens.refreshToken ? encryptSecret(tokens.refreshToken) : null,
         expiresAt,
         accountId: accountId || null,
         locationId: locationId || null,
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
     const name = encodeURIComponent(locationName ?? tokens.email);
     return redirectAndClearState(`/settings?google=connected&name=${name}`);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return redirectAndClearState(`/settings?google=error&reason=${encodeURIComponent(msg)}`);
+    console.error("google oauth exchange failed:", e);
+    return redirectAndClearState("/settings?google=error&reason=exchange_failed");
   }
 }

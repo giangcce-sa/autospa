@@ -1,9 +1,10 @@
-import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { executeApproval } from "@/lib/approval-executor";
+import { decryptSecret } from "@/lib/secrets-crypto";
 import { answerCallbackQuery, editMessage, sendMessage } from "@/lib/telegram";
 import { isTelegramActorAllowed } from "@/lib/telegram-control";
+import { secureCompare } from "@/lib/webhook-security";
 
 type TelegramUpdate = {
   update_id: number;
@@ -19,12 +20,6 @@ type TelegramUpdate = {
     message?: { message_id?: number; chat?: { id?: number } };
   };
 };
-
-function secureEqual(received: string, expected: string) {
-  const left = Buffer.from(received);
-  const right = Buffer.from(expected);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
 
 async function commandReply(command: string) {
   if (command === "/help" || command === "/start") {
@@ -90,11 +85,12 @@ export async function POST(req: NextRequest) {
   const settings = await prisma.settings.findFirst({
     select: { telegramWebhookSecret: true, telegramChatId: true, telegramAdminUserId: true },
   });
-  if (!settings?.telegramWebhookSecret || !settings.telegramChatId) {
+  const webhookSecret = decryptSecret(settings?.telegramWebhookSecret);
+  if (!settings || !webhookSecret || !settings.telegramChatId) {
     return NextResponse.json({ error: "Telegram webhook chưa cấu hình" }, { status: 503 });
   }
   const receivedSecret = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
-  if (!secureEqual(receivedSecret, settings.telegramWebhookSecret)) {
+  if (!secureCompare(receivedSecret, webhookSecret)) {
     return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401 });
   }
 
@@ -136,8 +132,8 @@ export async function POST(req: NextRequest) {
       const messageId = update.callback_query.message?.message_id;
       if (messageId) await editMessage(chatId, messageId, `*AutoSpa Approval*\n\n${statusText}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (update.callback_query.id) await answerCallbackQuery(update.callback_query.id, `Lỗi: ${message}`);
+      console.error("executeApproval failed:", error);
+      if (update.callback_query.id) await answerCallbackQuery(update.callback_query.id, "Lỗi khi xử lý duyệt");
     }
     return NextResponse.json({ ok: true });
   }

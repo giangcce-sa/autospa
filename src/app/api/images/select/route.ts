@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -48,11 +49,9 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
     if (error instanceof Error && error.message === "IMAGE_DESTINATION_MISMATCH") {
       return NextResponse.json({ success: false, error: "Ảnh không thuộc bài viết và Facebook Page này" }, { status: 403 });
     }
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

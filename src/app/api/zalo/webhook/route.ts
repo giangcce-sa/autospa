@@ -5,14 +5,16 @@ import { executeApproval } from "@/lib/approval-executor";
 import { getOrCreateConversation, processIncomingMessage, executeHandoff } from "@/lib/lead-agent";
 import { postToZalo } from "@/lib/zalo";
 import { matchMessageRule } from "@/lib/message-rules";
-import { verifyWebhookSignature } from "@/lib/webhook-security";
+import { decryptSecret } from "@/lib/secrets-crypto";
+import { secureCompare, verifyWebhookSignature } from "@/lib/webhook-security";
 
 // Zalo OA webhook verification
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const verifyToken = searchParams.get("verify_token");
   const settings = await prisma.settings.findFirst();
-  if (verifyToken && verifyToken === settings?.webhookVerifyToken) {
+  const expected = decryptSecret(settings?.webhookVerifyToken);
+  if (verifyToken && expected && secureCompare(verifyToken, expected)) {
     return new Response(verifyToken, { status: 200 });
   }
   return new Response("ok", { status: 200 });

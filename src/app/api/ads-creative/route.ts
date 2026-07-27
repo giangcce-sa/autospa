@@ -1,8 +1,11 @@
 import { generateAdCreative } from "@/lib/ads-creative";
+import { accessErrorResponse, requireUser } from "@/lib/page-access";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
+    // Burns AI quota to build an ad spec — owner only
+    await requireUser({ owner: true });
     const body = await req.json();
     const spec = await generateAdCreative({
       serviceId: body.serviceId,
@@ -12,7 +15,9 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ data: spec, success: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    const access = accessErrorResponse(err);
+    if (access) return access;
+    console.error("ads-creative failed:", err);
+    return NextResponse.json({ error: "Không tạo được creative", success: false }, { status: 500 });
   }
 }

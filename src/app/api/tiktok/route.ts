@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getTikTokOAuthUrl, getTikTokUser } from "@/lib/tiktok";
 import { createOAuthState, setOAuthStateCookie, TIKTOK_OAUTH_STATE_COOKIE } from "@/lib/oauth-state";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
+import { encryptSecret } from "@/lib/secrets-crypto";
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,9 +30,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: false, message: "Action không hợp lệ" }, { status: 400 });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi tải");
   }
 }
 
@@ -64,10 +64,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "Open ID không khớp với access token" }, { status: 400 });
       }
 
+      const storedToken = encryptSecret(accessToken);
       await prisma.tikTokAccount.upsert({
         where: { openId: user.openId },
-        update: { accessToken, displayName: user.displayName, avatarUrl: user.avatarUrl, isActive: true },
-        create: { openId: user.openId, displayName: user.displayName, avatarUrl: user.avatarUrl, accessToken, isActive: true },
+        update: { accessToken: storedToken, displayName: user.displayName, avatarUrl: user.avatarUrl, isActive: true },
+        create: { openId: user.openId, displayName: user.displayName, avatarUrl: user.avatarUrl, accessToken: storedToken, isActive: true },
       });
 
       return NextResponse.json({ success: true, data: user });
@@ -75,8 +76,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: false, message: "Action không hợp lệ" }, { status: 400 });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi không xác định");
   }
 }

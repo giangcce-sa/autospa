@@ -1,5 +1,6 @@
 import { buildBackupGzip } from "@/lib/backup";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { requireUser } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -18,9 +19,6 @@ export async function GET() {
       },
     });
   } catch (err) {
-    const access = accessErrorResponse(err);
-    if (access) return access;
-    const msg = err instanceof Error ? err.message : "Lỗi";
-    return NextResponse.json({ error: msg, success: false }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi");
   }
 }

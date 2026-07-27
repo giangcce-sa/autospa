@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db";
 import { getVisualProfile } from "@/lib/visual-profile";
 import { NextRequest, NextResponse } from "next/server";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,9 +11,7 @@ export async function GET(req: NextRequest) {
     const profile = await getVisualProfile(facebookPageId);
     return NextResponse.json({ success: true, data: profile });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -31,8 +30,6 @@ export async function PATCH(req: NextRequest) {
     });
     return NextResponse.json({ success: true, data: profile });
   } catch (error) {
-    const accessResponse = accessErrorResponse(error);
-    if (accessResponse) return accessResponse;
-    return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

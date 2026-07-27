@@ -8,6 +8,7 @@ import {
   requireExplicitPageAccess,
   requireUser,
 } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import { businessDateKey, businessHour } from "@/lib/today-policy";
 
 async function resolveAnalyticsScope(req: NextRequest, owner = false) {
@@ -159,7 +160,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -189,6 +190,6 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

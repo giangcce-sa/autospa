@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ZodError } from "zod";
-import { accessErrorResponse, requireUser } from "@/lib/page-access";
+import { settingsErrorResponse } from "@/lib/api-response";
+import { requireUser } from "@/lib/page-access";
 import { getChannelSettings, saveZaloSettings, testZaloSettings } from "@/lib/settings/channels";
 
 export async function GET() {
@@ -8,7 +8,7 @@ export async function GET() {
     await requireUser({ owner: true });
     return NextResponse.json({ success: true, data: await getChannelSettings() });
   } catch (error) {
-    return channelErrorResponse(error);
+    return settingsErrorResponse(error, "Cấu hình kênh không hợp lệ");
   }
 }
 
@@ -22,7 +22,7 @@ export async function PATCH(req: NextRequest) {
     });
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    return channelErrorResponse(error);
+    return settingsErrorResponse(error, "Cấu hình kênh không hợp lệ");
   }
 }
 
@@ -32,18 +32,6 @@ export async function POST(req: NextRequest) {
     const result = await testZaloSettings(await req.json());
     return NextResponse.json(result, { status: result.success ? 200 : 502 });
   } catch (error) {
-    return channelErrorResponse(error);
+    return settingsErrorResponse(error, "Cấu hình kênh không hợp lệ");
   }
-}
-
-function channelErrorResponse(error: unknown) {
-  const access = accessErrorResponse(error);
-  if (access) return access;
-  const message = error instanceof ZodError
-    ? error.issues[0]?.message ?? "Cấu hình kênh không hợp lệ"
-    : error instanceof Error ? error.message : String(error);
-  return NextResponse.json(
-    { success: false, error: message, message },
-    { status: error instanceof ZodError ? 400 : 500 },
-  );
 }

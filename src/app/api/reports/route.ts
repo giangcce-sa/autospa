@@ -9,6 +9,7 @@ import {
   requireExplicitPageAccess,
   requireUser,
 } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 
 async function resolveReportScope(req: NextRequest, owner = false) {
   const user = await requireUser({ owner });
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
-    return NextResponse.json({ error: String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi khi tải");
   }
 }
 
@@ -72,6 +73,6 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const access = accessErrorResponse(error);
     if (access) return access;
-    return NextResponse.json({ error: String(error), success: false }, { status: 500 });
+    return routeErrorResponse(error, "Lỗi không xác định");
   }
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { adsMutationErrorResponse } from "@/lib/ads-safety";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
+import { routeErrorResponse } from "@/lib/api-response";
 import {
   getCampaigns,
   getInsights,
@@ -52,11 +52,7 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    const blocked = adsMutationErrorResponse(e);
-    if (blocked) return blocked;
-    return NextResponse.json({ error: String(e).replace("Error: ", ""), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi Facebook Ads");
   }
 }
 
@@ -140,10 +136,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Action không hợp lệ", success: false }, { status: 400 });
   } catch (e) {
-    const access = accessErrorResponse(e);
-    if (access) return access;
-    const blocked = adsMutationErrorResponse(e);
-    if (blocked) return blocked;
-    return NextResponse.json({ error: String(e).replace("Error: ", ""), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi Facebook Ads");
   }
 }

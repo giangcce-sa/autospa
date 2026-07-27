@@ -5,6 +5,8 @@ import { listGbpReviews, replyToGbpReview, refreshGoogleToken } from "@/lib/goog
 import { generateChatCompletion } from "@/lib/openai";
 import { sendAlert } from "@/lib/telegram";
 import { verifyCronAuth } from "@/lib/cron-auth";
+import { routeErrorResponse } from "@/lib/api-response";
+import { decryptSecret, encryptSecret } from "@/lib/secrets-crypto";
 
 export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
@@ -17,14 +19,18 @@ export async function GET(req: NextRequest) {
     }
 
     // Refresh token if needed
-    let token = account.accessToken;
-    if (account.expiresAt && account.expiresAt < new Date(Date.now() + 60000) && account.refreshToken) {
-      const fresh = await refreshGoogleToken(account.refreshToken);
+    let token = decryptSecret(account.accessToken);
+    const refreshToken = decryptSecret(account.refreshToken);
+    if (account.expiresAt && account.expiresAt < new Date(Date.now() + 60000) && refreshToken) {
+      const fresh = await refreshGoogleToken(refreshToken);
       token = fresh.accessToken;
       await prisma.googleAccount.update({
         where: { id: account.id },
-        data: { accessToken: fresh.accessToken, expiresAt: new Date(Date.now() + fresh.expiresIn * 1000) },
+        data: { accessToken: encryptSecret(fresh.accessToken), expiresAt: new Date(Date.now() + fresh.expiresIn * 1000) },
       });
+    }
+    if (!token) {
+      return NextResponse.json({ success: true, message: "Google access token không đọc được — kết nối lại tài khoản" });
     }
 
     const reviews = await listGbpReviews(account.locationId, token);
@@ -98,6 +104,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: { synced, autoReplied, alerted, total: reviews.length } });
   } catch (e) {
-    return NextResponse.json({ error: String(e), success: false }, { status: 500 });
+    return routeErrorResponse(e, "Lỗi khi đồng bộ Google Reviews");
   }
 }

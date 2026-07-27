@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { postToZalo } from "@/lib/zalo";
 import { buildBackupGzip } from "@/lib/backup";
 import { finishJobRun, logActivity, startJobRun } from "@/lib/activity-log";
+import { routeErrorResponse } from "@/lib/api-response";
 
 /**
  * Weekly backup reminder. Computes backup size + row count, sends Zalo
@@ -63,22 +64,21 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ size, rowCount, notified: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Lỗi";
     if (job) {
       await finishJobRun(job.id, {
         status: "failed",
         summary: "Backup reminder failed",
-        error: msg,
+        error: "Thất bại",
       }).catch(() => null);
     }
     await logActivity({
       type: "job_run",
       title: "Backup reminder failed",
-      detail: msg,
+      detail: "Thất bại",
       href: "/settings",
       severity: "danger",
       source: "cron",
     }).catch(() => null);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return routeErrorResponse(err, "Lỗi");
   }
 }

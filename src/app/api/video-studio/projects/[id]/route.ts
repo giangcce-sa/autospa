@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { settingsErrorResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/db";
-import { accessErrorResponse, requirePageAccess } from "@/lib/page-access";
+import { requirePageAccess } from "@/lib/page-access";
 import { projectInclude } from "@/lib/video-studio/service";
 import { serializeProject } from "@/lib/video-studio/serializers";
 import { invalidatedProjectRenderData, PROJECT_RENDER_FIELDS } from "@/lib/video-studio/invalidation";
@@ -32,9 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     await requirePageAccess(project.facebookPageId);
     return NextResponse.json({ success: true, data: serializeProject(project) });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }
 
@@ -63,9 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
     return NextResponse.json({ success: true, data: project });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: error instanceof z.ZodError ? 400 : 500 });
+    return settingsErrorResponse(error);
   }
 }
 
@@ -83,8 +80,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     await Promise.all(keys.map((key) => deleteMedia(key).catch(() => null)));
     return NextResponse.json({ success: true });
   } catch (error) {
-    const access = accessErrorResponse(error);
-    if (access) return access;
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return settingsErrorResponse(error);
   }
 }
