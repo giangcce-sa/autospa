@@ -4,9 +4,15 @@ import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { resolveMediaStoragePolicy } from "@/lib/media-storage-policy";
 
 const STORAGE_ROOT = path.join(/* turbopackIgnore: true */ process.cwd(), ".data", "media");
-const STORAGE_PROVIDER = process.env.MEDIA_STORAGE_PROVIDER === "s3" ? "s3" : "local";
+
+function storagePolicy() {
+  const policy = resolveMediaStoragePolicy();
+  if (!policy.allowed) throw new Error(policy.blocker ?? "Media storage chưa sẵn sàng");
+  return policy;
+}
 
 function s3Config() {
   const bucket = process.env.MEDIA_S3_BUCKET;
@@ -78,7 +84,7 @@ export async function saveMedia(input: {
   const folder = safeKey(input.folder);
   const extension = input.extension.replace(/[^a-z0-9]/gi, "").toLowerCase() || "bin";
   const key = `${folder}/${Date.now()}-${randomUUID()}.${extension}`;
-  if (STORAGE_PROVIDER === "s3") {
+  if (storagePolicy().provider === "s3") {
     const { bucket, client } = s3Config();
     await client.send(new PutObjectCommand({
       Bucket: bucket,
@@ -96,7 +102,7 @@ export async function saveMedia(input: {
 }
 
 export async function readMedia(key: string) {
-  if (STORAGE_PROVIDER === "s3") {
+  if (storagePolicy().provider === "s3") {
     const { bucket, client } = s3Config();
     const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: safeKey(key) }));
     if (!response.Body) throw new Error("S3 không trả về nội dung ảnh");
@@ -107,7 +113,7 @@ export async function readMedia(key: string) {
 
 export async function deleteMedia(key?: string | null) {
   if (!key) return;
-  if (STORAGE_PROVIDER === "s3") {
+  if (storagePolicy().provider === "s3") {
     const { bucket, client } = s3Config();
     await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: safeKey(key) }));
     return;

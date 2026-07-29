@@ -1,40 +1,18 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
-const owner = {
-  email: process.env.E2E_OWNER_EMAIL ?? "owner-e2e@example.test",
-  password: process.env.E2E_OWNER_PASSWORD ?? "owner-e2e-password",
-};
-const viewer = {
-  email: process.env.E2E_VIEWER_EMAIL ?? "viewer-e2e@example.test",
-  password: process.env.E2E_VIEWER_PASSWORD ?? "viewer-e2e-password",
-};
 const pageId = "e2e-creative-page";
 const scope = `scope=current&pageId=${pageId}`;
-
-async function login(page: Page, credentials: typeof owner) {
-  await page.goto("/login");
-  const form = page.locator("form").filter({
-    has: page.getByRole("button", { name: "Đăng nhập" }),
-    visible: true,
-  });
-  await form.getByLabel("Email").filter({ visible: true }).fill(credentials.email);
-  await form.getByLabel("Mật khẩu").filter({ visible: true }).fill(credentials.password);
-  await form.getByRole("button", { name: "Đăng nhập" }).click();
-  await expect(page).not.toHaveURL(/\/login(?:\?|$)/);
-}
 
 async function expectView(page: Page, path: string, view: string, heading: string) {
   await page.goto(`${path}?view=${view}&${scope}`);
   const main = page.locator("#main-content");
   await expect(main.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
-  await expect(
-    main.getByRole("navigation", { name: new RegExp(`Điều hướng ${heading}`) })
-      .getByRole("link", { name: new RegExp(heading) }),
-  ).toHaveAttribute("aria-current", "page");
+  const navigation = main.getByRole("navigation", { name: new RegExp(`Điều hướng ${heading}`) });
+  await expect(navigation.locator(`a[href*="view=${view}"]`)).toHaveAttribute("aria-current", "page");
 }
 
-test("owner can open every canonical Creative view with persisted Page data", async ({ page }) => {
-  await login(page, owner);
+test("owner can open every canonical Creative view with persisted Page data", async ({ ownerPage: page }) => {
 
   await expectView(page, "/creative/ideas", "overview", "Ý tưởng & Nghiên cứu");
   await expect(page.getByRole("heading", { name: "Quy trình peel an toàn E2E" })).toBeVisible();
@@ -53,7 +31,7 @@ test("owner can open every canonical Creative view with persisted Page data", as
   await expectView(page, "/creative/content", "overview", "Biên tập nội dung");
   await expect(page.getByText("Peel da an toàn bắt đầu từ soi da")).toBeVisible();
   await expectView(page, "/creative/content", "editor", "Biên tập nội dung");
-  await expect(page.getByRole("button", { name: "Tạo nội dung" })).toBeVisible();
+  await expect(page.locator("#main-content").getByRole("button", { name: "Tạo nội dung" })).toBeVisible();
   await page.goto(`/creative/content?view=editor&${scope}&id=e2e-creative-draft`);
   await expect(page.getByRole("heading", { name: "Quy trình peel an toàn E2E" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Lưu nội dung" })).toBeVisible();
@@ -78,15 +56,14 @@ test("owner can open every canonical Creative view with persisted Page data", as
   await expect(page.getByRole("heading", { name: "Công việc video" })).toBeVisible();
 
   await expectView(page, "/creative/publishing", "overview", "Đăng bài & Thư viện");
-  await expect(page.getByText("Kết quả theo kênh")).toBeVisible();
+  await expect(page.locator("#main-content").getByRole("heading", { name: "Kết quả theo kênh" })).toBeVisible();
   await expectView(page, "/creative/publishing", "composer", "Đăng bài & Thư viện");
   await expectView(page, "/creative/publishing", "calendar", "Đăng bài & Thư viện");
   await expectView(page, "/creative/publishing", "library", "Đăng bài & Thư viện");
   await expect(page.getByText("Peel da an toàn bắt đầu từ soi da")).toBeVisible();
 });
 
-test("Creative navigation clears stale record identity and preserves deliberate handoffs", async ({ page }) => {
-  await login(page, owner);
+test("Creative navigation clears stale record identity and preserves deliberate handoffs", async ({ ownerPage: page }) => {
   await page.goto(`/creative/content?view=editor&${scope}&id=e2e-creative-draft`);
   await expect(page.getByRole("heading", { name: "Quy trình peel an toàn E2E" })).toBeVisible();
 
@@ -102,8 +79,7 @@ test("Creative navigation clears stale record identity and preserves deliberate 
   await expect(page.getByRole("heading", { name: "Quy trình peel an toàn E2E" })).toBeVisible();
 });
 
-test("viewer reads all Creative data but cannot mutate", async ({ page }) => {
-  await login(page, viewer);
+test("viewer reads all Creative data but cannot mutate", async ({ viewerPage: page }) => {
 
   await page.goto(`/creative/ideas?view=overview&${scope}&id=e2e-creative-draft`);
   await expect(page.getByRole("heading", { name: "Quy trình peel an toàn E2E" })).toBeVisible();
@@ -114,7 +90,9 @@ test("viewer reads all Creative data but cannot mutate", async ({ page }) => {
   await page.goto(`/creative/content?view=bulk&${scope}`);
   await expect(page.getByRole("heading", { name: "Kế hoạch E2E" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Tạo kế hoạch tháng/ })).toHaveCount(0);
-  await expect(page.getByText("chỉ chủ sở hữu mới có thể tạo hoặc xóa kế hoạch")).toBeVisible();
+  await expect(
+    page.locator("#main-content").getByText("chỉ chủ sở hữu mới có thể tạo hoặc xóa kế hoạch"),
+  ).toBeVisible();
 
   const generate = await page.request.post("/api/bulk", {
     data: { facebookPageId: pageId, month: 8, year: 2026, postsPerWeek: 2, tone: "friendly", postTypes: ["service"] },

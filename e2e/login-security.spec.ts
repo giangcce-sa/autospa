@@ -43,7 +43,7 @@ test("repeated failures lock the throwaway identity but the seeded owner still l
   // "unknown" IP bucket (30 failures/15min). Burning ~11 failures per project would
   // trip the IP-wide lockout by the third project and block every later login —
   // so the expensive lockout walk runs once, on desktop only.
-  test.skip(testInfo.project.name !== "desktop", "lockout budget is IP-wide; run once per suite");
+  test.skip(testInfo.project.name !== "desktop-full", "lockout budget is IP-wide; run once per suite");
 
   // This address is never seeded — locking it cannot break other specs.
   const throwawayEmail = `lockout-${testInfo.project.name}@example.test`;

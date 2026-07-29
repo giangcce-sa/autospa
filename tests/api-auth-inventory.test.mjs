@@ -75,11 +75,13 @@ test("the public allowlist does not rot", async () => {
 });
 
 test("high-risk formerly-open routes now enforce roles", async () => {
-  const ownerOnly = ["feedback/route.ts", "intelligence/route.ts", "ads-creative/route.ts"];
+  const ownerOnly = ["feedback/route.ts", "intelligence/route.ts"];
   for (const rel of ownerOnly) {
     const source = await readFile(path.join(API_ROOT, rel), "utf8");
     assert.match(source, /requireUser\(\{ owner: true \}\)/, `${rel} must gate mutations behind owner`);
   }
+  const adsCreative = await readFile(path.join(API_ROOT, "ads-creative/route.ts"), "utf8");
+  assert.match(adsCreative, /requirePageAccess\(input\.facebookPageId, \{ owner: true \}\)/);
   for (const rel of ["skin-ai/route.ts", "repurpose/route.ts"]) {
     const source = await readFile(path.join(API_ROOT, rel), "utf8");
     assert.match(source, /await requireUser\(\)/, `${rel} must require a session`);

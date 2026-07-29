@@ -27,11 +27,16 @@ interface AdSpec {
   predictedRoas: number;
   reasoning: string;
   council: { turns: DebateTurn[] };
+  generation: { mode: "ai" | "deterministic_fallback"; generatedAt: string };
+  estimates: { ctr: "historical" | "heuristic"; roas: "historical" | "heuristic" };
+  warnings: string[];
 }
+
+interface Props { facebookPageId?: string; }
 
 function vnd(n: number) { return new Intl.NumberFormat("vi-VN").format(n) + "đ"; }
 
-export function AdCreativeAssistant() {
+export function AdCreativeAssistant({ facebookPageId }: Props) {
   const [services, setServices] = useState<Service[]>([]);
   const [form, setForm] = useState({
     serviceId: "",
@@ -46,10 +51,13 @@ export function AdCreativeAssistant() {
   const [showDebate, setShowDebate] = useState(false);
 
   useEffect(() => {
-    fetch("/api/services").then((r) => r.json()).then((res) => {
+    setServices([]);
+    setForm((current) => ({ ...current, serviceId: "" }));
+    if (!facebookPageId) return;
+    fetch(`/api/services?facebookPageId=${encodeURIComponent(facebookPageId)}`).then((r) => r.json()).then((res) => {
       if (res.data) setServices(res.data.filter((s: Service & { active: boolean }) => s.active));
     });
-  }, []);
+  }, [facebookPageId]);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -60,6 +68,7 @@ export function AdCreativeAssistant() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          facebookPageId,
           serviceId: form.serviceId || undefined,
           dailyBudget: form.dailyBudget ? Number(form.dailyBudget) : undefined,
           objective: form.objective,
@@ -115,7 +124,7 @@ export function AdCreativeAssistant() {
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
           />
           {error && <p className="text-xs p-2 rounded" style={{ background: "var(--rose-light)", color: "var(--rose)" }}>{error}</p>}
-          <Button onClick={handleGenerate} loading={loading} className="w-full">
+          <Button onClick={handleGenerate} loading={loading} disabled={!facebookPageId} className="w-full">
             <Sparkle size={14} weight="fill" /> AI Council đề xuất spec quảng cáo
           </Button>
         </div>
@@ -133,6 +142,11 @@ export function AdCreativeAssistant() {
 
       {spec && !loading && (
         <>
+          {spec.warnings.length > 0 ? (
+            <div className="rounded-xl p-3 text-xs" style={{ background: "var(--amber-light)", color: "var(--amber)" }}>
+              <strong>{spec.generation.mode === "deterministic_fallback" ? "Fallback bảo thủ" : "Ước tính AI"}:</strong> {spec.warnings.join(" ")}
+            </div>
+          ) : null}
           {/* Summary metrics */}
           <div className="grid grid-cols-4 gap-2">
             <div className="rounded-xl p-3" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>

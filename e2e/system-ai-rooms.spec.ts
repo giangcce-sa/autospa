@@ -1,13 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const owner = {
-  email: process.env.E2E_OWNER_EMAIL ?? "owner-e2e@example.test",
-  password: process.env.E2E_OWNER_PASSWORD ?? "owner-e2e-password",
-};
-const viewer = {
-  email: process.env.E2E_VIEWER_EMAIL ?? "viewer-e2e@example.test",
-  password: process.env.E2E_VIEWER_PASSWORD ?? "viewer-e2e-password",
-};
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 const rooms = [
   ["overview", "Tổng quan"],
@@ -19,18 +11,6 @@ const rooms = [
 ] as const;
 
 const ownerRooms = [...rooms, ["operations", "Vận hành"]] as const;
-
-async function login(page: Page, credentials: typeof owner) {
-  await page.goto("/login");
-  const form = page.locator("form").filter({
-    has: page.getByRole("button", { name: "Đăng nhập" }),
-    visible: true,
-  });
-  await form.getByLabel("Email").filter({ visible: true }).fill(credentials.email);
-  await form.getByLabel("Mật khẩu").filter({ visible: true }).fill(credentials.password);
-  await form.getByRole("button", { name: "Đăng nhập" }).click();
-  await expect(page).not.toHaveURL(/\/login(?:\?|$)/);
-}
 
 async function expectCanonicalRoom(page: Page, view: typeof ownerRooms[number][0], label: string) {
   await page.goto(`/system/ai-rooms?view=${view}&scope=account`);
@@ -48,8 +28,7 @@ test("protected System routes redirect to the real login flow", async ({ page })
   await expect(page.getByRole("button", { name: "Đăng nhập" })).toBeVisible();
 });
 
-test("owner can read every canonical AI Room and sees owner controls", async ({ page }) => {
-  await login(page, owner);
+test("owner can read every canonical AI Room and sees owner controls", async ({ ownerPage: page }) => {
 
   await page.goto("/system");
   await expect(page.getByRole("heading", { name: "Hệ thống", level: 1 })).toBeVisible();
@@ -79,8 +58,7 @@ test("owner can read every canonical AI Room and sees owner controls", async ({ 
   await expect(operations.getByRole("button", { name: "Đồng bộ doanh thu Spa" })).toBeVisible();
 });
 
-test("owner filters Brain metadata and persists status and outcome actions", async ({ page }) => {
-  await login(page, owner);
+test("owner filters Brain metadata and persists status and outcome actions", async ({ ownerPage: page }) => {
   const resetResponse = await page.request.patch("/api/brain", {
     data: { id: "e2e-brain-skill", status: "draft" },
   });
@@ -117,8 +95,7 @@ test("owner filters Brain metadata and persists status and outcome actions", asy
   await expect(skill.locator("p").filter({ hasText: "Latest outcome:" })).toContainText("success");
 });
 
-test("viewer reads canonical AI Rooms but cannot see or call owner actions", async ({ page }) => {
-  await login(page, viewer);
+test("viewer reads canonical AI Rooms but cannot see or call owner actions", async ({ viewerPage: page }) => {
 
   for (const [view, label] of rooms) await expectCanonicalRoom(page, view, label);
 
@@ -156,8 +133,7 @@ test("viewer reads canonical AI Rooms but cannot see or call owner actions", asy
   expect(adsRunResponse.status()).toBe(403);
 });
 
-test("legacy AI aliases preserve query state and owner-only access", async ({ page }) => {
-  await login(page, viewer);
+test("legacy AI aliases preserve query state and owner-only access", async ({ viewerPage: page }) => {
   const main = page.locator("#main-content");
 
   await page.goto("/council?source=legacy");
@@ -182,8 +158,7 @@ test("legacy AI aliases preserve query state and owner-only access", async ({ pa
   await expect(main.getByRole("link", { name: "Vận hành", exact: true })).toHaveCount(0);
 });
 
-test("owner reaches Operations through the legacy automation alias", async ({ page }) => {
-  await login(page, owner);
+test("owner reaches Operations through the legacy automation alias", async ({ ownerPage: page }) => {
   await page.goto("/automation?source=legacy");
   await expect(page).toHaveURL(/\/system\/ai-rooms\?(?=.*view=operations)(?=.*scope=account)(?=.*source=legacy)/);
   const main = page.locator("#main-content");
@@ -191,8 +166,7 @@ test("owner reaches Operations through the legacy automation alias", async ({ pa
   await expect(main.getByRole("heading", { name: "Ads deployment policy hiệu lực" })).toBeVisible();
 });
 
-test("URL state survives navigation, refresh and browser history", async ({ page }) => {
-  await login(page, viewer);
+test("URL state survives navigation, refresh and browser history", async ({ viewerPage: page }) => {
   await page.goto("/system/ai-rooms?view=brain&scope=account");
   await page.reload();
   await expect(page.getByRole("link", { name: "Kỹ năng", exact: true })).toHaveAttribute("aria-current", "page");

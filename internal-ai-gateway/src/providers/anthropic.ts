@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import { modelRoutes } from "../config/models.js";
 import { GatewayError } from "../errors/gateway-error.js";
+import { parseSseJson, parseSseStream } from "./sse-parser.js";
 import type {
   GatewayChatRequest,
   GatewayChatResponse,
@@ -152,57 +153,42 @@ export class AnthropicAdapter implements StreamingAiProviderAdapter {
     async function* generate(): AsyncIterable<StreamChunk> {
       let inputTokens: number | null = null;
       let outputTokens: number | null = null;
-      let buffer = "";
-      const reader = body.getReader();
-      const decoder = new TextDecoder();
+      let completed = false;
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const raw = line.slice(6).trim();
-            if (!raw) continue;
-            let evt: Record<string, unknown>;
-            try {
-              evt = JSON.parse(raw) as Record<string, unknown>;
-            } catch {
-              continue;
-            }
-            if (evt.type === "content_block_delta") {
-              const delta = evt.delta as Record<string, unknown> | undefined;
-              const text = typeof delta?.text === "string" ? delta.text : "";
-              if (text) yield { content: text, done: false };
-            } else if (evt.type === "message_start") {
-              const msg = evt.message as Record<string, unknown> | undefined;
-              const usage = msg?.usage as Record<string, unknown> | undefined;
-              if (usage) {
-                inputTokens = typeof usage.input_tokens === "number" ? usage.input_tokens : null;
-              }
-            } else if (evt.type === "message_delta") {
-              const usage = (evt as Record<string, unknown>).usage as Record<string, unknown> | undefined;
-              if (usage) {
-                outputTokens = typeof usage.output_tokens === "number" ? usage.output_tokens : null;
-              }
-            }
+        for await (const event of parseSseStream(body)) {
+          const payload = parseSseJson(event.data);
+          if (payload.type === "error") {
+            const error = payload.error as Record<string, unknown> | undefined;
+            throw new GatewayError("PROVIDER_ERROR", typeof error?.message === "string" ? error.message : "Anthropic stream failed");
+          }
+          if (payload.type === "content_block_delta") {
+            const delta = payload.delta as Record<string, unknown> | undefined;
+            const text = typeof delta?.text === "string" ? delta.text : "";
+            if (text) yield { content: text, done: false };
+          } else if (payload.type === "message_start") {
+            const message = payload.message as Record<string, unknown> | undefined;
+            const usage = message?.usage as Record<string, unknown> | undefined;
+            inputTokens = typeof usage?.input_tokens === "number" ? usage.input_tokens : inputTokens;
+          } else if (payload.type === "message_delta") {
+            const usage = payload.usage as Record<string, unknown> | undefined;
+            outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : outputTokens;
+          } else if (payload.type === "message_stop") {
+            completed = true;
           }
         }
+        if (!completed) throw new GatewayError("PROVIDER_ERROR", "Anthropic stream ended before message_stop");
+        yield {
+          content: "",
+          done: true,
+          usage: {
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            source: inputTokens !== null || outputTokens !== null ? "provider" : "unavailable"
+          }
+        };
       } finally {
         clearTimeout(timer);
-        reader.releaseLock();
       }
-      yield {
-        content: "",
-        done: true,
-        usage: {
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
-          source: inputTokens !== null || outputTokens !== null ? "provider" : "unavailable"
-        }
-      };
     }
     return generate();
   }

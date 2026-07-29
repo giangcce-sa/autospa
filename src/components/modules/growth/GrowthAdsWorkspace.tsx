@@ -17,6 +17,10 @@ import {
   type AdsWorkspaceContextData,
 } from "@/lib/growth-ads";
 import { AccessError } from "@/lib/page-access";
+import {
+  META_INSIGHTS_DATE_PRESETS,
+  type MetaInsightsDatePreset,
+} from "@/lib/meta-insights-policy";
 import { resolveWorkspaceAccess } from "@/lib/workspace-access";
 import { parseWorkspaceUrl, workspaceScopesForRoute } from "@/lib/workspace-url";
 
@@ -24,7 +28,7 @@ export interface GrowthAdsWorkspaceProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-const DATE_PRESETS = new Set(["today", "last_7d", "last_30d", "this_month"]);
+const DATE_PRESETS = new Set<string>(META_INSIGHTS_DATE_PRESETS);
 
 export async function GrowthAdsWorkspace({ searchParams }: GrowthAdsWorkspaceProps) {
   const route = ROUTES_BY_ID.get("growth-ads");
@@ -59,7 +63,7 @@ export async function GrowthAdsWorkspace({ searchParams }: GrowthAdsWorkspacePro
           view={currentView.id}
           facebookPageId={access.state.pageId}
           recordId={access.state.id}
-          datePreset={typeof params.status === "string" && DATE_PRESETS.has(params.status) ? params.status : "last_7d"}
+          datePreset={typeof params.status === "string" && DATE_PRESETS.has(params.status) ? params.status as MetaInsightsDatePreset : "last_7d"}
           canMutate={access.canMutate}
         />
       ) : null}
@@ -77,7 +81,7 @@ async function AdsWorkspaceContent({
   view: string;
   facebookPageId: string;
   recordId?: string;
-  datePreset: string;
+  datePreset: MetaInsightsDatePreset;
   canMutate: boolean;
 }) {
   const context = await getAdsWorkspaceContext(facebookPageId);
@@ -91,7 +95,8 @@ async function AdsWorkspaceContent({
           facebookPageId={facebookPageId}
           initialPostId={recordId}
           initialPosts={posts}
-          canMutate={canMutate && !context.policy.writeBlocker}
+          canMutate={canMutate}
+          mutationBlocked={Boolean(context.policy.writeBlocker)}
         />
       </AdsWorkspaceFrame>
     );

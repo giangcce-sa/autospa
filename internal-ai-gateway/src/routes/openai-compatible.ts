@@ -7,7 +7,9 @@ import { assertPerKeyRateLimit } from "../auth/rate-limit.js";
 import { estimateTokenCostUsd } from "../billing/cost-estimator.js";
 import { GatewayError, toGatewayError } from "../errors/gateway-error.js";
 import { writeAuditLog } from "../observability/audit-log.js";
+import { supportsStreaming } from "../providers/types.js";
 import { getAdapter, resolveModelRoute, resolveSmartModelRoute } from "../router/model-router.js";
+import { writeOpenAiStreamResponse } from "./stream-response.js";
 
 const chatCompletionsSchema = z.object({
   model: z.string().min(1),
@@ -22,6 +24,7 @@ const chatCompletionsSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().int().positive().optional(),
   stream: z.boolean().optional(),
+  stream_options: z.object({ include_usage: z.boolean().optional() }).strict().optional(),
   metadata: z.record(z.string(), z.unknown()).optional()
 });
 
@@ -43,10 +46,6 @@ export async function openAiCompatibleRoutes(app: FastifyInstance): Promise<void
       const body = chatCompletionsSchema.parse(request.body);
       model = body.model;
 
-      if (body.stream) {
-        throw new GatewayError("INVALID_REQUEST", "Streaming is not implemented in the gateway yet", 400);
-      }
-
       if (body.model !== "auto") {
         assertModelAllowed(context.policy, body.model);
       }
@@ -58,17 +57,68 @@ export async function openAiCompatibleRoutes(app: FastifyInstance): Promise<void
       const route = resolveSmartModelRoute(body.model, "chat", context);
       routeProvider = route.provider;
       const adapter = getAdapter(route.provider);
-      const response = await adapter.chat({
+      const providerRequest = {
         requestId,
         clientId: context.client.id,
         model: route.model,
         providerModel: route.providerModel,
-        taskType: "chat",
+        taskType: "chat" as const,
         messages: body.messages,
         temperature: body.temperature,
         maxTokens: body.max_tokens,
         metadata: { ...body.metadata, openai_compatible: true }
-      });
+      };
+
+      if (body.stream === true) {
+        if (!supportsStreaming(adapter)) {
+          throw new GatewayError("INVALID_REQUEST", `Provider ${route.provider} does not support streaming`, 400);
+        }
+        const stream = await adapter.chatStream(providerRequest);
+        const outcome = await writeOpenAiStreamResponse(reply, stream, {
+          id: `chatcmpl_${requestId}`,
+          model: route.model,
+          includeUsage: body.stream_options?.include_usage === true
+        });
+        if (outcome.status === "error") {
+          await writeAuditLog({
+            request_id: requestId,
+            user_id: context.user.id,
+            api_key_id: context.apiKey.id,
+            client_id: context.client.id,
+            provider: route.provider,
+            model: route.model,
+            latency_ms: Date.now() - started,
+            status: "error",
+            error_code: outcome.error.code,
+            created_at: new Date().toISOString()
+          });
+          return;
+        }
+        await writeAuditLog({
+          estimated_cost: estimateTokenCostUsd({
+            provider: route.provider,
+            model: route.model,
+            upstreamModel: null,
+            inputTokens: outcome.usage.input_tokens,
+            outputTokens: outcome.usage.output_tokens
+          }),
+          request_id: requestId,
+          user_id: context.user.id,
+          api_key_id: context.apiKey.id,
+          client_id: context.client.id,
+          provider: route.provider,
+          model: route.model,
+          latency_ms: Date.now() - started,
+          status: "ok",
+          input_tokens: outcome.usage.input_tokens,
+          output_tokens: outcome.usage.output_tokens,
+          usage_source: outcome.usage.source,
+          created_at: new Date().toISOString()
+        });
+        return;
+      }
+
+      const response = await adapter.chat(providerRequest);
 
       await writeAuditLog({
         estimated_cost: estimateTokenCostUsd({

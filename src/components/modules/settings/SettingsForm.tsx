@@ -524,15 +524,15 @@ export function SettingsForm() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <FloppyDisk size={16} style={{ color: "var(--accent)" }} weight="fill" />
-                <CardTitle>Backup dữ liệu</CardTitle>
+                <CardTitle>Xuất dữ liệu đã loại bỏ secrets</CardTitle>
               </div>
             </CardHeader>
             <div className="space-y-3 text-xs">
               <p style={{ color: "var(--text-secondary)" }}>
-                Tự động: Neon Postgres có Point-in-Time Recovery 7 ngày. Mỗi Chủ nhật 3h sáng, Zalo nhắc tải backup tuần này.
+                Disaster recovery dùng physical PostgreSQL backup chạy ngoài ứng dụng và mã hóa trước khi upload. Operator cần chạy restore drill định kỳ vào database test.
               </p>
               <p style={{ color: "var(--text-secondary)" }}>
-                Manual download: tải file JSON gzipped chứa toàn bộ data — settings, posts, customers, leads, memory, mọi thứ.
+                Download dưới đây chỉ là JSON gzip đã loại bỏ secrets và một số dữ liệu vận hành; không thay thế physical backup.
               </p>
               <a
                 href="/api/backup"
@@ -540,10 +540,10 @@ export function SettingsForm() {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-80"
                 style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)", color: "white", boxShadow: "0 1px 6px color-mix(in srgb, var(--accent) 24%, transparent)" }}
               >
-                <DownloadSimple size={13} weight="bold" /> Download backup ngay
+                <DownloadSimple size={13} weight="bold" /> Download JSON export
               </a>
               <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                Tip: Giữ ít nhất 4 backup gần nhất (1 tháng). Upload lên Google Drive / iCloud / external drive là an toàn nhất.
+                Physical backup được cấu hình bằng deployment secrets và bucket lifecycle; không lưu backup credentials trong Settings.
               </p>
             </div>
           </Card>

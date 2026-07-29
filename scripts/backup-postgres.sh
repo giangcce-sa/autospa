@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-connection_url="${DIRECT_URL:-${DATABASE_URL:-}}"
-: "${connection_url:?DIRECT_URL or DATABASE_URL is required}"
+: "${DIRECT_URL:?DIRECT_URL is required}"
+connection_url="${DIRECT_URL}"
 pg_dump_bin="${PG_DUMP_BIN:-pg_dump}"
 pg_restore_bin="${PG_RESTORE_BIN:-pg_restore}"
 

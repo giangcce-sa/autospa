@@ -39,9 +39,11 @@ test("Security configuration never sends deployment values or secret payloads to
   const service = await source("src/lib/settings/security.ts");
   const policy = await source("src/lib/settings/security-policy.ts");
 
-  for (const name of ["AUTH_SECRET", "CRON_SECRET", "MEDIA_S3_BUCKET", "RUNWAY_API_KEY"]) {
+  for (const name of ["AUTH_SECRET", "CRON_SECRET", "RUNWAY_API_KEY"]) {
     assert.match(service, new RegExp(`process\\.env\\.${name}`));
   }
+  assert.match(service, /resolveMediaStoragePolicy\(\)/);
+  assert.equal(service.includes("process.env.MEDIA_S3_BUCKET"), false);
   assert.equal(policy.includes("secretValue"), false);
   assert.equal(policy.includes("rawSecret"), false);
   assert.equal(policy.includes("process.env"), false);

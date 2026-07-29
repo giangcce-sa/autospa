@@ -67,7 +67,7 @@ export function FacebookAdsManager({ initialPostId }: Props) {
       )}
 
       {tab === "campaigns" && <CampaignList facebookPageId={fbPageId} />}
-      {tab === "assistant" && <AdCreativeAssistant />}
+      {tab === "assistant" && <AdCreativeAssistant facebookPageId={fbPageId} />}
       {tab === "create" && <CreateAd facebookPageId={fbPageId} initialPostId={initialPostId} />}
       {tab === "insights" && <AdsInsights facebookPageId={fbPageId} />}
     </div>

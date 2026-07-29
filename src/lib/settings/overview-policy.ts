@@ -29,6 +29,7 @@ export interface SettingsOverviewInput {
     model: string;
     storageProvider: "local" | "s3";
     storageConfigured: boolean;
+    storageBlocker?: string | null;
   };
   video: {
     mockMode: boolean;
@@ -134,7 +135,7 @@ export function buildSettingsOverview(input: SettingsOverviewInput) {
       status: "blocked",
       statusLabel: "Storage bị chặn",
       summary: `Storage ${input.images.storageProvider.toUpperCase()} chưa hoàn tất`,
-      detail: "Cần cấu hình deployment storage trước khi lưu media ổn định.",
+      detail: input.images.storageBlocker ?? "Cần cấu hình deployment storage trước khi lưu media ổn định.",
       source: "Deployment",
     }),
     item("video", input.video.mockMode ? {
@@ -215,7 +216,7 @@ export function buildSettingsOverview(input: SettingsOverviewInput) {
       status: "info",
       statusLabel: "Đã có chính sách",
       summary: `Nháp ${input.data.draftRetentionDays} ngày · đã đăng ${input.data.publishedRetentionDays} ngày`,
-      detail: "0 ngày có nghĩa là giữ không giới hạn; backup loại bỏ các trường secret.",
+      detail: "0 ngày có nghĩa là giữ không giới hạn; JSON export loại bỏ secrets và không thay thế physical PostgreSQL backup.",
       source: "Database",
     }),
   ];

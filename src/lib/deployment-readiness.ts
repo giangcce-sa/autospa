@@ -1,3 +1,5 @@
+import { resolveMediaStoragePolicy } from "./media-storage-policy.ts";
+import { resolveProductionEnvironmentPolicy } from "./production-environment-policy.ts";
 import { resolveVideoExecutionPolicy } from "./video-studio/execution-policy.ts";
 
 export interface DeploymentReadiness {
@@ -8,6 +10,16 @@ export interface DeploymentReadiness {
     cronSecret: boolean;
     publicHttpsOrigin: boolean;
     mediaStorage: boolean;
+    productionEnvironment: boolean;
+  };
+  deployment: {
+    mode: "persistent" | "stateless";
+    source: "explicit" | "vercel_fallback" | "compatibility_fallback" | "invalid";
+  };
+  media: {
+    provider: "local" | "s3";
+    configured: boolean;
+    durable: boolean;
   };
   safety: {
     adsExecutionMode: string;
@@ -34,13 +46,15 @@ export function buildDeploymentReadiness(input: {
   env?: NodeJS.ProcessEnv;
 }): DeploymentReadiness {
   const env = input.env ?? process.env;
-  const mediaStorage = env.MEDIA_STORAGE_PROVIDER !== "s3" || Boolean(env.MEDIA_S3_BUCKET);
+  const mediaPolicy = resolveMediaStoragePolicy(env);
+  const productionEnvironment = resolveProductionEnvironmentPolicy(env);
   const checks = {
     database: input.database,
     authSecret: Boolean(env.AUTH_SECRET),
     cronSecret: Boolean(env.CRON_SECRET),
     publicHttpsOrigin: publicHttpsOrigin(env),
-    mediaStorage,
+    mediaStorage: mediaPolicy.allowed,
+    productionEnvironment: productionEnvironment.valid,
   };
   const videoPolicy = resolveVideoExecutionPolicy({
     requestedMockMode: env.VIDEO_MOCK_MODE !== "false",
@@ -51,6 +65,15 @@ export function buildDeploymentReadiness(input: {
   return {
     ready: Object.values(checks).every(Boolean),
     checks,
+    deployment: {
+      mode: mediaPolicy.deploymentMode,
+      source: mediaPolicy.deploymentModeSource,
+    },
+    media: {
+      provider: mediaPolicy.provider,
+      configured: mediaPolicy.configured,
+      durable: mediaPolicy.durable,
+    },
     safety: {
       adsExecutionMode: env.ADS_EXECUTION_MODE || "read_only",
       adsEmergencyStop: env.ADS_EMERGENCY_STOP !== "false",

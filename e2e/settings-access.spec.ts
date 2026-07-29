@@ -1,13 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const owner = {
-  email: process.env.E2E_OWNER_EMAIL ?? "owner-e2e@example.test",
-  password: process.env.E2E_OWNER_PASSWORD ?? "owner-e2e-password",
-};
-const viewer = {
-  email: process.env.E2E_VIEWER_EMAIL ?? "viewer-e2e@example.test",
-  password: process.env.E2E_VIEWER_PASSWORD ?? "viewer-e2e-password",
-};
+import { expect, test } from "./fixtures/auth";
 
 // Same secret list the smoke test enforces for /api/settings responses.
 const SECRET_FIELDS = [
@@ -19,20 +10,7 @@ const SECRET_FIELDS = [
   "telegramBotToken",
 ] as const;
 
-async function login(page: Page, credentials: typeof owner) {
-  await page.goto("/login");
-  const form = page.locator("form").filter({
-    has: page.getByRole("button", { name: "Đăng nhập" }),
-    visible: true,
-  });
-  await form.getByLabel("Email").filter({ visible: true }).fill(credentials.email);
-  await form.getByLabel("Mật khẩu").filter({ visible: true }).fill(credentials.password);
-  await form.getByRole("button", { name: "Đăng nhập" }).click();
-  await expect(page).not.toHaveURL(/\/login(?:\?|$)/);
-}
-
-test("viewer is denied on every owner-only Settings surface", async ({ page }) => {
-  await login(page, viewer);
+test("viewer is denied on every owner-only Settings surface", async ({ viewerPage: page }) => {
 
   const read = await page.request.get("/api/settings");
   expect(read.status()).toBe(403);
@@ -56,8 +34,7 @@ test("viewer is denied on every owner-only Settings surface", async ({ page }) =
   expect(competitors.status()).toBe(403);
 });
 
-test("owner reads Settings and every secret comes back masked or absent", async ({ page }) => {
-  await login(page, owner);
+test("owner reads Settings and every secret comes back masked or absent", async ({ ownerPage: page }) => {
 
   const response = await page.request.get("/api/settings");
   expect(response.status()).toBe(200);

@@ -7,7 +7,7 @@ export async function GET() {
   try {
     await requireUser({ owner: true });
     const { buffer, size, rowCount } = await buildBackupGzip();
-    const filename = `autospa-backup-${new Date().toISOString().slice(0, 10)}.json.gz`;
+    const filename = `autospa-redacted-export-${new Date().toISOString().slice(0, 10)}.json.gz`;
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

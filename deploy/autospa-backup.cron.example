@@ -1,0 +1,4 @@
+# Install separately from autospa.cron.example on the persistent backup host.
+# Keep /etc/autospa-backup.env owned by root with mode 0600.
+# Bucket lifecycle/versioning controls retention; this job does not delete remote backups.
+17 2 * * * flock -n /var/lock/autospa-backup.lock /bin/bash -lc 'set -a; source /etc/autospa-backup.env; set +a; /opt/autospa/scripts/run-postgres-backup.sh' >> /var/log/autospa-backup.log 2>&1

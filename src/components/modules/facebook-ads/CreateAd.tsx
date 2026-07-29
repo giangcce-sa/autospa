@@ -19,9 +19,10 @@ interface Props {
   initialPostId?: string;
   initialPosts?: DraftPost[];
   canMutate?: boolean;
+  mutationBlocked?: boolean;
 }
 
-export function CreateAd({ facebookPageId, initialPostId, initialPosts, canMutate = true }: Props) {
+export function CreateAd({ facebookPageId, initialPostId, initialPosts, canMutate = true, mutationBlocked = false }: Props) {
   const [posts, setPosts] = useState<DraftPost[]>(initialPosts ?? []);
   const [showPicker, setShowPicker] = useState(false);
   const [selectedPost, setSelectedPost] = useState<DraftPost | null>(null);
@@ -317,7 +318,7 @@ export function CreateAd({ facebookPageId, initialPostId, initialPosts, canMutat
         <Button
           onClick={handleCreate}
           loading={loading}
-          disabled={!selectedPost}
+          disabled={!selectedPost || mutationBlocked}
           className="w-full"
           size="lg"
         >

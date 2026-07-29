@@ -2,22 +2,32 @@ import { prisma } from "./db";
 import { councilDebate, type CouncilResult } from "./ai-council";
 import { generateContent } from "./claude";
 import { getCompetitorContext } from "./learning/competitor-learning";
+import {
+  buildAdCreativeFallback,
+  parseGeneratedAdSpecText,
+  type AdCreativeEstimateSource,
+  type AdCreativeGenerationMode,
+  type AdCreativeRequest,
+  type GeneratedAdSpec,
+} from "./ads-creative-policy";
 
-export interface AdSpec {
-  captions: { text: string; hashtags: string; tone: string }[];
-  audience: {
-    ageMin: number;
-    ageMax: number;
-    gender: "all" | "female" | "male";
-    locations: string[];
-    interests: string[];
-  };
-  dailyBudget: number;        // VND
-  durationDays: number;
-  predictedCtr: number;        // %
-  predictedRoas: number;       // multiplier
-  reasoning: string;           // synthesis
+export interface AdSpec extends GeneratedAdSpec {
+  reasoning: string;
   council: CouncilResult;
+  generation: {
+    mode: AdCreativeGenerationMode;
+    generatedAt: string;
+  };
+  context: {
+    facebookPageId: string;
+    campaignHistory: "page_owned_autospa_campaigns" | "none";
+    competitorMemory: "account_global";
+  };
+  estimates: {
+    ctr: AdCreativeEstimateSource;
+    roas: AdCreativeEstimateSource;
+  };
+  warnings: string[];
 }
 
 interface CampaignHistory {
@@ -27,16 +37,16 @@ interface CampaignHistory {
   // CTR/spend would come from FB Insights — placeholder here
 }
 
-async function getCampaignHistory(serviceId?: string): Promise<CampaignHistory[]> {
-  const where = serviceId
-    ? { service: { contains: serviceId, mode: "insensitive" as const } }
-    : {};
+async function getCampaignHistory(facebookPageId: string): Promise<CampaignHistory[]> {
+  const operations = await prisma.adsCreateOperation.findMany({
+    where: { facebookPageId, campaignId: { not: null } },
+    select: { campaignId: true },
+  });
+  const campaignIds = [...new Set(operations.flatMap((operation) => operation.campaignId ? [operation.campaignId] : []))];
+  if (!campaignIds.length) return [];
 
   const revenues = await prisma.bookingRevenue.findMany({
-    where: {
-      fromCampaignId: { not: null },
-      ...where,
-    },
+    where: { fromCampaignId: { in: campaignIds } },
     select: { service: true, amount: true, fromCampaignId: true },
   });
 
@@ -51,27 +61,22 @@ async function getCampaignHistory(serviceId?: string): Promise<CampaignHistory[]
   return Array.from(byCampaign.values()).sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 5);
 }
 
-export async function generateAdCreative(opts: {
-  serviceId?: string;
-  dailyBudget?: number;
-  objective?: "conversions" | "engagement" | "reach";
-  notes?: string;
-}): Promise<AdSpec> {
-  const { serviceId, dailyBudget, objective = "conversions", notes } = opts;
+export async function generateAdCreative(opts: AdCreativeRequest): Promise<AdSpec> {
+  const { facebookPageId, serviceId, dailyBudget, objective, notes } = opts;
 
-  // Pull context: service, brand, top historical campaigns, top organic posts
   const [service, brand, history, topPosts, competitorCtx] = await Promise.all([
-    serviceId ? prisma.service.findUnique({ where: { id: serviceId } }) : null,
-    prisma.brandKit.findFirst(),
-    getCampaignHistory(serviceId),
+    serviceId ? prisma.service.findFirst({ where: { id: serviceId, facebookPageId } }) : null,
+    prisma.brandKit.findUnique({ where: { facebookPageId } }),
+    getCampaignHistory(facebookPageId),
     prisma.post.findMany({
-      where: { status: "published", ...(serviceId ? { serviceId } : {}) },
+      where: { facebookPageId, status: "published", ...(serviceId ? { serviceId } : {}) },
       orderBy: { analytics: { likes: "desc" } },
       include: { analytics: true },
       take: 3,
     }),
     getCompetitorContext(),
   ]);
+  if (serviceId && !service) throw new Error("Dịch vụ không thuộc Facebook Page đã chọn");
 
   const serviceInfo = service
     ? `Dịch vụ: ${service.name} (${service.price ?? "liên hệ"}) — ${service.description ?? ""}`
@@ -138,40 +143,31 @@ Convert quyết định thành JSON CHÍNH XÁC theo định dạng:
 
 3 caption variants tone khác nhau. audience cụ thể. Budget hợp lý (VND/ngày). Predict dựa lịch sử nếu có, nếu không thì ước tính bảo thủ. Chỉ trả JSON.`;
 
-  let spec: Omit<AdSpec, "reasoning" | "council"> | null = null;
+  let spec: GeneratedAdSpec | null = null;
   try {
     const raw = await generateContent(formatPrompt, "Bạn là người định dạng JSON. Luôn trả JSON hợp lệ.");
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (match) {
-      spec = JSON.parse(match[0]);
-    }
+    spec = parseGeneratedAdSpecText(raw);
   } catch {
-    // fallback below
+    spec = null;
   }
 
-  if (!spec) {
-    // Fallback: hardcoded reasonable defaults
-    spec = {
-      captions: [
-        {
-          text: `${service?.name ?? "Dịch vụ spa"} cho làn da khỏe đẹp tự tin. Đặt lịch ngay để nhận ưu đãi.`,
-          hashtags: "#spa #lamdep #chamsocda",
-          tone: "friendly",
-        },
-      ],
-      audience: {
-        ageMin: 25,
-        ageMax: 45,
-        gender: "female",
-        locations: ["TP.HCM"],
-        interests: ["làm đẹp", "skincare", "spa"],
-      },
-      dailyBudget: dailyBudget ?? 200000,
-      durationDays: 7,
-      predictedCtr: 1.5,
-      predictedRoas: history.length ? 2.5 : 1.8,
-    };
-  }
+  const mode: AdCreativeGenerationMode = spec ? "ai" : "deterministic_fallback";
+  const warnings = spec
+    ? ["CTR và ROAS là ước tính heuristic; hệ thống chưa dùng Meta Insights lịch sử để huấn luyện forecast."]
+    : ["AI không trả structured output hợp lệ; đang dùng fallback bảo thủ.", "CTR và ROAS là ước tính heuristic, không phải số đo lịch sử."];
+  const output = spec ?? buildAdCreativeFallback({ serviceName: service?.name, dailyBudget });
 
-  return { ...spec, reasoning: council.synthesis, council };
+  return {
+    ...output,
+    reasoning: council.synthesis,
+    council,
+    generation: { mode, generatedAt: new Date().toISOString() },
+    context: {
+      facebookPageId,
+      campaignHistory: history.length ? "page_owned_autospa_campaigns" : "none",
+      competitorMemory: "account_global",
+    },
+    estimates: { ctr: "heuristic", roas: "heuristic" },
+    warnings,
+  };
 }

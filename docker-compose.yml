@@ -21,6 +21,7 @@ services:
       - .env
     environment:
       NODE_ENV: production
+      DEPLOYMENT_MODE: persistent
       NEXT_TELEMETRY_DISABLED: "1"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"

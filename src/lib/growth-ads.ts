@@ -4,6 +4,7 @@ import { adsReadinessBlockReason } from "@/lib/ads-readiness-policy";
 import { evaluateAdsMutation } from "@/lib/ads-safety";
 import { prisma } from "@/lib/db";
 import { getCampaigns, getInsights, type AdsInsights, type Campaign } from "@/lib/facebook-ads";
+import type { MetaInsightsDatePreset } from "@/lib/meta-insights-policy";
 import { AccessError } from "@/lib/page-access";
 import { getAdsSettings } from "@/lib/settings/ads";
 
@@ -121,7 +122,7 @@ export async function getAdsCampaignData(facebookPageId: string): Promise<AdsDat
   return readMetaData(() => getCampaigns(facebookPageId), "Meta Marketing API", "7 ngày gần nhất");
 }
 
-export async function getAdsInsightsData(facebookPageId: string, datePreset: string): Promise<AdsDataResult<AdsInsights>> {
+export async function getAdsInsightsData(facebookPageId: string, datePreset: MetaInsightsDatePreset): Promise<AdsDataResult<AdsInsights>> {
   return readMetaData(() => getInsights(facebookPageId, datePreset), "Meta Marketing API", datePreset);
 }
 

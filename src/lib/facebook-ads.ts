@@ -14,6 +14,12 @@ import { enforceAdsMutation } from "./ads-safety";
 import { prisma } from "./db";
 import { decryptSecret } from "./secrets-crypto";
 import { sanitizeMetaPagingUrl } from "./meta-graph-url";
+import {
+  normalizeMetaMetric,
+  readMetaInsightsPages,
+  type MetaInsightsDatePreset,
+  type MetaMetric,
+} from "./meta-insights-policy";
 import { AccessError } from "./page-access";
 
 const FB = "https://graph.facebook.com/v21.0";
@@ -194,48 +200,65 @@ export async function getCampaigns(facebookPageId?: string): Promise<Campaign[]>
 }
 
 export interface AdsInsights {
-  spend: string;
-  reach: string;
-  impressions: string;
-  clicks: string;
-  ctr: string;
-  cpm: string;
-  cpc: string;
-  campaigns: Array<{ name: string; spend: string; reach: string; clicks: string; impressions: string; ctr: string }>;
+  spend: MetaMetric;
+  reach: MetaMetric;
+  impressions: MetaMetric;
+  clicks: MetaMetric;
+  ctr: MetaMetric;
+  cpm: MetaMetric;
+  cpc: MetaMetric;
+  campaigns: Array<{
+    id: string;
+    name: string;
+    spend: MetaMetric;
+    reach: MetaMetric;
+    clicks: MetaMetric;
+    impressions: MetaMetric;
+    ctr: MetaMetric;
+  }>;
 }
 
-export async function getInsights(facebookPageId?: string, datePreset = "last_7d"): Promise<AdsInsights> {
+function insightsUrl(actId: string, fields: string, datePreset: MetaInsightsDatePreset, level: "account" | "campaign") {
+  const url = new URL(`${FB}/${actId}/insights`);
+  url.searchParams.set("fields", fields);
+  url.searchParams.set("date_preset", datePreset);
+  url.searchParams.set("level", level);
+  url.searchParams.set("limit", "100");
+  return url.toString();
+}
+
+export async function getInsights(
+  facebookPageId: string | undefined,
+  datePreset: MetaInsightsDatePreset = "last_7d",
+): Promise<AdsInsights> {
   const { token, actId } = await getAdsCreds(facebookPageId);
   const fields = "spend,reach,impressions,clicks,ctr,cpm,cpc";
-  const url = `${FB}/${actId}/insights?fields=${fields}&date_preset=${datePreset}&level=account`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  const data = await res.json();
-  detectAdsError(data);
-  const acc = data.data?.[0] ?? {};
-
-  const campUrl = `${FB}/${actId}/insights?fields=${fields},campaign_name&date_preset=${datePreset}&level=campaign&limit=20`;
-  const campRes = await fetch(campUrl, { headers: { Authorization: `Bearer ${token}` } });
-  const campData = await campRes.json();
-  const camps = (campData.data ?? []).map((c: {
-    campaign_name?: string; spend?: string; reach?: string; clicks?: string; impressions?: string; ctr?: string;
-  }) => ({
-    name: c.campaign_name ?? "",
-    spend: c.spend ?? "0",
-    reach: c.reach ?? "0",
-    clicks: c.clicks ?? "0",
-    impressions: c.impressions ?? "0",
-    ctr: c.ctr ?? "0",
-  }));
+  const [accountRows, campaignRows] = await Promise.all([
+    readMetaInsightsPages(insightsUrl(actId, fields, datePreset, "account"), token),
+    readMetaInsightsPages(insightsUrl(actId, `${fields},campaign_id,campaign_name`, datePreset, "campaign"), token),
+  ]);
+  const account = accountRows[0] ?? {};
 
   return {
-    spend: acc.spend ?? "0",
-    reach: acc.reach ?? "0",
-    impressions: acc.impressions ?? "0",
-    clicks: acc.clicks ?? "0",
-    ctr: acc.ctr ?? "0",
-    cpm: acc.cpm ?? "0",
-    cpc: acc.cpc ?? "0",
-    campaigns: camps,
+    spend: normalizeMetaMetric(account.spend),
+    reach: normalizeMetaMetric(account.reach),
+    impressions: normalizeMetaMetric(account.impressions),
+    clicks: normalizeMetaMetric(account.clicks),
+    ctr: normalizeMetaMetric(account.ctr),
+    cpm: normalizeMetaMetric(account.cpm),
+    cpc: normalizeMetaMetric(account.cpc),
+    campaigns: campaignRows.flatMap((campaign) => {
+      if (typeof campaign.campaign_id !== "string" || !campaign.campaign_id) return [];
+      return [{
+        id: campaign.campaign_id,
+        name: typeof campaign.campaign_name === "string" ? campaign.campaign_name : "",
+        spend: normalizeMetaMetric(campaign.spend),
+        reach: normalizeMetaMetric(campaign.reach),
+        clicks: normalizeMetaMetric(campaign.clicks),
+        impressions: normalizeMetaMetric(campaign.impressions),
+        ctr: normalizeMetaMetric(campaign.ctr),
+      }];
+    }),
   };
 }
 

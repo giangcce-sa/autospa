@@ -38,6 +38,7 @@ async function loadTestServer() {
   process.env.NINEROUTER_API_KEY = "sk_test";
   process.env.NINEROUTER_TIMEOUT_SECONDS = "5";
   process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+  process.env.OPENAI_API_KEY = "sk-openai-test";
   process.env.N8N_GATEWAY_KEY = "gw_test_n8n_seed_secret";
   process.env.CLAUDE_CODE_GATEWAY_KEY = "gw_test_claude_seed_secret";
   process.env.CURSOR_GATEWAY_KEY = "gw_test_cursor_seed_secret";
@@ -886,6 +887,102 @@ describe("internal ai gateway", () => {
     );
   });
 
+  it("streams OpenAI-compatible chunks with usage and records one successful request", async () => {
+    const upstream = [
+      'data: {"id":"upstream","choices":[{"delta":{"content":"Hello"}}]}',
+      'data: {"id":"upstream","choices":[{"delta":{"content":" world"},"finish_reason":"stop"}]}',
+      'data: {"id":"upstream","choices":[],"usage":{"prompt_tokens":3,"completion_tokens":2}}',
+      "data: [DONE]",
+      ""
+    ].join("\r\n\r\n");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(upstream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" }
+    })));
+
+    const response = await app!.inject({
+      method: "POST",
+      url: "/v1/chat/completions",
+      headers: { "x-api-key": "gw_test_n8n_seed_secret" },
+      payload: {
+        model: "gpt-4.1-mini",
+        messages: [{ role: "user", content: "hello" }],
+        stream: true,
+        stream_options: { include_usage: true }
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/event-stream");
+    expect(response.body).toContain('"id":"chatcmpl_');
+    expect(response.body).toContain('"role":"assistant"');
+    expect(response.body).toContain('"content":"Hello"');
+    expect(response.body).toContain('"finish_reason":"stop"');
+    expect(response.body).toContain('"prompt_tokens":3');
+    expect(response.body).toContain("data: [DONE]");
+
+    const { getDb } = await import("../db/client.js");
+    expect(getDb().prepare("SELECT status, input_tokens, output_tokens FROM audit_logs").all()).toEqual([
+      expect.objectContaining({ status: "ok", input_tokens: 3, output_tokens: 2 })
+    ]);
+    expect(getDb().prepare("SELECT request_count FROM usage_daily").all()).toEqual([{ request_count: 1 }]);
+  });
+
+  it("returns a JSON error before stream headers when provider setup fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("unavailable", { status: 503 })));
+
+    const response = await app!.inject({
+      method: "POST",
+      url: "/v1/chat/completions",
+      headers: { "x-api-key": "gw_test_n8n_seed_secret" },
+      payload: {
+        model: "gpt-4.1-mini",
+        messages: [{ role: "user", content: "hello" }],
+        stream: true
+      }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.headers["content-type"]).toContain("application/json");
+    expect(response.json().error.code).toBe("PROVIDER_ERROR");
+    const { getDb } = await import("../db/client.js");
+    expect(getDb().prepare("SELECT status FROM audit_logs").all()).toEqual([{ status: "error" }]);
+    expect(getDb().prepare("SELECT COUNT(*) AS total FROM usage_daily").get()).toEqual({ total: 0 });
+  });
+
+  it("emits one stream error and audit record when the provider fails mid-stream", async () => {
+    const upstream = [
+      'data: {"choices":[{"delta":{"content":"partial"}}]}',
+      'data: {"error":{"message":"upstream exploded"}}',
+      ""
+    ].join("\n\n");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(upstream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" }
+    })));
+
+    const response = await app!.inject({
+      method: "POST",
+      url: "/v1/chat/completions",
+      headers: { "x-api-key": "gw_test_n8n_seed_secret" },
+      payload: {
+        model: "gpt-4.1-mini",
+        messages: [{ role: "user", content: "hello" }],
+        stream: true
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("partial");
+    expect(response.body).toContain("upstream exploded");
+    expect(response.body.match(/data: \[DONE\]/g)).toHaveLength(1);
+    const { getDb } = await import("../db/client.js");
+    expect(getDb().prepare("SELECT status, error_code FROM audit_logs").all()).toEqual([
+      { status: "error", error_code: "PROVIDER_ERROR" }
+    ]);
+    expect(getDb().prepare("SELECT COUNT(*) AS total FROM usage_daily").get()).toEqual({ total: 0 });
+  });
+
   it("enforces provider and cost-tier policy restrictions during routing", async () => {
     const keyResponse = await app!.inject({
       method: "POST",
@@ -1471,7 +1568,7 @@ describe("internal ai gateway", () => {
       'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}',
       'data: {"type":"message_stop"}',
       ""
-    ].join("\n");
+    ].join("\n\n");
     const fetchMock = vi.fn(async () =>
       new Response(sseBody, {
         status: 200,

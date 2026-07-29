@@ -40,6 +40,7 @@ jobs:
       AUTH_URL: https://autospa.example.test
       NEXT_PUBLIC_APP_URL: https://autospa.example.test
       DEPLOYMENT_ENV: ci
+      DEPLOYMENT_MODE: persistent
       APP_RELEASE: ${{ github.sha }}
       MEDIA_STORAGE_PROVIDER: local
       VIDEO_MOCK_MODE: "true"

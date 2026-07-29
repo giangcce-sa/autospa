@@ -2,8 +2,8 @@
 set -euo pipefail
 
 backup_file="${1:?Usage: scripts/restore-postgres.sh backup.dump}"
-connection_url="${DIRECT_URL:-${DATABASE_URL:-}}"
-: "${connection_url:?DIRECT_URL or DATABASE_URL is required}"
+: "${DIRECT_URL:?DIRECT_URL is required}"
+connection_url="${DIRECT_URL}"
 pg_restore_bin="${PG_RESTORE_BIN:-pg_restore}"
 psql_bin="${PSQL_BIN:-psql}"
 test -f "${backup_file}"
@@ -25,6 +25,7 @@ fi
   --no-owner \
   --no-acl \
   --exit-on-error \
+  --single-transaction \
   "${backup_file}"
 
 "${psql_bin}" "${connection_url}" -v ON_ERROR_STOP=1 -c "SELECT 1" >/dev/null

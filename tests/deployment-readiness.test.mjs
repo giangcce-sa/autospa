@@ -47,6 +47,7 @@ test("deployment readiness is redacted and requires only mandatory local depende
       AUTH_SECRET: "auth-value-must-not-leak",
       CRON_SECRET: "cron-value-must-not-leak",
       NEXT_PUBLIC_APP_URL: "https://autospa.example.com",
+      DEPLOYMENT_MODE: "stateless",
       MEDIA_STORAGE_PROVIDER: "s3",
       MEDIA_S3_BUCKET: "media",
       APP_RELEASE: "sha-123",
@@ -62,9 +63,47 @@ test("deployment readiness is redacted and requires only mandatory local depende
   assert.equal(ready.release, "sha-123");
   assert.equal(ready.environment, "staging");
   assert.equal(ready.safety.videoExecutionMode, "live");
+  assert.deepEqual(ready.deployment, { mode: "stateless", source: "explicit" });
+  assert.deepEqual(ready.media, { provider: "s3", configured: true, durable: true });
   const serialized = JSON.stringify(ready);
   assert.equal(serialized.includes("auth-value-must-not-leak"), false);
   assert.equal(serialized.includes("cron-value-must-not-leak"), false);
+});
+
+test("deployment readiness fails closed on incomplete production release configuration", () => {
+  const result = buildDeploymentReadiness({
+    database: true,
+    env: {
+      DEPLOYMENT_ENV: "production",
+      AUTH_SECRET: "change-me",
+      CRON_SECRET: "change-me",
+      AUTH_URL: "https://autospa.example.com",
+      NEXT_PUBLIC_APP_URL: "https://autospa.example.com",
+      DEPLOYMENT_MODE: "persistent",
+      MEDIA_STORAGE_PROVIDER: "local",
+    },
+  });
+
+  assert.equal(result.ready, false);
+  assert.equal(result.checks.productionEnvironment, false);
+  assert.equal(JSON.stringify(result).includes("change-me"), false);
+});
+
+test("deployment readiness blocks local media on stateless runtimes", () => {
+  const result = buildDeploymentReadiness({
+    database: true,
+    env: {
+      AUTH_SECRET: "auth",
+      CRON_SECRET: "cron",
+      NEXT_PUBLIC_APP_URL: "https://autospa.example.com",
+      VERCEL: "1",
+      MEDIA_STORAGE_PROVIDER: "local",
+    },
+  });
+
+  assert.equal(result.ready, false);
+  assert.equal(result.checks.mediaStorage, false);
+  assert.deepEqual(result.deployment, { mode: "stateless", source: "vercel_fallback" });
 });
 
 test("health and readiness remain public, read-only and provider-free", async () => {

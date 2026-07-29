@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import { modelRoutes } from "../config/models.js";
 import { GatewayError } from "../errors/gateway-error.js";
+import { parseSseJson, parseSseStream } from "./sse-parser.js";
 import type {
   GatewayChatRequest,
   GatewayChatResponse,
@@ -131,53 +132,39 @@ export class OpenAiCompatibleAdapter implements StreamingAiProviderAdapter {
     async function* generate(): AsyncIterable<StreamChunk> {
       let inputTokens: number | null = null;
       let outputTokens: number | null = null;
-      let buffer = "";
-      const reader = body.getReader();
-      const decoder = new TextDecoder();
+      let completed = false;
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const raw = line.slice(6).trim();
-            if (!raw) continue;
-            if (raw === "[DONE]") continue;
-            let evt: Record<string, unknown>;
-            try {
-              evt = JSON.parse(raw) as Record<string, unknown>;
-            } catch {
-              continue;
-            }
-            const choices = evt.choices as Array<Record<string, unknown>> | undefined;
-            if (choices && choices.length > 0) {
-              const delta = choices[0].delta as Record<string, unknown> | undefined;
-              const text = typeof delta?.content === "string" ? delta.content : "";
-              if (text) yield { content: text, done: false };
-            }
-            const usage = evt.usage as Record<string, unknown> | undefined;
-            if (usage) {
-              inputTokens = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : inputTokens;
-              outputTokens = typeof usage.completion_tokens === "number" ? usage.completion_tokens : outputTokens;
-            }
+        for await (const event of parseSseStream(body)) {
+          if (event.data === "[DONE]") {
+            completed = true;
+            continue;
           }
+          const payload = parseSseJson(event.data);
+          if (payload.error) {
+            const error = payload.error as Record<string, unknown>;
+            throw new GatewayError("PROVIDER_ERROR", typeof error.message === "string" ? error.message : "OpenAI-compatible stream failed");
+          }
+          const choices = payload.choices as Array<Record<string, unknown>> | undefined;
+          const delta = choices?.[0]?.delta as Record<string, unknown> | undefined;
+          const text = typeof delta?.content === "string" ? delta.content : "";
+          if (text) yield { content: text, done: false };
+          const usage = payload.usage as Record<string, unknown> | undefined;
+          inputTokens = typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : inputTokens;
+          outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : outputTokens;
         }
+        if (!completed) throw new GatewayError("PROVIDER_ERROR", "OpenAI-compatible stream ended before [DONE]");
+        yield {
+          content: "",
+          done: true,
+          usage: {
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            source: inputTokens !== null || outputTokens !== null ? "provider" : "unavailable"
+          }
+        };
       } finally {
         clearTimeout(timer);
-        reader.releaseLock();
       }
-      yield {
-        content: "",
-        done: true,
-        usage: {
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
-          source: inputTokens !== null || outputTokens !== null ? "provider" : "unavailable"
-        }
-      };
     }
     return generate();
   }

@@ -6,22 +6,21 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ArrowClockwise } from "@phosphor-icons/react";
 import type { AdsInsights as Insights } from "@/lib/facebook-ads";
+import {
+  META_INSIGHTS_DATE_PRESET_OPTIONS,
+  type MetaInsightsDatePreset,
+  type MetaMetric,
+} from "@/lib/meta-insights-policy";
 
-const DATE_PRESETS = [
-  { label: "Hôm nay", value: "today" },
-  { label: "7 ngày", value: "last_7d" },
-  { label: "30 ngày", value: "last_30d" },
-  { label: "Tháng này", value: "this_month" },
-];
-
-function fmt(n: string) { return Number(n).toLocaleString("vi-VN"); }
-function fmtVnd(n: string) { return Number(n).toLocaleString("vi-VN") + "đ"; }
+function fmt(value: MetaMetric) { return value === null ? "—" : Number(value).toLocaleString("vi-VN"); }
+function fmtVnd(value: MetaMetric) { return value === null ? "—" : `${Number(value).toLocaleString("vi-VN")}đ`; }
+function fmtPercent(value: MetaMetric) { return value === null ? "—" : `${Number(value).toFixed(2)}%`; }
 
 interface Props {
   facebookPageId?: string;
   initialData?: Insights | null;
   initialError?: string;
-  initialDatePreset?: string;
+  initialDatePreset?: MetaInsightsDatePreset;
   canonical?: boolean;
 }
 
@@ -63,7 +62,7 @@ export function AdsInsights({ facebookPageId, initialData, initialError = "", in
         { label: "Reach", value: fmt(data.reach) },
         { label: "Impressions", value: fmt(data.impressions) },
         { label: "Clicks", value: fmt(data.clicks) },
-        { label: "CTR", value: Number(data.ctr).toFixed(2) + "%" },
+        { label: "CTR", value: fmtPercent(data.ctr) },
         { label: "CPM", value: fmtVnd(data.cpm) },
         { label: "CPC", value: fmtVnd(data.cpc) },
       ]
@@ -74,7 +73,7 @@ export function AdsInsights({ facebookPageId, initialData, initialError = "", in
       {/* Date preset + refresh */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex gap-1 p-1 rounded-xl" style={{ background: "var(--bg-subtle)" }}>
-          {DATE_PRESETS.map((d) => (
+          {META_INSIGHTS_DATE_PRESET_OPTIONS.map((d) => (
             <button
               key={d.value}
               onClick={() => {
@@ -132,14 +131,14 @@ export function AdsInsights({ facebookPageId, initialData, initialError = "", in
                 </tr>
               </thead>
               <tbody>
-                {data.campaigns.map((c, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                {data.campaigns.map((c) => (
+                  <tr key={c.id} style={{ borderBottom: "1px solid var(--border)" }}>
                     <td className="py-2.5 px-2 font-medium max-w-[200px] truncate" style={{ color: "var(--text)" }}>{c.name || "—"}</td>
                     <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{fmtVnd(c.spend)}</td>
                     <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{fmt(c.reach)}</td>
                     <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{fmt(c.clicks)}</td>
                     <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{fmt(c.impressions)}</td>
-                    <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{Number(c.ctr).toFixed(2)}%</td>
+                    <td className="py-2.5 px-2" style={{ color: "var(--text-secondary)" }}>{fmtPercent(c.ctr)}</td>
                   </tr>
                 ))}
               </tbody>

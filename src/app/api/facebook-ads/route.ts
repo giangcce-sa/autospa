@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePageAccess } from "@/lib/page-access";
 import { routeErrorResponse } from "@/lib/api-response";
+import { parseMetaInsightsDatePreset } from "@/lib/meta-insights-policy";
 import {
   getCampaigns,
   getInsights,
@@ -35,7 +36,6 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const action = searchParams.get("action") ?? "campaigns";
   const facebookPageId = searchParams.get("facebookPageId") || undefined;
-  const datePreset = searchParams.get("datePreset") ?? "last_7d";
 
   try {
     if (!facebookPageId) {
@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data, success: true });
     }
     if (action === "insights") {
+      const datePreset = parseMetaInsightsDatePreset(searchParams.get("datePreset") ?? "last_7d");
       const data = await getInsights(facebookPageId, datePreset);
       return NextResponse.json({ data, success: true });
     }

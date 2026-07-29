@@ -54,8 +54,9 @@ export function ImageSettingsForm({ initialSettings }: { initialSettings: ImageS
           <div className="flex items-center gap-2"><HardDrives size={17} className="text-[var(--accent)]" aria-hidden="true" /><CardTitle>Lưu trữ media</CardTitle></div>
           <Badge variant={initialSettings.storage.configured ? "success" : "danger"}>{initialSettings.storage.configured ? "Sẵn sàng" : "Thiếu cấu hình"}</Badge>
         </CardHeader>
-        <p className="text-sm text-[var(--text-secondary)]">Provider: <strong>{initialSettings.storage.provider === "s3" ? "S3" : "Local volume"}</strong></p>
-        <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">Nguồn cấu hình: deployment. Thay đổi storage cần cập nhật biến môi trường và restart; giao diện không hot-switch credential lưu trữ.</p>
+        <p className="text-sm text-[var(--text-secondary)]">Provider: <strong>{initialSettings.storage.provider === "s3" ? "S3" : "Local volume"}</strong> · deployment <strong>{initialSettings.storage.deploymentMode}</strong></p>
+        <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">{initialSettings.storage.blocker ?? "Cấu hình storage phù hợp với độ bền filesystem của deployment; trạng thái này không phải kiểm tra kết nối provider."}</p>
+        <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">Nguồn cấu hình: deployment ({initialSettings.storage.deploymentModeSource}). Thay đổi storage cần cập nhật biến môi trường và restart.</p>
       </Card>
       {message ? <p role={message.type === "error" ? "alert" : "status"} className={`text-sm ${message.type === "success" ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>{message.text}</p> : null}
       <Button onClick={save} loading={saving} disabled={!dirty}>Lưu cấu hình hình ảnh</Button>

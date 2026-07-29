@@ -1,6 +1,9 @@
 # Install environment values in /etc/autospa-cron.env with mode 600:
 # AUTOSPA_BASE_URL=https://autospa.somail.us
 # CRON_SECRET=<strong-random-secret>
+# Optional dead-man switch endpoints; runner appends the cron job name.
+# CRON_HEARTBEAT_SUCCESS_BASE_URL=https://heartbeat.example.com/ping/success
+# CRON_HEARTBEAT_FAILURE_BASE_URL=https://heartbeat.example.com/ping/failure
 #
 # Then install this entry with: crontab deploy/autospa.cron.example
 SHELL=/bin/sh
@@ -10,7 +13,6 @@ SHELL=/bin/sh
 7 * * * * set -a; . /etc/autospa-cron.env; set +a; /opt/autospa/scripts/run-autospa-cron.sh /api/cron/ads-reconcile >> /var/log/autospa-cron.log 2>&1
 17 * * * * set -a; . /etc/autospa-cron.env; set +a; /opt/autospa/scripts/run-autospa-cron.sh /api/cron/publish-reconcile >> /var/log/autospa-cron.log 2>&1
 0 13 * * * set -a; . /etc/autospa-cron.env; set +a; /opt/autospa/scripts/run-autospa-cron.sh /api/cron/daily-report >> /var/log/autospa-cron.log 2>&1
-0 3 * * 0 set -a; . /etc/autospa-cron.env; set +a; /opt/autospa/scripts/run-autospa-cron.sh /api/cron/backup-reminder >> /var/log/autospa-cron.log 2>&1
 0 * * * * set -a; . /etc/autospa-cron.env; set +a; /opt/autospa/scripts/run-autospa-cron.sh /api/cron/weekly-report >> /var/log/autospa-cron.log 2>&1
 30 3 * * * set -a; . /etc/autospa-cron.env; set +a; /opt/autospa/scripts/run-autospa-cron.sh /api/cron/image-cleanup >> /var/log/autospa-cron.log 2>&1
 */2 * * * * set -a; . /etc/autospa-cron.env; set +a; /opt/autospa/scripts/run-autospa-cron.sh /api/cron/video-jobs >> /var/log/autospa-cron.log 2>&1

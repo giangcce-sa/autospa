@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
+import { resolveMediaStoragePolicy } from "@/lib/media-storage-policy";
 import { buildSecurityConfiguration } from "@/lib/settings/security-policy";
 
 const secretSelect = {
@@ -17,6 +18,7 @@ const secretSelect = {
 } as const;
 
 export async function getSecuritySettings() {
+  const mediaStorage = resolveMediaStoragePolicy();
   const [settings, users, pageAccessCount, audits] = await Promise.all([
     prisma.settings.findUnique({ where: { id: "1" }, select: secretSelect }),
     prisma.user.findMany({
@@ -49,8 +51,11 @@ export async function getSecuritySettings() {
       authSecret: Boolean(process.env.AUTH_SECRET),
       cronSecret: Boolean(process.env.CRON_SECRET),
       publicBaseUrl: process.env.NEXT_PUBLIC_APP_URL || process.env.AUTH_URL,
-      mediaStorageProvider: process.env.MEDIA_STORAGE_PROVIDER === "s3" ? "s3" : "local",
-      mediaS3Bucket: Boolean(process.env.MEDIA_S3_BUCKET),
+      mediaStorageProvider: mediaStorage.provider,
+      mediaStorageConfigured: mediaStorage.configured,
+      mediaStorageBlocker: mediaStorage.blocker,
+      deploymentMode: mediaStorage.deploymentMode,
+      deploymentModeSource: mediaStorage.deploymentModeSource,
       runway: Boolean(process.env.RUNWAY_API_KEY || process.env.RUNWAYML_API_SECRET),
       elevenLabs: Boolean(process.env.ELEVENLABS_API_KEY),
       sync: Boolean(process.env.SYNC_API_KEY),

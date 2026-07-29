@@ -1,23 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const owner = {
-  email: process.env.E2E_OWNER_EMAIL ?? "owner-e2e@example.test",
-  password: process.env.E2E_OWNER_PASSWORD ?? "owner-e2e-password",
-};
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 const MASK_PREFIX = "•".repeat(8);
-
-async function login(page: Page, credentials: typeof owner) {
-  await page.goto("/login");
-  const form = page.locator("form").filter({
-    has: page.getByRole("button", { name: "Đăng nhập" }),
-    visible: true,
-  });
-  await form.getByLabel("Email").filter({ visible: true }).fill(credentials.email);
-  await form.getByLabel("Mật khẩu").filter({ visible: true }).fill(credentials.password);
-  await form.getByRole("button", { name: "Đăng nhập" }).click();
-  await expect(page).not.toHaveURL(/\/login(?:\?|$)/);
-}
 
 async function readClaudeMask(page: Page) {
   const response = await page.request.get("/api/settings");
@@ -29,8 +13,7 @@ async function readClaudeMask(page: Page) {
 
 // Each browser project reruns this spec against the shared DB; every step
 // overwrites the key, so the flow is idempotent across desktop/tablet/mobile.
-test("saving a Claude key masks it, mask round-trips do not clobber, and new keys flip the suffix", async ({ page }) => {
-  await login(page, owner);
+test("saving a Claude key masks it, mask round-trips do not clobber, and new keys flip the suffix", async ({ ownerPage: page }) => {
 
   // 1. Save a fresh key: response masks it as 8 bullets + last 4 characters.
   const save = await page.request.post("/api/settings", {
@@ -61,8 +44,7 @@ test("saving a Claude key masks it, mask round-trips do not clobber, and new key
   expect(await readClaudeMask(page)).toBe(`${MASK_PREFIX}5678`);
 });
 
-test("provider Settings UI signals a stored key without revealing it", async ({ page }) => {
-  await login(page, owner);
+test("provider Settings UI signals a stored key without revealing it", async ({ ownerPage: page }) => {
 
   // Guarantee a stored key regardless of test ordering within the project run.
   const save = await page.request.post("/api/settings", {

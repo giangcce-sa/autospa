@@ -77,18 +77,18 @@ export function DataSettingsForm({ initialSettings }: { initialSettings: DataSet
         <CardHeader>
           <div className="flex items-center gap-2">
             <DownloadSimple size={17} className="text-[var(--accent)]" aria-hidden="true" />
-            <CardTitle>Backup dữ liệu</CardTitle>
+            <CardTitle>Xuất dữ liệu đã loại bỏ secrets</CardTitle>
           </div>
         </CardHeader>
         <p className="text-sm leading-6 text-[var(--text-secondary)]">
-          File gzip chứa dữ liệu vận hành và loại bỏ API key, access token, webhook secret và mật khẩu.
+          File JSON gzip chứa một phần dữ liệu vận hành và loại bỏ API key, access token, webhook secret và mật khẩu. Đây không phải bản backup PostgreSQL dùng cho disaster recovery.
         </p>
         <a
           href="/api/backup"
           download
           className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-md bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-foreground)]"
         >
-          <DownloadSimple size={15} aria-hidden="true" /> Tải backup
+          <DownloadSimple size={15} aria-hidden="true" /> Tải JSON export
         </a>
       </Card>
 

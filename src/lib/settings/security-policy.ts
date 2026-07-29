@@ -32,7 +32,10 @@ export interface SecuritySettingsInput {
     cronSecret: boolean;
     publicBaseUrl?: string;
     mediaStorageProvider: "local" | "s3";
-    mediaS3Bucket: boolean;
+    mediaStorageConfigured: boolean;
+    mediaStorageBlocker: string | null;
+    deploymentMode: "persistent" | "stateless";
+    deploymentModeSource: "explicit" | "vercel_fallback" | "compatibility_fallback" | "invalid";
     runway: boolean;
     elevenLabs: boolean;
     sync: boolean;
@@ -60,7 +63,6 @@ export function buildSecurityConfiguration(input: SecuritySettingsInput) {
       return false;
     }
   })();
-  const storageConfigured = input.deployment.mediaStorageProvider === "local" || input.deployment.mediaS3Bucket;
 
   const secrets = [
     secret("auth", "Khóa ký phiên đăng nhập", input.deployment.authSecret, "deployment"),
@@ -118,12 +120,17 @@ export function buildSecurityConfiguration(input: SecuritySettingsInput) {
         : "Chưa có public HTTPS origin hợp lệ trong NEXT_PUBLIC_APP_URL hoặc AUTH_URL.",
     },
     {
+      id: "deployment-mode",
+      label: "Deployment filesystem",
+      configured: input.deployment.deploymentModeSource !== "invalid",
+      detail: `Mode ${input.deployment.deploymentMode} (${input.deployment.deploymentModeSource}).`,
+    },
+    {
       id: "media-storage",
       label: "Media storage",
-      configured: storageConfigured,
-      detail: storageConfigured
-        ? `Storage ${input.deployment.mediaStorageProvider.toUpperCase()} có cấu hình hiệu lực.`
-        : "Storage S3 đã chọn nhưng chưa có bucket trong deployment.",
+      configured: input.deployment.mediaStorageConfigured,
+      detail: input.deployment.mediaStorageBlocker
+        ?? `Storage ${input.deployment.mediaStorageProvider.toUpperCase()} phù hợp với deployment ${input.deployment.deploymentMode}; chưa thực hiện network probe.`,
     },
   ];
 

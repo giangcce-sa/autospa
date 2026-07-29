@@ -56,6 +56,7 @@ try {
 
   await pool.query("BEGIN");
   try {
+    await pool.query(`DELETE FROM "AdsCreateOperation" WHERE "id" = 'e2e-ads-operation'`);
     await pool.query(`DELETE FROM "PostAsset" WHERE "id" = 'e2e-creative-asset'`);
     await pool.query(`DELETE FROM "ContentReview" WHERE "id" = 'e2e-creative-review'`);
     await pool.query(`DELETE FROM "ContentGeneration" WHERE "id" = 'e2e-creative-generation'`);
@@ -70,11 +71,17 @@ try {
     await pool.query(`DELETE FROM "JobRun" WHERE "id" = 'e2e-creative-job'`);
 
     await pool.query(
-      `INSERT INTO "FacebookPage" ("id", "fbPageId", "pageName", "accessToken", "isActive", "createdAt")
-       VALUES ('e2e-creative-page', 'e2e-creative-fb-page', 'E2E Creative Spa', 'e2e-page-token', TRUE, NOW())
+      `INSERT INTO "FacebookPage" (
+         "id", "fbPageId", "pageName", "accessToken", "isActive", "adAccountId",
+         "adsReadinessStatus", "adsReadinessError", "createdAt"
+       ) VALUES (
+         'e2e-creative-page', 'e2e-creative-fb-page', 'E2E Creative Spa', 'e2e-page-token', TRUE, NULL,
+         'unchecked', 'E2E fixture chưa cấu hình Ad Account ID', NOW()
+       )
        ON CONFLICT ("id") DO UPDATE SET
          "fbPageId" = EXCLUDED."fbPageId", "pageName" = EXCLUDED."pageName",
-         "accessToken" = EXCLUDED."accessToken", "isActive" = TRUE`,
+         "accessToken" = EXCLUDED."accessToken", "isActive" = TRUE, "adAccountId" = NULL,
+         "adsReadinessStatus" = 'unchecked', "adsReadinessError" = 'E2E fixture chưa cấu hình Ad Account ID'`,
     );
     await pool.query(
       `INSERT INTO "UserPageAccess" ("id", "userId", "facebookPageId", "permission", "createdAt")
@@ -100,6 +107,18 @@ try {
          'Peel da an toàn bắt đầu từ soi da và lựa chọn nồng độ phù hợp.', '#peelda #spa',
          'facebook', 'educational', 'professional', 'draft', NOW() + INTERVAL '1 day',
          'AI-RESEARCH: Quy trình peel an toàn E2E', NOW() - INTERVAL '2 hour', NOW()
+       )`,
+    );
+    await pool.query(
+      `INSERT INTO "AdsCreateOperation" (
+         "id", "idempotencyKey", "requestHash", "postId", "facebookPageId", "fbPageId", "adAccountId",
+         "currency", "actorId", "input", "status", "currentStep", "campaignId", "adSetId", "attempt",
+         "error", "createdAt", "updatedAt"
+       ) VALUES (
+         'e2e-ads-operation', 'e2e-ads-idempotency', 'e2e-request-hash', 'e2e-creative-draft',
+         'e2e-creative-page', 'e2e-creative-fb-page', 'e2e-ad-account', 'VND', 'e2e-owner', '{}',
+         'failed', 'adset', 'e2e-campaign', 'e2e-adset', 2, 'E2E provider unavailable fixture',
+         NOW() - INTERVAL '30 minute', NOW() - INTERVAL '20 minute'
        )`,
     );
     await pool.query(

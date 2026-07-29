@@ -53,6 +53,7 @@ export async function getSettingsOverview() {
       model: images.imageModel,
       storageProvider: images.storage.provider,
       storageConfigured: images.storage.configured,
+      storageBlocker: images.storage.blocker,
     },
     video: {
       mockMode: video.videoMockMode,

@@ -16,9 +16,21 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"], browserName: "chromium" } },
-    { name: "tablet", use: { ...devices["iPad Pro 11"], browserName: "chromium" } },
-    { name: "mobile", use: { ...devices["iPhone 13"], browserName: "chromium", viewport: { width: 390, height: 844 } } },
+    {
+      name: "desktop-full",
+      testIgnore: /responsive-smoke\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], browserName: "chromium" },
+    },
+    {
+      name: "tablet-smoke",
+      testMatch: /responsive-smoke\.spec\.ts/,
+      use: { ...devices["iPad Pro 11"], browserName: "chromium" },
+    },
+    {
+      name: "mobile-smoke",
+      testMatch: /responsive-smoke\.spec\.ts/,
+      use: { ...devices["iPhone 13"], browserName: "chromium", viewport: { width: 390, height: 844 } },
+    },
   ],
   webServer: process.env.E2E_EXTERNAL_SERVER
     ? undefined

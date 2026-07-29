@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { resolveMediaStoragePolicy } from "../media-storage-policy.ts";
 import { getSecretReplacement } from "../settings-secrets.ts";
 
 export const PROVIDER_SETTINGS_DEFAULTS = {
@@ -50,6 +51,10 @@ export interface ImageSettingsDto {
   storage: {
     provider: "local" | "s3";
     configured: boolean;
+    durable: boolean;
+    deploymentMode: "persistent" | "stateless";
+    deploymentModeSource: "explicit" | "vercel_fallback" | "compatibility_fallback" | "invalid";
+    blocker: string | null;
     source: "deployment";
   };
 }
@@ -112,12 +117,16 @@ export function toProviderSettingsDto(settings: {
 }
 
 export function toImageSettingsDto(settings: { imageModel?: string | null } | null | undefined): ImageSettingsDto {
-  const provider = process.env.MEDIA_STORAGE_PROVIDER === "s3" ? "s3" : "local";
+  const storage = resolveMediaStoragePolicy();
   return {
     imageModel: settings?.imageModel ?? PROVIDER_SETTINGS_DEFAULTS.imageModel,
     storage: {
-      provider,
-      configured: provider === "local" || Boolean(process.env.MEDIA_S3_BUCKET),
+      provider: storage.provider,
+      configured: storage.configured,
+      durable: storage.durable,
+      deploymentMode: storage.deploymentMode,
+      deploymentModeSource: storage.deploymentModeSource,
+      blocker: storage.blocker,
       source: "deployment",
     },
   };

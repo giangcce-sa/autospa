@@ -21,7 +21,10 @@ function input(overrides = {}) {
       cronSecret: false,
       publicBaseUrl: undefined,
       mediaStorageProvider: "local",
-      mediaS3Bucket: false,
+      mediaStorageConfigured: true,
+      mediaStorageBlocker: null,
+      deploymentMode: "persistent",
+      deploymentModeSource: "explicit",
       runway: false,
       elevenLabs: false,
       sync: false,
@@ -66,7 +69,8 @@ test("Security configuration reports production deployment blockers truthfully",
     deployment: {
       ...input().deployment,
       mediaStorageProvider: "s3",
-      mediaS3Bucket: false,
+      mediaStorageConfigured: false,
+      mediaStorageBlocker: "Storage S3 đã chọn nhưng chưa có MEDIA_S3_BUCKET.",
       publicBaseUrl: "http://localhost:3000",
     },
   }));
@@ -75,13 +79,14 @@ test("Security configuration reports production deployment blockers truthfully",
     ["auth-secret", false],
     ["cron-secret", false],
     ["public-origin", false],
+    ["deployment-mode", true],
     ["media-storage", false],
   ]);
   assert.match(data.deployment.find((entry) => entry.id === "auth-secret").detail, /AUTH_SECRET/);
   assert.match(data.deployment.find((entry) => entry.id === "cron-secret").detail, /CRON_SECRET/);
 });
 
-test("Security configuration accepts local storage but requires HTTPS public origin", () => {
+test("Security configuration accepts local storage on persistent deployment with HTTPS origin", () => {
   const data = buildSecurityConfiguration(input({
     deployment: {
       ...input().deployment,
@@ -92,6 +97,21 @@ test("Security configuration accepts local storage but requires HTTPS public ori
     },
   }));
 
-  assert.equal(data.deploymentReadyCount, 4);
+  assert.equal(data.deploymentReadyCount, 5);
   assert.equal(data.deployment.every((entry) => entry.configured), true);
+});
+
+test("Security configuration blocks local storage on stateless deployment", () => {
+  const data = buildSecurityConfiguration(input({
+    deployment: {
+      ...input().deployment,
+      mediaStorageConfigured: false,
+      mediaStorageBlocker: "Local media không bền vững trên deployment stateless; hãy dùng S3.",
+      deploymentMode: "stateless",
+    },
+  }));
+
+  const storage = data.deployment.find((entry) => entry.id === "media-storage");
+  assert.equal(storage.configured, false);
+  assert.match(storage.detail, /stateless/);
 });
