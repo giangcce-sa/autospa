@@ -59,6 +59,7 @@ export default async function Home({ searchParams }: TodayPageProps) {
       state={access.state}
       pages={access.pages}
       wide
+      dashboard
       header={<DashboardHeading data={data} userName={userName} />}
     >
       <Dashboard data={data} />

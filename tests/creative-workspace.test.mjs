@@ -217,10 +217,12 @@ test("Quality review authorizes the selected Page and rejects foreign Posts", as
 test("Creative navigation drops stale record identity outside record views", async () => {
   const workspace = await source("src/components/modules/creative/CreativeWorkspace.tsx");
   const shell = await source("src/components/workspace/WorkspaceShell.tsx");
+  const scopeControl = await source("src/components/workspace/WorkspaceScopeControl.tsx");
 
   assert.match(workspace, /const recordId = creativeRecordIdForView\(routeId, access\.state\.view, access\.state\.id\)/);
   assert.match(workspace, /routeId === "creative-content"\) return view === "editor" \|\| view === "review" \? id : undefined/);
-  assert.match(shell, /pageId: page\.id, id: undefined, step: undefined/);
+  assert.match(scopeControl, /scope: "current", pageId, id: undefined, step: undefined/);
+  assert.match(scopeControl, /workspaceSearchParams\(\{ \.\.\.state, scope, pageId, id: undefined, step: undefined \}\)/);
   assert.match(shell, /workspaceViewState\(route, \{ \.\.\.state, view: view\.id, scope, pageId \}\)/);
   assert.match(shell, /month: state\.view === "calendar" \? state\.month : undefined/);
 });

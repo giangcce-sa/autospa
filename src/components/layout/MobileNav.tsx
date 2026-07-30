@@ -12,9 +12,9 @@ export function MobileNav() {
         const IconComponent = item.icon;
         const active = navIsActive(pathname, item);
         return (
-          <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-1 text-[10px] font-semibold ${active ? "text-[var(--accent)]" : "text-[var(--text-muted)]"}`}>
-            <IconComponent size={19} weight={active ? "fill" : "regular"} />
-            <span className="text-[11px]">{item.label}</span>
+          <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={`relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-1 text-[10px] font-semibold transition-colors ${active ? "bg-[var(--accent-light)] text-[var(--accent)]" : "text-[var(--text-muted)] hover:bg-[var(--surface-subtle)]"}`}>
+            <IconComponent size={19} weight={active ? "fill" : "regular"} aria-hidden="true" />
+            <span className="max-w-full truncate text-[11px]">{item.label}</span>
           </Link>
         );
       })}

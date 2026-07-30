@@ -1,10 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-
-/**
- * Shared building blocks for the Sáng tạo studios so all five tabs read as one
- * system: same panel chrome, same tone chips, same stat rows.
- */
+import { actionStyles } from "@/components/ui/Button";
+import { Surface } from "@/components/ui/Card";
 
 export type Tone = "purple" | "blue" | "rose" | "green" | "amber" | "danger" | "muted";
 
@@ -21,7 +18,7 @@ export const TONE_CHIP: Record<Tone, string> = {
 /** Working area + context rail, for list-centric studio overviews. */
 export function StudioWithRail({ rail, children }: { rail: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,19rem)]">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,19rem)]">
       <div className="min-w-0">{children}</div>
       {rail}
     </div>
@@ -53,24 +50,22 @@ export function StudioPanel({
   children: ReactNode;
 }) {
   return (
-    <section
-      className={`surface-hover rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)] ${padding === "sm" ? "p-3.5" : "p-[18px]"} ${className}`}
-    >
+    <Surface as="section" padding={padding === "sm" ? "compact" : "default"} className={className}>
       {(title || link) && (
-        <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="mb-3 flex items-start justify-between gap-2">
           <div className="min-w-0">
             {title && <h3 className="truncate text-[14px] font-bold">{title}</h3>}
             {meta && <p className="mt-0.5 truncate text-[11.5px] text-[var(--text-muted)]">{meta}</p>}
           </div>
           {link && (
-            <Link href={link.href} className="shrink-0 text-[12px] font-bold text-[var(--accent)] transition-opacity hover:opacity-70">
+            <Link href={link.href} className={actionStyles({ variant: "quiet", size: "sm", className: "shrink-0" })}>
               {link.label}
             </Link>
           )}
         </div>
       )}
       {children}
-    </section>
+    </Surface>
   );
 }
 

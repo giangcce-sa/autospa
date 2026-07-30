@@ -1,6 +1,7 @@
 "use client";
 
 import { Children, cloneElement, isValidElement, useId, useRef, useState } from "react";
+import { HorizontalScroller } from "@/components/ui/HorizontalScroller";
 import { cn } from "@/lib/utils";
 
 export interface DashboardTabItem {
@@ -30,7 +31,8 @@ export function DashboardTabs({
 
   return (
     <div className={cn("dashboard-tabs", className)}>
-      <div className="mb-4 flex gap-1 overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--bg-subtle)] p-1 lg:hidden" role="tablist" aria-label="Nhóm dữ liệu dashboard">
+      <HorizontalScroller className="mb-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface-subtle)] lg:hidden" contentClassName="flex gap-1 p-1" label="Nhóm dữ liệu dashboard">
+        <div className="contents" role="tablist" aria-label="Nhóm dữ liệu dashboard">
         {items.map((item, index) => (
           <button
             key={item.id}
@@ -53,7 +55,8 @@ export function DashboardTabs({
             {item.label}
           </button>
         ))}
-      </div>
+        </div>
+      </HorizontalScroller>
       <div className="space-y-5">
         {Children.map(children, (child) => {
           if (!isValidElement<DashboardTabPanelProps>(child)) return child;

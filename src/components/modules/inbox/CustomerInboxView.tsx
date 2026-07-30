@@ -96,14 +96,14 @@ export function CustomerInboxView({ facebookPageId, view, initialMessages, selec
           </div>
         </div>
 
-        <div className="lg:grid lg:min-h-[34rem] lg:grid-cols-[minmax(17rem,0.78fr)_minmax(22rem,1.22fr)_minmax(15rem,0.62fr)]">
-          <div className={`${view === "conversation" ? "hidden lg:block" : "block"} min-w-0 border-r-0 border-[var(--border)] lg:border-r`}>
+        <div className="md:grid md:min-h-[34rem] md:grid-cols-[minmax(16rem,0.82fr)_minmax(0,1.18fr)] xl:grid-cols-[minmax(17rem,0.78fr)_minmax(22rem,1.22fr)_minmax(15rem,0.62fr)]">
+          <div className={`${view === "conversation" ? "hidden md:block" : "block"} min-w-0 border-r-0 border-[var(--border)] md:border-r`}>
             <MessageList messages={filteredMessages} detailHref={(id) => hrefFor("conversation", id)} selectedMessageId={selectedMessage?.id} />
           </div>
-          <div className={`${view === "queue" ? "hidden lg:block" : "block"} min-w-0 border-r-0 border-[var(--border)] lg:border-r`}>
+          <div className={`${view === "queue" ? "hidden md:block" : "block"} min-w-0 border-r-0 border-[var(--border)] xl:border-r`}>
             <MessageDetail message={selectedMessage} backHref={hrefFor("queue")} canMutate={canMutate} pendingAction={pendingAction} onAutoReply={(messageId) => runAction("auto-reply", { messageId }, `${messageId}:auto-reply`)} onSend={(messageId) => runAction("send-fb-reply", { messageId }, `${messageId}:send-fb-reply`)} />
           </div>
-          <div className={`${view === "queue" ? "hidden lg:block" : "block"} min-w-0`}>
+          <div className={`${view === "queue" ? "hidden xl:block" : "block"} min-w-0 border-t border-[var(--border)] md:col-span-2 xl:col-span-1 xl:border-t-0`}>
             <MessageFacts message={selectedMessage} />
           </div>
         </div>
@@ -116,7 +116,7 @@ function MessageList({ messages, detailHref, selectedMessageId }: { messages: In
   return (
     <div>
       <div className="border-b border-[var(--border)] px-4 py-3"><h3 className="text-sm font-bold">Message records</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{messages.length} record phù hợp</p></div>
-      {messages.length ? <div className="divide-y divide-[var(--border)] lg:max-h-[31rem] lg:overflow-y-auto">{messages.map((message) => (
+      {messages.length ? <div className="divide-y divide-[var(--border)] md:max-h-[31rem] md:overflow-y-auto">{messages.map((message) => (
         <Link key={message.id} href={detailHref(message.id)} aria-current={selectedMessageId === message.id ? "page" : undefined} className={`block min-h-11 p-4 hover:bg-[var(--bg-subtle)] ${selectedMessageId === message.id ? "bg-[var(--accent-light)]" : "bg-[var(--bg-card)]"}`}>
           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-sm font-bold">{message.senderName}</p><MessageSource message={message} /></div><p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--text-secondary)]">{message.message}</p></div><time className="shrink-0 text-[10px] text-[var(--text-muted)]">{formatDateTime(message.createdAt)}</time></div>
           <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-semibold text-[var(--text-muted)]"><span>{message.reply ? "Có reply được lưu" : "Chưa có reply"}</span><span>·</span><span>{message.isRead ? "Legacy: đã xử lý" : "Legacy: chưa đánh dấu"}</span></div>
@@ -131,7 +131,7 @@ function MessageDetail({ message, backHref, canMutate, pendingAction, onAutoRepl
   const realMessage = !message.senderId.startsWith("sim_");
   return (
     <div className="p-4 sm:p-5">
-      <Link href={backHref} className="mb-4 inline-flex min-h-11 items-center gap-2 text-xs font-bold text-[var(--accent)] lg:hidden"><ArrowLeft size={15} aria-hidden="true" /> Quay lại hàng đợi</Link>
+      <Link href={backHref} className="mb-4 inline-flex min-h-11 items-center gap-2 text-xs font-bold text-[var(--accent)] md:hidden"><ArrowLeft size={15} aria-hidden="true" /> Quay lại hàng đợi</Link>
       <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-4"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-extrabold">{message.senderName}</h3><MessageSource message={message} /></div><p className="mt-1 text-xs text-[var(--text-muted)]">{formatDateTime(message.createdAt)}</p></div></div>
       <section className="mt-5"><p className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Tin khách gửi</p><p className="mt-2 break-words rounded-[12px] bg-[var(--bg-subtle)] p-4 text-sm leading-6">{message.message}</p></section>
       <section className="mt-5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Reply được lưu</p>{message.isAutoReply ? <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--accent)]"><Robot size={12} aria-hidden="true" /> AI draft</span> : null}</div>{message.reply ? <p className="mt-2 break-words rounded-[12px] bg-[var(--accent-light)] p-4 text-sm leading-6">{message.reply}</p> : <p className="mt-2 rounded-[12px] border border-dashed border-[var(--border)] p-4 text-sm text-[var(--text-muted)]">Chưa có reply được lưu cho bản ghi này.</p>}</section>

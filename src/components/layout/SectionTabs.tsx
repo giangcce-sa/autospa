@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { HorizontalScroller } from "@/components/ui/HorizontalScroller";
 import { ROUTE_ICONS } from "@/config/route-icons";
 import { APP_ROUTES, routeIsActive, type AppSectionId } from "@/config/routes";
 
@@ -19,10 +20,8 @@ export function SectionTabs({ sectionId }: { sectionId: AppSectionId }) {
   const pageId = searchParams.get("pageId");
 
   return (
-    <nav
-      className="-mx-1 flex gap-1 overflow-x-auto border-b border-[var(--border)] px-1 pb-px"
-      aria-label="Khu vực sáng tạo"
-    >
+    <HorizontalScroller className="-mx-1 border-b border-[var(--border)]" contentClassName="flex gap-1 px-1 pb-px" label="Khu vực sáng tạo">
+      <nav className="contents" aria-label="Khu vực sáng tạo">
       {tabs.map((tab) => {
         const IconComponent = ROUTE_ICONS[tab.icon];
         const active = routeIsActive(pathname, tab.path);
@@ -51,6 +50,7 @@ export function SectionTabs({ sectionId }: { sectionId: AppSectionId }) {
           </Link>
         );
       })}
-    </nav>
+      </nav>
+    </HorizontalScroller>
   );
 }

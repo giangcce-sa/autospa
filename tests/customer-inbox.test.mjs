@@ -51,7 +51,9 @@ test("Inbox list, detail, and mobile back navigation preserve canonical state", 
   assert.match(view, /if \(status\) params\.set\("status", status\)/);
   assert.match(view, /if \(query\.trim\(\)\) params\.set\("q", query\.trim\(\)\)/);
   assert.match(view, /backHref=\{hrefFor\("queue"\)\}/);
-  assert.match(view, /hidden lg:block/);
+  assert.match(view, /md:grid-cols-\[minmax\(16rem,0\.82fr\)_minmax\(0,1\.18fr\)\]/);
+  assert.match(view, /xl:grid-cols-\[minmax\(17rem,0\.78fr\)_minmax\(22rem,1\.22fr\)_minmax\(15rem,0\.62fr\)\]/);
+  assert.match(view, /hidden md:block/);
   assert.match(view, /Persisted facts/);
   assert.match(view, /Không suy diễn Customer, Lead, assignee hoặc channel delivery/);
   assert.equal(view.includes("online"), false);

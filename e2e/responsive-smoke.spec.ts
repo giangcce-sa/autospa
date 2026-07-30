@@ -2,6 +2,21 @@ import { expect, test } from "./fixtures/auth";
 
 const pageId = "e2e-creative-page";
 
+async function expectNoDocumentOverflow(page: import("@playwright/test").Page) {
+  await expect.poll(() => page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }))).toMatchObject({
+    clientWidth: expect.any(Number),
+    scrollWidth: expect.any(Number),
+  });
+  const geometry = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1);
+}
+
 for (const workspace of [
   { path: "/creative/ideas", heading: "Ý tưởng & Nghiên cứu" },
   { path: "/growth/ads", heading: "Ads Manager" },
@@ -12,7 +27,7 @@ for (const workspace of [
     const main = page.locator("#main-content");
     await expect(main.getByRole("heading", { name: workspace.heading, level: 1 })).toBeVisible();
     await expect(main).toBeVisible();
-    await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
+    await expectNoDocumentOverflow(page);
   });
 }
 
@@ -31,7 +46,7 @@ for (const dashboard of [
     await firstTab.focus();
     await firstTab.press("ArrowRight");
     await expect(tabs.getByRole("tab", { name: dashboard.nextTab })).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
+    await expectNoDocumentOverflow(page);
   });
 }
 
@@ -46,5 +61,5 @@ test("Customer Inbox uses canonical list and record modes at the responsive smok
     await expect(page).toHaveURL(new RegExp(`pageId=${pageId}`));
     await expect(main.getByRole("link", { name: "Quay lại hàng đợi" })).toBeVisible();
   }
-  await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
+  await expectNoDocumentOverflow(page);
 });

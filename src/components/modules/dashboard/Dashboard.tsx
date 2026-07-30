@@ -20,6 +20,10 @@ import {
   WarningCircle,
   XCircle,
 } from "@phosphor-icons/react/dist/ssr";
+import { DashboardMetric } from "@/components/dashboard/Dashboard";
+import { actionStyles } from "@/components/ui/Button";
+import { Surface } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { TodayData } from "@/lib/today";
 import { BUSINESS_TIME_ZONE } from "@/lib/today-policy";
 
@@ -89,8 +93,9 @@ export function DashboardHeading({ data, userName }: { data: TodayData; userName
 
   return (
     <div>
-      <h1 className="text-[23px] font-extrabold leading-tight tracking-tight">
-        {greetingFor(hour)}, {firstName}! <span aria-hidden="true">👋</span>
+      <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">Trung tâm điều hành</p>
+      <h1 className="mt-2 text-[26px] font-extrabold leading-tight tracking-tight">
+        {greetingFor(hour)}, {firstName}!
       </h1>
       <p className="mt-1.5 text-[13.5px] text-[var(--text-secondary)]">
         Đây là tổng quan công việc và cơ hội tăng trưởng hôm nay.
@@ -118,51 +123,12 @@ export function Dashboard({ data }: { data: TodayData }) {
 
   return (
     <div>
-      <section className="grid grid-cols-2 gap-3.5 lg:grid-cols-3 xl:grid-cols-5">
-        <Kpi
-          icon={CurrencyCircleDollar}
-          tone="blue"
-          label="Doanh thu hôm nay"
-          value={money(data.metrics.revenueToday.value)}
-          unit="đ"
-          note={`${data.metrics.paidBookingsToday.value} giao dịch đã ghi nhận`}
-          className="rise"
-        />
-        <Kpi
-          icon={CalendarCheck}
-          tone="purple"
-          label="Lịch chờ xác nhận"
-          value={String(data.stats.pendingAppointments)}
-          note={data.stats.pendingAppointments > 0 ? "Cần xác nhận với khách" : "Không có lịch chờ"}
-          noteTone={data.stats.pendingAppointments > 0 ? "warn" : undefined}
-          className="rise rise-1"
-        />
-        <Kpi
-          icon={HeartStraight}
-          tone="rose"
-          label="Khách cần chăm sóc"
-          value={String(data.stats.pendingCare)}
-          note={`${data.stats.hotLeads} khách cần ưu tiên`}
-          noteTone={data.stats.pendingCare > 0 ? "crit" : undefined}
-          className="rise rise-2"
-        />
-        <Kpi
-          icon={UserPlus}
-          tone="green"
-          label="Khách mới hôm nay"
-          value={String(data.metrics.leadsToday.value)}
-          note={`${data.stats.totalCustomers.toLocaleString("vi-VN")} khách trong hệ thống`}
-          className="rise rise-3"
-        />
-        <Kpi
-          icon={Envelope}
-          tone="amber"
-          label="Tin nhắn chưa đọc"
-          value={String(data.metrics.unreadMessages.value)}
-          note={data.kpis.pendingApprovals > 0 ? `${data.kpis.pendingApprovals} việc chờ duyệt` : "Không có việc chờ duyệt"}
-          noteTone={data.metrics.unreadMessages.value > 0 ? "warn" : undefined}
-          className="rise rise-4"
-        />
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+        <DashboardMetric label="Doanh thu hôm nay" value={`${money(data.metrics.revenueToday.value)}đ`} detail={`${data.metrics.paidBookingsToday.value} giao dịch đã ghi nhận`} icon={CurrencyCircleDollar} tone="info" />
+        <DashboardMetric label="Lịch chờ xác nhận" value={data.stats.pendingAppointments} detail={data.stats.pendingAppointments > 0 ? "Cần xác nhận với khách" : "Không có lịch chờ"} icon={CalendarCheck} />
+        <DashboardMetric label="Khách cần chăm sóc" value={data.stats.pendingCare} detail={`${data.stats.hotLeads} khách cần ưu tiên`} icon={HeartStraight} tone={data.stats.pendingCare > 0 ? "danger" : "success"} />
+        <DashboardMetric label="Khách mới hôm nay" value={data.metrics.leadsToday.value} detail={`${data.stats.totalCustomers.toLocaleString("vi-VN")} khách trong hệ thống`} icon={UserPlus} tone="success" />
+        <DashboardMetric label="Tin nhắn chưa đọc" value={data.metrics.unreadMessages.value} detail={data.kpis.pendingApprovals > 0 ? `${data.kpis.pendingApprovals} việc chờ duyệt` : "Không có việc chờ duyệt"} icon={Envelope} tone={data.metrics.unreadMessages.value > 0 ? "warning" : "info"} />
       </section>
 
       <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
@@ -313,11 +279,7 @@ export function Dashboard({ data }: { data: TodayData }) {
 /* ── pieces ─────────────────────────────────────────────── */
 
 function Panel({ className = "", children }: { className?: string; children: React.ReactNode }) {
-  return (
-    <section className={`surface-hover rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-[18px] shadow-[var(--shadow-sm)] ${className}`}>
-      {children}
-    </section>
-  );
+  return <Surface as="section" className={className}>{children}</Surface>;
 }
 
 function PanelHead({ title, meta, link }: { title: string; meta?: string; link?: { href: string; label: string } }) {
@@ -326,7 +288,7 @@ function PanelHead({ title, meta, link }: { title: string; meta?: string; link?:
       <h3 className="text-[14.5px] font-bold">{title}</h3>
       {meta && <span className="shrink-0 text-[12px] text-[var(--text-muted)]">{meta}</span>}
       {link && (
-        <Link href={link.href} className="shrink-0 text-[12.5px] font-bold text-[var(--accent)] transition-opacity hover:opacity-70">
+        <Link href={link.href} className={actionStyles({ variant: "quiet", size: "sm", className: "shrink-0" })}>
           {link.label}
         </Link>
       )}
@@ -343,47 +305,13 @@ function Chip({ icon: IconComponent, tone, size = "md" }: { icon: Icon; tone: To
   );
 }
 
-function Kpi({
-  icon,
-  tone,
-  label,
-  value,
-  unit,
-  note,
-  noteTone,
-  className = "",
-}: {
-  icon: Icon;
-  tone: Tone;
-  label: string;
-  value: string;
-  unit?: string;
-  note: string;
-  noteTone?: "warn" | "crit";
-  className?: string;
-}) {
-  const noteClass = noteTone === "crit" ? "text-[var(--danger)] font-bold" : noteTone === "warn" ? "text-[var(--warning)] font-bold" : "text-[var(--text-muted)]";
-  return (
-    <article className={`card-hover rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] p-4 shadow-[var(--shadow-sm)] ${className}`}>
-      <div className="mb-3 flex items-center justify-between">
-        <Chip icon={icon} tone={tone} size="lg" />
-      </div>
-      <p className="text-[11.5px] font-semibold uppercase tracking-[0.03em] text-[var(--text-muted)]">{label}</p>
-      <p className="mt-1 text-[26px] font-extrabold leading-none tabular-nums tracking-tight">
-        {value}{unit && <span className="ml-0.5 text-[15px] font-bold text-[var(--text-muted)]">{unit}</span>}
-      </p>
-      <p className={`mt-1.5 text-[12px] ${noteClass}`}>{note}</p>
-    </article>
-  );
-}
-
 function TaskRow({ item }: { item: QueueItem }) {
   const meta = QUEUE_ICON[item.type] ?? { icon: Info, tone: "muted" as Tone };
   const priority = PRIORITY_LABEL[item.priority] ?? PRIORITY_LABEL.low;
   const isPrimary = item.priority === "critical";
   return (
     <li
-      className="row-hover flex items-center gap-3 rounded-[11px] border border-[var(--border)] p-3"
+      className="row-hover flex flex-col items-stretch gap-3 rounded-[11px] border border-[var(--border)] p-3 sm:flex-row sm:items-center"
       style={{ borderLeft: `3px solid ${priority.stripe}` }}
     >
       <Chip icon={meta.icon} tone={meta.tone} />
@@ -396,11 +324,7 @@ function TaskRow({ item }: { item: QueueItem }) {
       </div>
       <Link
         href={item.href}
-        className={`flex min-h-9 shrink-0 items-center rounded-[8px] px-3.5 text-[12.5px] font-bold transition-colors ${
-          isPrimary
-            ? "bg-[var(--accent)] text-[var(--accent-foreground)] hover:bg-[var(--accent-hover)]"
-            : "border border-[var(--border-strong)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
-        }`}
+        className={actionStyles({ variant: isPrimary ? "primary" : "secondary", size: "sm", className: "w-full shrink-0 sm:w-auto" })}
       >
         {item.primaryAction}
       </Link>
@@ -470,12 +394,7 @@ function Tag({ label, tone }: { label: string; tone: TagTone }) {
 }
 
 function Empty({ icon: IconComponent, text, tone }: { icon: Icon; text: string; tone: Tone }) {
-  const color = tone === "green" ? "text-[var(--success)]" : "text-[var(--text-muted)]";
-  return (
-    <div className={`flex items-center gap-2.5 py-6 text-[13px] ${color}`}>
-      <IconComponent size={20} weight="fill" aria-hidden="true" />{text}
-    </div>
-  );
+  return <EmptyState density="compact" icon={<IconComponent size={20} weight="fill" aria-hidden="true" />} title={text} className={tone === "green" ? "text-[var(--success)]" : undefined} />;
 }
 
 /* ── status helpers ─────────────────────────────────────── */

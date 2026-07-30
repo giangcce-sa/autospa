@@ -9,6 +9,7 @@ import { QualityChecker } from "@/components/modules/quality/QualityChecker";
 import { LibraryView } from "@/components/modules/library/LibraryView";
 import { CalendarView } from "@/components/modules/publish/CalendarView";
 import type { PublishingPostData } from "@/components/modules/publish/PublishManager";
+import { PermissionState } from "@/components/ui/EmptyState";
 import type { ReviewIssue } from "@/components/ui/ReviewBadge";
 import { SectionTabs } from "@/components/layout/SectionTabs";
 import { WorkspacePermissionState } from "@/components/workspace/WorkspacePermissionState";
@@ -472,8 +473,10 @@ function parsePostReview(review: { status: string; score: number; issues: string
 
 function ReadOnlyMessage() {
   return (
-    <section className="rounded-[11px] border border-[var(--border)] bg-[var(--bg-card)] p-5 text-sm text-[var(--text-secondary)]">
-      Tài khoản của bạn có quyền xem workspace này nhưng không có quyền thực hiện thay đổi.
-    </section>
+    <PermissionState
+      density="compact"
+      title="Workspace đang ở chế độ chỉ xem"
+      description="Tài khoản của bạn không có quyền thực hiện thay đổi."
+    />
   );
 }

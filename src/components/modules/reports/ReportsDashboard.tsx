@@ -1,31 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
+import { useEffect, useState } from "react";
+import { ChartBar, Eye, Flame, Heart, Sparkle, ThumbsUp, Users } from "@phosphor-icons/react";
+import { DashboardMetric, DashboardPanel } from "@/components/dashboard/Dashboard";
 import { Button } from "@/components/ui/Button";
-import { ChartBar, Eye, ThumbsUp, Users, Flame, Heart, Sparkle } from "@phosphor-icons/react";
+import { EmptyState, UnavailableState } from "@/components/ui/EmptyState";
+import { SkeletonCard, SkeletonStat } from "@/components/ui/Skeleton";
 import { truncate } from "@/lib/utils";
 
 interface ReportData {
-  overview: { postCount: number; publishedCount: number; totalReach: number | null; totalLikes: number | null; totalComments: number | null; totalShares: number | null; avgEngagement: number | null };
+  overview: {
+    postCount: number;
+    publishedCount: number;
+    totalReach: number | null;
+    totalLikes: number | null;
+    totalComments: number | null;
+    totalShares: number | null;
+    avgEngagement: number | null;
+  };
   crm: { customers: number; leads: number; closedLeads: number; hotLeads: number; conversionRate: number; careMessages: number } | null;
   topPosts: { id: string; caption: string; analytics: { likes: number; comments: number; shares: number; reach: number } | null }[];
   bySource: { source: string; _count: number }[];
   bySegment: { segment: string; _count: number }[];
 }
-
-const MetricCard = ({ label, value, sub, icon: Icon, color }: { label: string; value: string | number; sub?: string; icon: React.ElementType; color: string }) => (
-  <Card>
-    <div className="flex items-center justify-between mb-2">
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: color + "18" }}>
-        <Icon size={14} style={{ color }} weight="fill" />
-      </div>
-    </div>
-    <p className="text-2xl font-bold" style={{ color: "var(--text)" }}>{value}</p>
-    {sub && <p className="text-[10px]" style={{ color: "var(--accent)" }}>{sub}</p>}
-    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{label}</p>
-  </Card>
-);
 
 export function ReportsDashboard() {
   const [data, setData] = useState<ReportData | null>(null);
@@ -33,147 +30,151 @@ export function ReportsDashboard() {
   const [genLoading, setGenLoading] = useState(false);
 
   useEffect(() => {
-    fetch("/api/reports").then((r) => r.json()).then((res) => res.data && setData(res.data));
+    fetch("/api/reports").then((response) => response.json()).then((result) => result.data && setData(result.data));
   }, []);
 
   const generateSummary = async () => {
     setGenLoading(true);
     try {
-      const res = await fetch("/api/reports", { method: "POST" });
-      const d = await res.json();
-      if (d.data) setSummary(d.data.summary);
-    } finally { setGenLoading(false); }
+      const response = await fetch("/api/reports", { method: "POST" });
+      const result = await response.json();
+      if (result.data) setSummary(result.data.summary);
+    } finally {
+      setGenLoading(false);
+    }
   };
 
-  if (!data) return (
-    <div className="space-y-4 max-w-5xl">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[1,2,3,4].map(i => <div key={i} className="skeleton h-24 rounded-xl" />)}
+  if (!data) {
+    return (
+      <div className="max-w-6xl space-y-4" role="status" aria-busy="true" aria-label="Đang tải báo cáo">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => <SkeletonStat key={index} />)}
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => <SkeletonStat key={index} />)}
+        </div>
+        <SkeletonCard />
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[1,2,3,4].map(i => <div key={i} className="skeleton h-24 rounded-xl" />)}
-      </div>
-      <div className="skeleton h-64 rounded-xl" />
-    </div>
-  );
+    );
+  }
+
+  const sourceTotal = data.bySource.reduce((total, entry) => total + entry._count, 0);
+  const segmentTotal = data.bySegment.reduce((total, entry) => total + entry._count, 0);
 
   return (
-    <div className="space-y-4 max-w-5xl">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricCard label="Bài đã đăng" value={data.overview.publishedCount} sub={`/ ${data.overview.postCount} tổng`} icon={ChartBar} color="var(--accent)" />
-        <MetricCard label="Tổng tiếp cận" value={data.overview.totalReach?.toLocaleString("vi-VN") ?? "Chưa đo"} icon={Eye} color="var(--blue)" />
-        <MetricCard label="Tổng lượt thích" value={data.overview.totalLikes?.toLocaleString("vi-VN") ?? "Chưa đo"} icon={ThumbsUp} color="var(--rose)" />
-        <MetricCard label="Tỷ lệ tương tác" value={data.overview.avgEngagement == null ? "Chưa đo" : `${data.overview.avgEngagement}%`} icon={Flame} color="var(--amber)" />
-      </div>
+    <div className="max-w-6xl space-y-5">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <DashboardMetric label="Bài đã đăng" value={data.overview.publishedCount} detail={`${data.overview.postCount} bài tổng cộng`} icon={ChartBar} />
+        <DashboardMetric label="Tổng tiếp cận" value={data.overview.totalReach?.toLocaleString("vi-VN") ?? "Chưa đo"} detail="Analytics đã lưu" icon={Eye} tone="info" unavailable={data.overview.totalReach == null} />
+        <DashboardMetric label="Tổng lượt thích" value={data.overview.totalLikes?.toLocaleString("vi-VN") ?? "Chưa đo"} detail="Analytics đã lưu" icon={ThumbsUp} tone="success" unavailable={data.overview.totalLikes == null} />
+        <DashboardMetric label="Tỷ lệ tương tác" value={data.overview.avgEngagement == null ? "Chưa đo" : `${data.overview.avgEngagement}%`} detail="Analytics đã lưu" icon={Flame} tone="warning" unavailable={data.overview.avgEngagement == null} />
+      </section>
 
       {data.crm ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MetricCard label="Khách hàng CRM" value={data.crm.customers} icon={Users} color="var(--accent)" />
-          <MetricCard label="Tổng leads" value={data.crm.leads} sub={`${data.crm.hotLeads} đang nóng`} icon={Flame} color="var(--rose)" />
-          <MetricCard label="Đã chốt" value={data.crm.closedLeads} sub={`${data.crm.conversionRate}% tỷ lệ`} icon={ChartBar} color="var(--accent)" />
-          <MetricCard label="Tin nhắn chăm sóc" value={data.crm.careMessages} icon={Heart} color="var(--rose)" />
-        </div>
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <DashboardMetric label="Khách hàng CRM" value={data.crm.customers} detail="Phạm vi tài khoản" icon={Users} />
+          <DashboardMetric label="Tổng leads" value={data.crm.leads} detail={`${data.crm.hotLeads} lead đang nóng`} icon={Flame} tone="danger" />
+          <DashboardMetric label="Đã chốt" value={data.crm.closedLeads} detail={`${data.crm.conversionRate}% tỷ lệ`} icon={ChartBar} tone="success" />
+          <DashboardMetric label="Tin nhắn chăm sóc" value={data.crm.careMessages} detail="Bản ghi đã lưu" icon={Heart} tone="info" />
+        </section>
       ) : (
-        <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-4 text-xs leading-5 text-[var(--text-muted)]">
-          CRM, lead và care chưa có Page ownership tương thích nên không được ghép vào báo cáo theo Page.
-        </p>
+        <UnavailableState
+          density="compact"
+          title="Báo cáo CRM theo Page chưa khả dụng"
+          description="CRM, lead và care chưa có Page ownership tương thích nên không được ghép vào báo cáo theo Page."
+        />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-3">
-          <Card>
-            <CardHeader><CardTitle>Top 5 bài đăng hiệu quả nhất</CardTitle></CardHeader>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(16rem,0.75fr)]">
+        <div className="space-y-4">
+          <DashboardPanel title="Top 5 bài đăng hiệu quả nhất" description="Xếp hạng từ analytics đã lưu, không suy diễn dữ liệu còn thiếu.">
             {data.topPosts.length === 0 ? (
-              <p className="text-xs text-center py-6" style={{ color: "var(--text-muted)" }}>Chưa có dữ liệu analytics. Thêm số liệu ở trang Analytics.</p>
+              <EmptyState density="compact" title="Chưa có dữ liệu analytics" description="Thêm số liệu ở trang Analytics để bắt đầu so sánh bài đăng." />
             ) : (
               <div className="space-y-2">
-                {data.topPosts.map((post, i) => (
-                  <div key={post.id} className="flex items-start gap-3 p-2.5 rounded-lg" style={{ background: "var(--bg-subtle)" }}>
-                    <span className="text-sm font-bold shrink-0 w-5" style={{ color: i === 0 ? "var(--amber)" : "var(--text-muted)" }}>#{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs" style={{ color: "var(--text)" }}>{truncate(post.caption, 70)}</p>
-                      {post.analytics && (
-                        <div className="flex gap-3 mt-1 text-[10px]" style={{ color: "var(--text-muted)" }}>
-                          <span>{post.analytics.reach.toLocaleString()} reach</span>
+                {data.topPosts.map((post, index) => (
+                  <div key={post.id} className="flex items-start gap-3 rounded-lg bg-[var(--bg-subtle)] p-3">
+                    <span className={`w-5 shrink-0 text-sm font-bold ${index === 0 ? "text-[var(--amber)]" : "text-[var(--text-muted)]"}`}>#{index + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs leading-5">{truncate(post.caption, 70)}</p>
+                      {post.analytics ? (
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]">
+                          <span>{post.analytics.reach.toLocaleString("vi-VN")} reach</span>
                           <span>{post.analytics.likes} likes</span>
-                          <span>{post.analytics.comments} cmt</span>
+                          <span>{post.analytics.comments} bình luận</span>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </Card>
+          </DashboardPanel>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Sparkle size={14} style={{ color: "var(--accent)" }} weight="fill" />
-                <CardTitle>Nhận xét AI</CardTitle>
+          <DashboardPanel title="Nhận xét AI" description="Phân tích được tạo theo yêu cầu từ dữ liệu báo cáo hiện tại.">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                {summary ? (
+                  <p className="text-xs leading-6 text-[var(--text-secondary)]">{summary}</p>
+                ) : (
+                  <p className="text-xs leading-5 text-[var(--text-muted)]">Chưa tạo nhận xét cho dữ liệu hiện tại.</p>
+                )}
               </div>
-              <Button size="sm" variant="secondary" onClick={generateSummary} loading={genLoading}>Tạo nhận xét</Button>
-            </CardHeader>
-            {summary ? (
-              <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{summary}</p>
-            ) : (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>Nhấn "Tạo nhận xét" để AI phân tích hiệu quả tổng thể và đề xuất cải thiện.</p>
-            )}
-          </Card>
+              <Button size="sm" variant={summary ? "secondary" : "primary"} onClick={generateSummary} loading={genLoading} className="shrink-0">
+                <Sparkle size={14} aria-hidden="true" /> {summary ? "Tạo lại" : "Tạo nhận xét"}
+              </Button>
+            </div>
+          </DashboardPanel>
         </div>
 
-        <div className="space-y-3">
-          <Card>
-            <CardHeader><CardTitle>Nguồn Lead</CardTitle></CardHeader>
-            {data.bySource.length === 0 ? (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>Chưa có dữ liệu</p>
-            ) : (
-              <div className="space-y-2">
-                {data.bySource.map((s) => {
-                  const total = data.bySource.reduce((a, b) => a + b._count, 0);
-                  const pct = total > 0 ? Math.round((s._count / total) * 100) : 0;
-                  return (
-                    <div key={s.source}>
-                      <div className="flex justify-between text-xs mb-0.5" style={{ color: "var(--text-secondary)" }}>
-                        <span>{s.source}</span><span>{s._count} ({pct}%)</span>
-                      </div>
-                      <div className="h-1.5 rounded-full" style={{ background: "var(--bg-subtle)" }}>
-                        <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, background: "var(--accent)" }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Phân khúc KH</CardTitle></CardHeader>
-            {data.bySegment.length === 0 ? (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>Chưa có dữ liệu</p>
-            ) : (
-              <div className="space-y-2">
-                {data.bySegment.map((s) => {
-                  const total = data.bySegment.reduce((a, b) => a + b._count, 0);
-                  const pct = total > 0 ? Math.round((s._count / total) * 100) : 0;
-                  const colors: Record<string, string> = { vip: "var(--amber)", regular: "var(--accent)", new: "var(--blue)" };
-                  return (
-                    <div key={s.segment}>
-                      <div className="flex justify-between text-xs mb-0.5" style={{ color: "var(--text-secondary)" }}>
-                        <span>{s.segment === "vip" ? "VIP" : s.segment === "regular" ? "Thân thiết" : "Mới"}</span>
-                        <span>{s._count} ({pct}%)</span>
-                      </div>
-                      <div className="h-1.5 rounded-full" style={{ background: "var(--bg-subtle)" }}>
-                        <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, background: colors[s.segment] || "var(--accent)" }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
+        <div className="space-y-4">
+          <BreakdownPanel title="Nguồn Lead" entries={data.bySource} total={sourceTotal} labelFor={(value) => value} />
+          <BreakdownPanel
+            title="Phân khúc KH"
+            entries={data.bySegment}
+            total={segmentTotal}
+            labelFor={(value) => value === "vip" ? "VIP" : value === "regular" ? "Thân thiết" : "Mới"}
+          />
         </div>
       </div>
     </div>
+  );
+}
+
+function BreakdownPanel({
+  title,
+  entries,
+  total,
+  labelFor,
+}: {
+  title: string;
+  entries: { source?: string; segment?: string; _count: number }[];
+  total: number;
+  labelFor: (value: string) => string;
+}) {
+  return (
+    <DashboardPanel title={title} description={`${total} bản ghi đã phân loại`}>
+      {entries.length === 0 ? (
+        <EmptyState density="compact" title="Chưa có dữ liệu" />
+      ) : (
+        <div className="space-y-3">
+          {entries.map((entry) => {
+            const value = entry.source ?? entry.segment ?? "unknown";
+            const percentage = total > 0 ? Math.round((entry._count / total) * 100) : 0;
+            return (
+              <div key={value}>
+                <div className="mb-1 flex justify-between gap-3 text-xs text-[var(--text-secondary)]">
+                  <span>{labelFor(value)}</span>
+                  <span className="shrink-0 tabular-nums">{entry._count} ({percentage}%)</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-[var(--bg-subtle)]">
+                  <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${percentage}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </DashboardPanel>
   );
 }

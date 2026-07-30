@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import Link from "next/link";
+import { useEffect, useState, useCallback } from "react";
 import { Bell, X, Checks, Info, Warning, Fire } from "@phosphor-icons/react";
+import { Popover } from "@/components/ui/Popover";
 
 interface Alert {
   id: string;
@@ -41,7 +43,6 @@ export function NotificationBell() {
   const [unack, setUnack] = useState(0);
   const [loading, setLoading] = useState(true);
   const [ackingAll, setAckingAll] = useState(false);
-  const dropRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -63,18 +64,6 @@ export function NotificationBell() {
     const id = setInterval(() => { load(); }, 60000);
     return () => clearInterval(id);
   }, [load]);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
 
   const acknowledge = async (id: string) => {
     setAlerts((prev) => prev.map((a) => a.id === id ? { ...a, acknowledged: true } : a));
@@ -103,36 +92,23 @@ export function NotificationBell() {
   const read = alerts.filter((a) => a.acknowledged);
 
   return (
-    <div className="relative" ref={dropRef}>
-      {/* Bell button */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="relative p-1.5 rounded-md transition-colors hover:bg-[var(--bg-subtle)]"
-        style={{ color: "var(--text-muted)" }}
-        aria-label="Thông báo"
-      >
-        <Bell size={18} weight={unack > 0 ? "fill" : "regular"} style={{ color: unack > 0 ? "var(--warning)" : undefined }} />
-        {unack > 0 && (
-          <span
-            className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-md flex items-center justify-center text-[9px] font-bold px-1"
-            style={{ background: "var(--danger)", color: "white" }}
-          >
-            {unack > 99 ? "99+" : unack}
-          </span>
-        )}
-      </button>
-
-      {/* Dropdown */}
-      {open && (
-        <div
-          className="absolute right-0 top-full mt-2 w-80 rounded-lg overflow-hidden z-50"
-          style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            boxShadow: "var(--shadow-lg)",
-            animation: "slide-in-up 0.18s cubic-bezier(0.4,0,0.2,1) both",
-          }}
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      label="Thông báo"
+      className="w-80"
+      trigger={(triggerProps) => (
+        <button
+          {...triggerProps}
+          type="button"
+          className="relative flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-subtle)]"
+          aria-label={unack > 0 ? `Thông báo, ${unack} chưa đọc` : "Thông báo"}
         >
+          <Bell size={19} weight={unack > 0 ? "fill" : "regular"} style={{ color: unack > 0 ? "var(--warning)" : undefined }} aria-hidden="true" />
+          {unack > 0 ? <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-md bg-[var(--danger)] px-1 text-[9px] font-bold text-white">{unack > 99 ? "99+" : unack}</span> : null}
+        </button>
+      )}
+    >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
             <div className="flex items-center gap-2">
@@ -146,12 +122,12 @@ export function NotificationBell() {
             </div>
             {unack > 0 && (
               <button
+                type="button"
                 onClick={acknowledgeAll}
                 disabled={ackingAll}
-                className="flex items-center gap-1 text-[10px] transition-opacity hover:opacity-70 disabled:opacity-40"
-                style={{ color: "var(--accent)" }}
+                className="flex min-h-9 items-center gap-1 rounded-[var(--radius-sm)] px-2 text-[11px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent-light)] disabled:opacity-40"
               >
-                <Checks size={11} /> Đánh dấu tất cả
+                <Checks size={13} aria-hidden="true" /> Đánh dấu tất cả
               </button>
             )}
           </div>
@@ -189,15 +165,12 @@ export function NotificationBell() {
             )}
           </div>
 
-          {/* Footer */}
-          <div className="px-4 py-2.5 border-t text-center" style={{ borderColor: "var(--border)" }}>
-            <a href="/listening" className="text-[10px] transition-opacity hover:opacity-70" style={{ color: "var(--text-muted)" }}>
+          <div className="border-t border-[var(--border)] px-4 py-2.5 text-center">
+            <Link href="/listening" onClick={() => setOpen(false)} className="inline-flex min-h-9 items-center text-[11px] font-semibold text-[var(--text-muted)] transition-colors hover:text-[var(--accent)]">
               Xem tất cả cảnh báo →
-            </a>
+            </Link>
           </div>
-        </div>
-      )}
-    </div>
+    </Popover>
   );
 }
 
@@ -221,12 +194,12 @@ function AlertRow({ alert, onAck }: { alert: Alert; onAck: (id: string) => void 
       </div>
       {!alert.acknowledged && (
         <button
+          type="button"
           onClick={() => onAck(alert.id)}
-          className="shrink-0 mt-0.5 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--bg-subtle)]"
-          style={{ color: "var(--text-muted)" }}
-          title="Đánh dấu đã đọc"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-subtle)] hover:text-[var(--text)]"
+          aria-label={`Đánh dấu đã đọc: ${alert.title}`}
         >
-          <X size={10} />
+          <X size={14} aria-hidden="true" />
         </button>
       )}
     </div>

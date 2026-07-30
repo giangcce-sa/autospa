@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
+import { ChartLine, CurrencyCircleDollar, Robot, TrendUp } from "@phosphor-icons/react";
+import { HorizontalScroller } from "@/components/ui/HorizontalScroller";
+import { PermissionState } from "@/components/ui/EmptyState";
+import { AIAnalyst } from "./AIAnalyst";
 import { ReportsDashboard } from "./ReportsDashboard";
 import { RevenueAttribution } from "./RevenueAttribution";
 import { RevenueForecast } from "./RevenueForecast";
-import { AIAnalyst } from "./AIAnalyst";
-import { ChartLine, CurrencyCircleDollar, TrendUp, Robot } from "@phosphor-icons/react";
 
 const TABS = [
   { id: "overview", label: "Tổng quan", icon: ChartLine },
@@ -17,36 +19,56 @@ const TABS = [
 type Tab = (typeof TABS)[number]["id"];
 
 function AccountReportPermission() {
-  return <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>Báo cáo doanh thu cấp tài khoản chỉ dành cho Owner.</p>;
+  return <PermissionState density="panel" title="Báo cáo này chỉ dành cho Owner" description="Attribution và dự báo sử dụng dữ liệu cấp tài khoản." />;
 }
 
 export function ReportsPageClient({ canMutate = true }: { canMutate?: boolean }) {
   const [tab, setTab] = useState<Tab>("overview");
+  const baseId = useId();
+  const refs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const activate = (index: number) => {
+    const next = TABS[(index + TABS.length) % TABS.length];
+    setTab(next.id);
+    refs.current[(index + TABS.length) % TABS.length]?.focus();
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: "var(--bg-subtle)" }}>
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-            style={
-              tab === id
-                ? { background: "var(--accent)", color: "white" }
-                : { background: "transparent", color: "var(--text-secondary)" }
-            }
-          >
-            <Icon size={13} weight={tab === id ? "fill" : "regular"} />
-            {label}
-          </button>
-        ))}
-      </div>
+    <div className="space-y-5">
+      <HorizontalScroller className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-subtle)]" contentClassName="flex gap-1 p-1" label="Nhóm báo cáo">
+        <div className="contents" role="tablist" aria-label="Nhóm báo cáo">
+          {TABS.map(({ id, label, icon: Icon }, index) => (
+            <button
+              key={id}
+              ref={(node) => { refs.current[index] = node; }}
+              id={`${baseId}-tab-${id}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              aria-controls={`${baseId}-panel-${id}`}
+              tabIndex={tab === id ? 0 : -1}
+              onClick={() => setTab(id)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowRight") { event.preventDefault(); activate(index + 1); }
+                if (event.key === "ArrowLeft") { event.preventDefault(); activate(index - 1); }
+                if (event.key === "Home") { event.preventDefault(); activate(0); }
+                if (event.key === "End") { event.preventDefault(); activate(TABS.length - 1); }
+              }}
+              className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-[var(--radius-md)] px-4 text-xs font-bold transition-colors ${tab === id ? "bg-[var(--bg-card)] text-[var(--accent)] shadow-sm" : "text-[var(--text-secondary)] hover:bg-[var(--action-quiet-hover)]"}`}
+            >
+              <Icon size={14} weight={tab === id ? "fill" : "regular"} aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </HorizontalScroller>
 
-      {tab === "overview" && <ReportsDashboard />}
-      {tab === "analyst" && <AIAnalyst canMutate={canMutate} />}
-      {tab === "attribution" && (canMutate ? <RevenueAttribution /> : <AccountReportPermission />)}
-      {tab === "forecast" && (canMutate ? <RevenueForecast /> : <AccountReportPermission />)}
+      <div id={`${baseId}-panel-${tab}`} role="tabpanel" aria-labelledby={`${baseId}-tab-${tab}`}>
+        {tab === "overview" ? <ReportsDashboard /> : null}
+        {tab === "analyst" ? <AIAnalyst canMutate={canMutate} /> : null}
+        {tab === "attribution" ? (canMutate ? <RevenueAttribution /> : <AccountReportPermission />) : null}
+        {tab === "forecast" ? (canMutate ? <RevenueForecast /> : <AccountReportPermission />) : null}
+      </div>
     </div>
   );
 }

@@ -3,14 +3,10 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle, Plugs, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import type { AppRoute, RouteScope, WorkspaceView } from "@/config/routes";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { HorizontalScroller } from "@/components/ui/HorizontalScroller";
+import { WorkspaceScopeControl } from "@/components/workspace/WorkspaceScopeControl";
 import type { WorkspacePageOption } from "@/lib/workspace-access";
 import { workspaceScopesForRoute, workspaceSearchParams, type WorkspaceUrlState } from "@/lib/workspace-url";
-
-const SCOPE_LABELS = {
-  current: "Trang hiện tại",
-  all: "Tất cả Trang được phép",
-  account: "Toàn tài khoản",
-} as const;
 
 export function WorkspaceShell({
   route,
@@ -45,8 +41,8 @@ export function WorkspaceShell({
   return (
     <div className={`space-y-5 ${wide || dashboard ? "max-w-none" : "max-w-6xl space-y-6"}`}>
       {topNav}
-      <header className={dashboard ? "overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)]" : wide ? "" : "border-b border-[var(--border)] pb-5"}>
-        <div className={`flex flex-wrap items-start justify-between gap-4 ${dashboard ? "p-5 lg:p-6" : ""}`}>
+      <header className={dashboard ? "overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface-card)] shadow-[var(--shadow-sm)]" : wide ? "" : "border-b border-[var(--border)] pb-5"}>
+        <div className={`flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:flex-wrap sm:items-start ${dashboard ? "p-5 lg:p-6" : ""}`}>
           {header ?? (
             <div>
               <p className={`${dashboard ? "text-[11px] font-extrabold uppercase tracking-[0.16em]" : "text-[13px] font-semibold"} text-[var(--accent)]`}>Phần mềm chức năng</p>
@@ -54,7 +50,7 @@ export function WorkspaceShell({
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{route.description}</p>
             </div>
           )}
-          <WorkspaceScopeControl route={route} state={state} pages={pages} effectiveScope={effectiveScope} />
+          <WorkspaceScopeControl routePath={route.path} state={state} pages={pages} effectiveScope={effectiveScope} />
         </div>
         <WorkspaceNav route={route} views={views} state={state} pages={pages} dashboard={dashboard} />
       </header>
@@ -66,73 +62,6 @@ export function WorkspaceShell({
       ) : (
         <WorkspaceOverview route={route} views={views} state={state} />
       ))}
-    </div>
-  );
-}
-
-function WorkspaceScopeControl({
-  route,
-  state,
-  pages,
-  effectiveScope,
-}: {
-  route: AppRoute;
-  state: WorkspaceUrlState;
-  pages: WorkspacePageOption[];
-  effectiveScope: RouteScope;
-}) {
-  const scopes = workspaceScopesForRoute(effectiveScope);
-
-  if (scopes.length === 1 && scopes[0] === "account") {
-    return (
-      <span className="rounded-md border border-[var(--border)] bg-[var(--bg-subtle)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)]">
-        {SCOPE_LABELS.account}
-      </span>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center justify-end gap-2" aria-label="Phạm vi dữ liệu">
-      {pages.length > 0 && state.scope === "current" && (
-        <div className="flex flex-wrap gap-1">
-          {pages.map((page) => {
-            const params = workspaceSearchParams({ ...state, scope: "current", pageId: page.id, id: undefined, step: undefined });
-            return (
-              <Link
-                key={page.id}
-                href={`${route.path}?${params.toString()}`}
-                aria-current={state.pageId === page.id ? "true" : undefined}
-                className={`inline-flex min-h-11 items-center rounded-md border px-3 text-xs font-semibold ${state.pageId === page.id ? "border-[var(--accent)] bg-[var(--accent-light)] text-[var(--accent)]" : "border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)]"}`}
-              >
-                {page.pageName}
-              </Link>
-            );
-          })}
-        </div>
-      )}
-      {scopes.length > 1 && (
-        <div className="flex gap-1 rounded-md border border-[var(--border)] bg-[var(--bg-subtle)] p-1">
-          {scopes.map((scope) => {
-            const pageId = scope === "current" ? state.pageId ?? pages[0]?.id : undefined;
-            const params = workspaceSearchParams({ ...state, scope, pageId, id: undefined, step: undefined });
-            return (
-              <Link
-                key={scope}
-                href={`${route.path}?${params.toString()}`}
-                aria-current={state.scope === scope ? "true" : undefined}
-                className={`inline-flex min-h-9 items-center rounded px-3 text-xs font-semibold ${state.scope === scope ? "bg-[var(--bg-card)] text-[var(--accent)] shadow-sm" : "text-[var(--text-muted)]"}`}
-              >
-                {SCOPE_LABELS[scope]}
-              </Link>
-            );
-          })}
-        </div>
-      )}
-      {scopes.length === 1 && (
-        <span className="rounded-md border border-[var(--border)] bg-[var(--bg-subtle)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)]">
-          {SCOPE_LABELS[state.scope]}
-        </span>
-      )}
     </div>
   );
 }
@@ -191,7 +120,12 @@ function WorkspaceNav({
   dashboard?: boolean;
 }) {
   return (
-    <nav className={dashboard ? "flex gap-1 overflow-x-auto border-t border-[var(--border)] bg-[var(--bg-subtle)] px-4 py-2" : "mt-5 flex gap-1 overflow-x-auto pb-1"} aria-label={`Điều hướng ${route.label}`}>
+    <HorizontalScroller
+      label={`Điều hướng ${route.label}`}
+      className={dashboard ? "border-t border-[var(--border)] bg-[var(--surface-subtle)]" : "mt-5"}
+      contentClassName={dashboard ? "flex gap-1 px-4 py-2" : "flex gap-1 pb-1"}
+    >
+      <nav className="contents" aria-label={`Điều hướng ${route.label}`}>
       {views.map((view) => {
         const targetScope = view.scope ?? route.scope;
         const allowedScopes = workspaceScopesForRoute(targetScope);
@@ -209,7 +143,8 @@ function WorkspaceNav({
           </Link>
         );
       })}
-    </nav>
+      </nav>
+    </HorizontalScroller>
   );
 }
 

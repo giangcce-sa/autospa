@@ -1,16 +1,14 @@
-import assert from "node:assert/strict";
 import bcrypt from "bcryptjs";
 import pg from "pg";
+import { requireTestDatabaseUrls } from "./lib/test-database-guard.mjs";
 
-const databaseUrl = process.env.DATABASE_URL;
+const { databaseUrl } = requireTestDatabaseUrls();
 const ownerEmail = process.env.E2E_OWNER_EMAIL ?? "owner-e2e@example.test";
 const ownerPassword = process.env.E2E_OWNER_PASSWORD ?? "owner-e2e-password";
 const viewerEmail = process.env.E2E_VIEWER_EMAIL ?? "viewer-e2e@example.test";
 const viewerPassword = process.env.E2E_VIEWER_PASSWORD ?? "viewer-e2e-password";
 
-assert(databaseUrl, "DATABASE_URL is required");
-const databaseName = new URL(databaseUrl).pathname.slice(1);
-assert(/(?:^|_)e2e(?:_|$)/i.test(databaseName) || /(?:^|_)test(?:_|$)/i.test(databaseName), `Refusing to seed non-test database: ${databaseName}`);
+const databaseName = decodeURIComponent(new URL(databaseUrl).pathname.slice(1));
 
 const pool = new pg.Pool({ connectionString: databaseUrl });
 const users = [

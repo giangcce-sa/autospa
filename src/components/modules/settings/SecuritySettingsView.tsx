@@ -1,12 +1,14 @@
 import Link from "next/link";
 import {
   CheckCircle,
-  ClockCounterClockwise,
   Key,
   ShieldCheck,
   UserCircle,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
+import { DashboardMetric, DashboardPanel } from "@/components/dashboard/Dashboard";
+import { actionStyles } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { SecuritySettingsDto } from "@/lib/settings/security";
 
 const SOURCE_LABEL = {
@@ -24,42 +26,37 @@ function dateLabel(value: string | null) {
 export function SecuritySettingsView({ data }: { data: SecuritySettingsDto }) {
   return (
     <div className="space-y-5">
-      <section className="grid gap-px overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--border)] sm:grid-cols-3">
-        <div className="bg-[var(--bg-card)] p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Secret đã cấu hình</p>
-          <p className="mt-2 text-3xl font-extrabold tabular-nums text-[var(--success)]">
-            {data.configuredSecretCount}/{data.secrets.length}
-          </p>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">chỉ hiển thị trạng thái, không trả giá trị</p>
-        </div>
-        <div className="bg-[var(--bg-card)] p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Deployment readiness</p>
-          <p className="mt-2 text-3xl font-extrabold tabular-nums text-[var(--accent)]">
-            {data.deploymentReadyCount}/{data.deployment.length}
-          </p>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">auth, cron, HTTPS origin và storage</p>
-        </div>
-        <div className="bg-[var(--bg-card)] p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Người dùng</p>
-          <p className="mt-2 text-3xl font-extrabold tabular-nums">{data.users.length}</p>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">{data.pageAccessCount} phân quyền Page đã lưu</p>
-        </div>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <DashboardMetric
+          label="Secret đã cấu hình"
+          value={`${data.configuredSecretCount}/${data.secrets.length}`}
+          detail="Chỉ hiển thị trạng thái, không trả giá trị"
+          icon={Key}
+          tone="success"
+        />
+        <DashboardMetric
+          label="Deployment readiness"
+          value={`${data.deploymentReadyCount}/${data.deployment.length}`}
+          detail="Auth, cron, HTTPS origin và storage"
+          icon={ShieldCheck}
+          tone="info"
+        />
+        <DashboardMetric
+          label="Người dùng"
+          value={data.users.length}
+          detail={`${data.pageAccessCount} phân quyền Page đã lưu`}
+          icon={UserCircle}
+        />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5">
-          <div className="flex items-start gap-3">
-            <Key size={19} className="mt-0.5 text-[var(--accent)]" aria-hidden="true" />
-            <div>
-              <h2 className="text-lg font-bold">Trạng thái secret</h2>
-              <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                AutoSpa không hiển thị raw secret hoặc suffix tại màn hình tổng hợp này.
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 divide-y divide-[var(--border)]">
+      <section className="grid items-start gap-4 xl:grid-cols-2">
+        <DashboardPanel
+          title="Trạng thái secret"
+          description="AutoSpa không hiển thị raw secret hoặc suffix tại màn hình tổng hợp này."
+        >
+          <div className="divide-y divide-[var(--border)]">
             {data.secrets.map((entry) => (
-              <div key={entry.id} className="flex min-h-12 items-center justify-between gap-3 py-2.5">
+              <div key={entry.id} className="flex min-h-12 items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
                 <div>
                   <p className="text-sm font-semibold">{entry.label}</p>
                   <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Nguồn: {SOURCE_LABEL[entry.source]}</p>
@@ -71,20 +68,14 @@ export function SecuritySettingsView({ data }: { data: SecuritySettingsDto }) {
               </div>
             ))}
           </div>
-        </div>
+        </DashboardPanel>
 
         <div className="space-y-4">
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5">
-            <div className="flex items-start gap-3">
-              <ShieldCheck size={19} className="mt-0.5 text-[var(--premium)]" aria-hidden="true" />
-              <div>
-                <h2 className="text-lg font-bold">Deployment security</h2>
-                <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                  Các giá trị này chỉ có thể thay đổi tại môi trường triển khai, không chỉnh từ database.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 space-y-2">
+          <DashboardPanel
+            title="Deployment security"
+            description="Các giá trị này chỉ có thể thay đổi tại môi trường triển khai, không chỉnh từ database."
+          >
+            <div className="space-y-2">
               {data.deployment.map((entry) => (
                 <div key={entry.id} className="rounded-md border border-[var(--border)] bg-[var(--bg-subtle)] p-3">
                   <div className="flex items-center gap-2">
@@ -99,19 +90,13 @@ export function SecuritySettingsView({ data }: { data: SecuritySettingsDto }) {
                 </div>
               ))}
             </div>
-          </div>
+          </DashboardPanel>
 
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5">
-            <div className="flex items-start gap-3">
-              <UserCircle size={19} className="mt-0.5 text-[var(--accent)]" aria-hidden="true" />
-              <div>
-                <h2 className="text-lg font-bold">Tài khoản & phiên đăng nhập</h2>
-                <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                  Auth.js đang dùng JWT; hệ thống không có bảng session để tuyên bố số phiên đang hoạt động.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 divide-y divide-[var(--border)]">
+          <DashboardPanel
+            title="Tài khoản & phiên đăng nhập"
+            description="Auth.js đang dùng JWT; hệ thống không có bảng session để tuyên bố số phiên đang hoạt động."
+          >
+            <div className="divide-y divide-[var(--border)]">
               {data.users.map((user) => (
                 <div key={user.id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -127,41 +112,33 @@ export function SecuritySettingsView({ data }: { data: SecuritySettingsDto }) {
                 </div>
               ))}
             </div>
-          </div>
+          </DashboardPanel>
         </div>
       </section>
 
-      <section className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5" aria-labelledby="settings-audit-heading">
-        <div className="flex items-start gap-3">
-          <ClockCounterClockwise size={19} className="mt-0.5 text-[var(--accent)]" aria-hidden="true" />
-          <div>
-            <h2 id="settings-audit-heading" className="text-lg font-bold">Audit cấu hình gần đây</h2>
-            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-              Chỉ hiển thị tiêu đề, nguồn và thời gian. Metadata có thể chứa user ID hoặc field names không được truyền tới UI này.
-            </p>
-          </div>
-        </div>
+      <DashboardPanel
+        title="Audit cấu hình gần đây"
+        description="Chỉ hiển thị tiêu đề, nguồn và thời gian. Metadata có thể chứa user ID hoặc field names không được truyền tới UI này."
+      >
         {data.audits.length ? (
-          <div className="mt-4 divide-y divide-[var(--border)]">
+          <div className="divide-y divide-[var(--border)]">
             {data.audits.map((audit) => (
               <div key={audit.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                 <div>
                   <p className="text-sm font-bold">{audit.title}</p>
                   <p className="mt-1 text-xs text-[var(--text-muted)]">{audit.detail || "Không có mô tả"} · {audit.source}</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <time className="text-xs text-[var(--text-muted)]" dateTime={audit.createdAt}>{dateLabel(audit.createdAt)}</time>
-                  {audit.href ? (
-                    <Link href={audit.href} className="inline-flex min-h-11 items-center text-xs font-bold text-[var(--accent)]">Mở</Link>
-                  ) : null}
+                  {audit.href ? <Link href={audit.href} className={actionStyles({ variant: "quiet", size: "sm" })}>Mở</Link> : null}
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="mt-4 rounded-md bg-[var(--bg-subtle)] p-4 text-sm text-[var(--text-muted)]">Chưa có audit thay đổi Settings.</p>
+          <EmptyState density="compact" title="Chưa có audit thay đổi Settings" />
         )}
-      </section>
+      </DashboardPanel>
     </div>
   );
 }

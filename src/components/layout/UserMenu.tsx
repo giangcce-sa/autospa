@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { SignOut } from "@phosphor-icons/react";
+import { Popover } from "@/components/ui/Popover";
 
 export function UserMenu() {
   const { data: session } = useSession();
@@ -14,37 +15,33 @@ export function UserMenu() {
   const initial = name.charAt(0).toUpperCase();
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-opacity hover:opacity-80"
-        style={{ background: "var(--accent)", color: "white" }}
-        title={name}
-      >
-        {initial}
-      </button>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div
-            className="absolute bottom-full mb-2 right-0 w-44 rounded-xl overflow-hidden z-50"
-            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "var(--shadow-md)" }}
-          >
-            <div className="px-3 py-2 border-b" style={{ borderColor: "var(--border)" }}>
-              <p className="text-xs font-semibold truncate" style={{ color: "var(--text)" }}>{name}</p>
-              <p className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>{session.user.email}</p>
-            </div>
-            <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:opacity-80 transition-opacity"
-              style={{ color: "var(--rose)" }}
-            >
-              <SignOut size={12} weight="bold" /> Đăng xuất
-            </button>
-          </div>
-        </>
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      label="Tài khoản người dùng"
+      className="bottom-full top-auto mb-2 w-56"
+      trigger={(triggerProps) => (
+        <button
+          {...triggerProps}
+          type="button"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--accent)] text-[12px] font-bold text-[var(--accent-foreground)] transition-opacity hover:opacity-85"
+          aria-label={`Mở menu tài khoản ${name}`}
+        >
+          {initial}
+        </button>
       )}
-    </div>
+    >
+      <div className="border-b border-[var(--border)] px-4 py-3">
+        <p className="truncate text-xs font-semibold text-[var(--text)]">{name}</p>
+        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{session.user.email}</p>
+      </div>
+      <button
+        type="button"
+        onClick={() => signOut({ callbackUrl: "/login" })}
+        className="flex min-h-11 w-full items-center gap-2 px-4 py-2 text-xs font-semibold text-[var(--danger)] transition-colors hover:bg-[var(--danger-light)]"
+      >
+        <SignOut size={14} weight="bold" aria-hidden="true" /> Đăng xuất
+      </button>
+    </Popover>
   );
 }

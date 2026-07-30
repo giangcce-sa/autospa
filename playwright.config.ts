@@ -1,6 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import { requireTestDatabaseUrls } from "./scripts/lib/test-database-guard.mjs";
+
+requireTestDatabaseUrls();
 
 const baseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3100";
+const externalServer = process.env.E2E_EXTERNAL_SERVER === "true";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -32,7 +36,7 @@ export default defineConfig({
       use: { ...devices["iPhone 13"], browserName: "chromium", viewport: { width: 390, height: 844 } },
     },
   ],
-  webServer: process.env.E2E_EXTERNAL_SERVER
+  webServer: externalServer
     ? undefined
     : {
         command: "npm run start -- --hostname 127.0.0.1 --port 3100",
