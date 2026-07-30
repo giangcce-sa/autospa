@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { DashboardMetric } from "@/components/dashboard/Dashboard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
@@ -107,7 +108,7 @@ export function CRMManager({
 
   if (selected) {
     return (
-      <div className="space-y-4 max-w-3xl">
+      <div className="space-y-5">
         <Button size="sm" variant="secondary" onClick={() => { setSelected(null); onCustomerChange?.(); }}><ArrowLeft size={13} /> Quay lại</Button>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 space-y-4">
@@ -166,19 +167,16 @@ export function CRMManager({
   }
 
   return (
-    <div className="space-y-4 max-w-5xl">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[{ label: "Tất cả", value: stats.total, icon: Users, color: "var(--text-secondary)" }, { label: "Khách mới", value: stats.new, icon: UserCircle, color: "var(--blue)" }, { label: "Thân thiết", value: stats.regular, icon: Star, color: "var(--accent)" }, { label: "VIP", value: stats.vip, icon: Crown, color: "var(--amber)" }].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label}>
-            <div className="flex items-center gap-2 mb-1"><Icon size={14} style={{ color }} weight="fill" /></div>
-            <p className="text-2xl font-bold" style={{ color: "var(--text)" }}>{value}</p>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</p>
-          </Card>
-        ))}
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <DashboardMetric label="Tất cả khách" value={stats.total} detail="Customer persisted" icon={Users} />
+        <DashboardMetric label="Khách mới" value={stats.new} detail="Segment new" icon={UserCircle} tone="info" />
+        <DashboardMetric label="Thân thiết" value={stats.regular} detail="Segment regular" icon={Star} tone="success" />
+        <DashboardMetric label="VIP" value={stats.vip} detail="Segment vip" icon={Crown} tone="warning" />
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-3 shadow-[var(--shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {["", "new", "regular", "vip"].map((s) => (
             <Button key={s} size="sm" variant={filterSegment === s ? "primary" : "secondary"} onClick={() => { setFilterSegment(s); if (onSegmentChange) onSegmentChange(s || undefined); else load(s || undefined); }}>
               {s === "" ? "Tất cả" : s === "new" ? "Mới" : s === "regular" ? "Thân thiết" : "VIP"}
@@ -217,9 +215,22 @@ export function CRMManager({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {customers.map((c) => (
-          <Card key={c.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { if (onCustomerChange) onCustomerChange(c.id); else loadDetail(c.id).then(() => {}); }}>
+          <Card
+            key={c.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`Mở hồ sơ ${c.name}`}
+            className="cursor-pointer transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            onClick={() => { if (onCustomerChange) onCustomerChange(c.id); else loadDetail(c.id).then(() => {}); }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              if (onCustomerChange) onCustomerChange(c.id);
+              else loadDetail(c.id).then(() => {});
+            }}
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0" style={{ background: c.segment === "vip" ? "var(--amber)" : c.segment === "regular" ? "var(--accent)" : "var(--text-muted)" }}>{c.name[0]}</div>
@@ -230,8 +241,8 @@ export function CRMManager({
               </div>
               {canMutate ? (
                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                  <Button size="sm" variant="secondary" onClick={() => startEdit(c)}><PencilSimple size={11} /></Button>
-                  <Button size="sm" variant="danger" onClick={() => handleDelete(c.id)}><Trash size={11} /></Button>
+                  <Button size="sm" variant="secondary" aria-label={`Sửa ${c.name}`} onClick={() => startEdit(c)}><PencilSimple size={11} /></Button>
+                  <Button size="sm" variant="danger" aria-label={`Xóa ${c.name}`} onClick={() => handleDelete(c.id)}><Trash size={11} /></Button>
                 </div>
               ) : null}
             </div>

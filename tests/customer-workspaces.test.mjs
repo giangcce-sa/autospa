@@ -6,6 +6,45 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
+test("Customer landing resolves authorized scope and aggregates persisted data only", async () => {
+  const page = await source("src/app/customers/page.tsx");
+  const reader = await source("src/lib/customer-overview.ts");
+  const overview = await source("src/components/modules/customers/CustomerOverview.tsx");
+
+  assert.equal(page.includes("<HubPage"), false);
+  assert.match(page, /await resolveWorkspaceAccess\(route, state, "current_or_all"\)/);
+  assert.match(page, /access\.state\.scope === "all"/);
+  assert.match(page, /<CustomerOverview data=\{data\} access=\{access\}/);
+  assert.match(reader, /import "server-only"/);
+  assert.match(reader, /await Promise\.all\(\[/);
+  assert.match(reader, /getInboxMessages\(currentPageId, 8\)/);
+  assert.match(reader, /getScopedLeads\(pageIds\)/);
+  assert.match(reader, /getCustomerWorkspaceData\(undefined, 6\)/);
+  assert.match(reader, /getCareWorkspaceData\(undefined, \{ take: 6, includeCustomers: false \}\)/);
+  assert.match(reader, /availability:/);
+  assert.match(reader, /source:/);
+  assert.match(reader, /scope:/);
+  assert.match(reader, /asOf/);
+  assert.match(reader, /warning:/);
+  assert.equal(reader.includes("fetch("), false);
+  assert.match(overview, /không gọi Meta hoặc AI provider/);
+  assert.match(overview, /không phải conversion funnel/);
+  assert.match(reader, /Customer chưa lưu Facebook Page nguồn/);
+  assert.match(overview, /không phải delivery proof/);
+});
+
+test("Customer landing compact tabs preserve full desktop panels", async () => {
+  const overview = await source("src/components/modules/customers/CustomerOverview.tsx");
+  const tabs = await source("src/components/dashboard/DashboardTabs.tsx");
+
+  assert.match(overview, /label: "Hộp thư"/);
+  assert.match(overview, /label: "Lead"/);
+  assert.match(overview, /label: "CRM & Care"/);
+  assert.match(tabs, /role="tablist"/);
+  assert.match(tabs, /event\.key === "ArrowRight"/);
+  assert.match(tabs, /active \? "block" : "hidden lg:block"/);
+});
+
 test("canonical CRM, Sales, and Care pages render the production Customer dispatcher", async () => {
   for (const [path, routeId] of [
     ["src/app/customers/crm/page.tsx", "customers-crm"],
@@ -24,8 +63,10 @@ test("Customer dispatcher resolves per-view scope and server-loads initial data"
 
   assert.match(workspace, /const effectiveScope = currentView\.scope \?\? route\.scope/);
   assert.match(workspace, /await resolveWorkspaceAccess\(route, state, effectiveScope\)/);
-  assert.match(workspace, /await getCustomerWorkspaceData\(segment\)/);
-  assert.match(workspace, /await getCustomerDetail\(access\.state\.id\)/);
+  assert.match(workspace, /visibleViewIds=\{access\.visibleViewIds\} dashboard wide/);
+  assert.match(workspace, /await Promise\.all\(\[/);
+  assert.match(workspace, /getCustomerWorkspaceData\(segment\)/);
+  assert.match(workspace, /access\.state\.id \? getCustomerDetail\(access\.state\.id\)/);
   assert.match(workspace, /await getScopedLeads\(pageIds, access\.state\.status\)/);
   assert.match(workspace, /await getCareWorkspaceData\(status\)/);
   assert.match(reader, /import "server-only"/);

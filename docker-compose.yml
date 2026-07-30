@@ -23,6 +23,7 @@ services:
       NODE_ENV: production
       DEPLOYMENT_MODE: persistent
       NEXT_TELEMETRY_DISABLED: "1"
+      APP_RELEASE: "${APP_RELEASE:-unknown}"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
       # Domain comes from .env (compose reads it for substitution); fail fast if missing.

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { DashboardMetric } from "@/components/dashboard/Dashboard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -95,11 +96,11 @@ export function CareManager({
   };
 
   return (
-    <div className="space-y-4 max-w-5xl">
-      <div className="grid grid-cols-3 gap-3">
-        <Card><p className="text-2xl font-bold" style={{ color: "var(--text)" }}>{stats.total}</p><p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Tổng tin nhắn</p></Card>
-        <Card><p className="text-2xl font-bold" style={{ color: "var(--amber)" }}>{stats.pending}</p><p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Chờ gửi</p></Card>
-        <Card><p className="text-2xl font-bold" style={{ color: "var(--accent)" }}>{stats.sent}</p><p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Đã ghi nhận gửi</p></Card>
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <DashboardMetric label="Tổng CareMessage" value={stats.total} detail="Persisted account records" icon={Heart} />
+        <DashboardMetric label="Cần review" value={stats.pending} detail="Status pending" icon={ChatCircleText} tone="warning" />
+        <DashboardMetric label="Đã ghi nhận gửi" value={stats.sent} detail="Không phải delivery proof" icon={CheckCircle} tone="success" />
       </div>
 
       {canMutate ? (

@@ -31,7 +31,7 @@ test("protected System routes redirect to the real login flow", async ({ page })
 test("owner can read every canonical AI Room and sees owner controls", async ({ ownerPage: page }) => {
 
   await page.goto("/system");
-  await expect(page.getByRole("heading", { name: "Hệ thống", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Trung tâm điều hành hệ thống", level: 1 })).toBeVisible();
 
   for (const [view, label] of ownerRooms) await expectCanonicalRoom(page, view, label);
 

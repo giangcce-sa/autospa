@@ -390,6 +390,66 @@ button, a {
   letter-spacing: 0;
 }
 
+/* Dense operational dashboards used by Growth and System. */
+.dashboard-page {
+  container-type: inline-size;
+}
+
+.dashboard-command,
+.dashboard-panel,
+.dashboard-metric {
+  backdrop-filter: saturate(1.04);
+}
+
+.dashboard-panel table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dashboard-panel th {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.dashboard-panel th,
+.dashboard-panel td {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  vertical-align: top;
+}
+
+.dashboard-panel tr:last-child td {
+  border-bottom: 0;
+}
+
+@media (max-width: 1023px) {
+  .dashboard-tabs [role="tabpanel"][hidden] {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-tabs [role="tabpanel"][hidden] {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .rise,
+  .card-hover,
+  .surface-hover,
+  .chip-tone {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
 /* ═══ Utilities ═══════════════════════════════════════════ */
 
 .text-balance { text-wrap: balance; }

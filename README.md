@@ -44,3 +44,27 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Deploy AutoSpa qua SSH
+
+Repo có SSH profile riêng tại `deploy/ssh_config`:
+
+```bash
+ssh -F deploy/ssh_config autospa-vps
+```
+
+Profile sử dụng VPS `tranapo@34.87.65.200`, private key local
+`~/.ssh/qq_vps_new` và bắt buộc kiểm tra host key. Không commit private key
+hoặc `.env` vào repo.
+
+Deploy một release:
+
+```bash
+scripts/deploy-vps.sh "$(git rev-parse --short HEAD)-$(date -u +%Y%m%d%H%M%S)"
+```
+
+Mặc định mã nguồn được đồng bộ tới `/opt/autospa`. Script giữ nguyên `.env`,
+media và backup trên VPS, sau đó chạy backup PostgreSQL, Prisma migrations,
+khởi động riêng service `autospa` và kiểm tra `/api/ready`. Có thể override bằng
+`AUTOSPA_SSH_TARGET`, `AUTOSPA_REMOTE_DIR`, `SSH_CONFIG_FILE` hoặc
+`SSH_IDENTITY_FILE`.

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { CareManager } from "@/components/modules/care/CareManager";
 import { CLVDashboard } from "@/components/modules/crm/CLVDashboard";
+import { DashboardPanel, DashboardStatusStrip } from "@/components/dashboard/Dashboard";
 import { WorkspacePermissionState } from "@/components/workspace/WorkspacePermissionState";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { ROUTES_BY_ID } from "@/config/routes";
@@ -45,7 +46,7 @@ export async function CustomerWorkspace({ routeId, searchParams }: CustomerWorks
   }
 
   return (
-    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope}>
+    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope} visibleViewIds={access.visibleViewIds} dashboard wide>
       {routeId === "customers-crm" ? <CRMWorkspaceContent access={access} view={currentView.id} /> : null}
       {routeId === "customers-sales" ? <SalesWorkspaceContent access={access} view={currentView.id} /> : null}
       {routeId === "customers-care" ? <CareWorkspaceContent access={access} view={currentView.id} /> : null}
@@ -67,21 +68,23 @@ async function CRMWorkspaceContent({
   if (view === "overview") {
     const summary = await getCustomerCLVSummary();
     return (
-      <section className="space-y-4">
-        <DataScopeNotice>CRM hiện là dữ liệu cấp tài khoản. Hồ sơ chưa lưu Facebook Page nguồn nên không được mô tả là dữ liệu theo Page.</DataScopeNotice>
+      <section className="space-y-5">
+        <DashboardStatusStrip tone="info" title="CRM đang dùng dữ liệu cấp tài khoản" detail="Hồ sơ chưa lưu Facebook Page nguồn nên không được mô tả là dữ liệu theo Page." meta="Nguồn: Customer + booking-derived CLV persisted" />
         <CLVDashboard initialSummary={summary} canMutate={access.canMutate} />
       </section>
     );
   }
 
   const segment = view === "segments" ? access.state.status : undefined;
-  const data = await getCustomerWorkspaceData(segment);
-  const customer = access.state.id ? await getCustomerDetail(access.state.id) : null;
+  const [data, customer] = await Promise.all([
+    getCustomerWorkspaceData(segment),
+    access.state.id ? getCustomerDetail(access.state.id) : Promise.resolve(null),
+  ]);
   if (access.state.id && !customer) notFound();
 
   return (
-    <section className="space-y-4">
-      <DataScopeNotice>Danh sách và hồ sơ khách hàng ở cấp tài khoản; URL lưu hồ sơ và bộ lọc đang xem.</DataScopeNotice>
+    <section className="space-y-5">
+      <DashboardStatusStrip tone="info" title="Hồ sơ khách hàng ở cấp tài khoản" detail="URL lưu hồ sơ và bộ lọc đang xem; Customer chưa có Page ownership tương thích." meta="Nguồn: Customer, notes, appointments và activity records persisted" />
       <CustomerCRMView
         view={view}
         customers={data.customers}
@@ -108,12 +111,10 @@ async function SalesWorkspaceContent({
 
   const data = await getScopedLeads(pageIds, access.state.status);
   return (
-    <section className="space-y-4">
-      <DataScopeNotice>
-        Chỉ hiển thị lead có conversation gắn với Facebook Page trong phạm vi được cấp quyền. Lead thủ công, Zalo hoặc record chưa có Page ownership không xuất hiện ở đây.
-      </DataScopeNotice>
+    <section className="space-y-5">
+      <DashboardStatusStrip tone="info" title="Pipeline chỉ gồm lead Page-safe" detail="Chỉ hiển thị lead có conversation gắn với Facebook Page trong phạm vi được cấp quyền. Lead thủ công, Zalo hoặc record chưa có Page ownership không xuất hiện ở đây." meta={`Nguồn: Lead + Conversation persisted · ${pageIds.length} Page được áp dụng`} />
       {view === "outreach" ? (
-        <DataScopeNotice>Kịch bản AI chỉ được tạo theo yêu cầu owner và không tự gửi ra kênh. Proactive outreach chưa tham gia canonical flow vì customer identity chưa Page-safe.</DataScopeNotice>
+        <DashboardStatusStrip tone="warning" title="AI script chỉ chạy theo yêu cầu owner" detail="Kịch bản AI không tự gửi ra kênh. Proactive outreach chưa tham gia canonical flow vì customer identity chưa Page-safe." />
       ) : null}
       <CustomerSalesView
         view={view}
@@ -138,10 +139,8 @@ async function CareWorkspaceContent({
   const status = view === "tasks" ? "pending" : view === "history" ? "sent" : undefined;
   const data = await getCareWorkspaceData(status);
   return (
-    <section className="space-y-4">
-      <DataScopeNotice>
-        CareMessage là draft và trạng thái ghi nhận ở cấp tài khoản. “Đã ghi nhận gửi” không chứng minh có external delivery ID hoặc kênh đã nhận thành công.
-      </DataScopeNotice>
+    <section className="space-y-5">
+      <DashboardStatusStrip tone="warning" title="Care là workflow ghi nhận cấp tài khoản" detail="CareMessage là draft và trạng thái ghi nhận ở cấp tài khoản. “Đã ghi nhận gửi” không chứng minh có external delivery ID hoặc kênh đã nhận thành công." meta="Nguồn: CareMessage persisted · owner action mới tạo draft hoặc đổi trạng thái" />
       <CareManager
         initialMessages={data.messages}
         initialStats={data.stats}
@@ -155,11 +154,11 @@ async function CareWorkspaceContent({
 
 function AppointmentList({ appointments }: { appointments: Awaited<ReturnType<typeof getAppointmentRequests>> }) {
   return (
-    <section className="space-y-4">
-      <DataScopeNotice>Lịch hẹn hiện là dữ liệu cấp tài khoản vì schema chưa lưu Facebook Page nguồn.</DataScopeNotice>
-      <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-card)]">
+    <section className="space-y-5">
+      <DashboardStatusStrip tone="warning" title="Lịch hẹn đang ở cấp tài khoản" detail="Schema chưa lưu Facebook Page nguồn nên các record này không được đưa vào Inbox Page-scoped." meta="Nguồn: AppointmentRequest persisted" />
+      <DashboardPanel title="Yêu cầu lịch hẹn" description={`${appointments.length} record gần nhất`} padding={false}>
         {appointments.length ? appointments.map((appointment) => (
-          <article key={appointment.id} className="border-b border-[var(--border)] p-4 last:border-b-0">
+          <article key={appointment.id} className="border-b border-[var(--border)] p-4 last:border-b-0 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-sm font-bold text-[var(--text)]">{appointment.name}</h2>
@@ -169,15 +168,7 @@ function AppointmentList({ appointments }: { appointments: Awaited<ReturnType<ty
             </div>
           </article>
         )) : <p className="p-8 text-center text-sm text-[var(--text-muted)]">Chưa có yêu cầu lịch hẹn.</p>}
-      </div>
+      </DashboardPanel>
     </section>
-  );
-}
-
-function DataScopeNotice({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-4 text-sm leading-6 text-[var(--text-secondary)]">
-      {children}
-    </p>
   );
 }

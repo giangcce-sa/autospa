@@ -65,12 +65,13 @@ export interface CareMessageData {
   customer: { id: string; name: string; phone: string | null; segment: string } | null;
 }
 
-export async function getCustomerWorkspaceData(segment?: string) {
+export async function getCustomerWorkspaceData(segment?: string, take?: number) {
   const where = segment ? { segment } : {};
   const [customers, total, newCount, regular, vip] = await Promise.all([
     prisma.customer.findMany({
       where,
       orderBy: { updatedAt: "desc" },
+      ...(take ? { take } : {}),
       select: {
         id: true,
         name: true,
@@ -181,13 +182,13 @@ export async function getScopedLeads(pageIds: string[], stage?: string) {
   };
 }
 
-export async function getCareWorkspaceData(status?: string) {
+export async function getCareWorkspaceData(status?: string, options?: { take?: number; includeCustomers?: boolean }) {
   const where = status ? { status } : {};
   const [messages, pending, sent, total, customers] = await Promise.all([
     prisma.careMessage.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: options?.take ?? 100,
       select: {
         id: true,
         type: true,
@@ -202,7 +203,7 @@ export async function getCareWorkspaceData(status?: string) {
     prisma.careMessage.count({ where: { status: "pending" } }),
     prisma.careMessage.count({ where: { status: "sent" } }),
     prisma.careMessage.count(),
-    prisma.customer.findMany({
+    options?.includeCustomers === false ? Promise.resolve([]) : prisma.customer.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, phone: true, birthday: true, segment: true },
     }),

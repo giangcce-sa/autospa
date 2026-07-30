@@ -14,7 +14,7 @@ test("canonical Customer Inbox renders its production dispatcher", async () => {
   assert.equal(page.includes("<WorkspacePage"), false);
   assert.match(workspace, /parseWorkspaceUrl\(params, \{/);
   assert.match(workspace, /await resolveWorkspaceAccess\(route, state, effectiveScope\)/);
-  assert.match(workspace, /<WorkspaceShell route=\{route\} state=\{access\.state\} pages=\{access\.pages\} effectiveScope=\{effectiveScope\}>/);
+  assert.match(workspace, /<WorkspaceShell route=\{route\} state=\{access\.state\} pages=\{access\.pages\} effectiveScope=\{effectiveScope\} visibleViewIds=\{access\.visibleViewIds\} dashboard wide>/);
 });
 
 test("canonical Inbox server-loads Page messages, selected record, and account rules", async () => {
@@ -43,12 +43,27 @@ test("canonical Inbox is truthful about flat messages and unowned appointments",
   assert.equal(view.includes("đang chờ phản hồi"), false);
 });
 
+test("Inbox list, detail, and mobile back navigation preserve canonical state", async () => {
+  const view = await source("src/components/modules/inbox/CustomerInboxView.tsx");
+
+  assert.match(view, /new URLSearchParams\(\{ view: nextView, scope: "current", pageId: facebookPageId \}\)/);
+  assert.match(view, /if \(messageId\) params\.set\("id", messageId\)/);
+  assert.match(view, /if \(status\) params\.set\("status", status\)/);
+  assert.match(view, /if \(query\.trim\(\)\) params\.set\("q", query\.trim\(\)\)/);
+  assert.match(view, /backHref=\{hrefFor\("queue"\)\}/);
+  assert.match(view, /hidden lg:block/);
+  assert.match(view, /Persisted facts/);
+  assert.match(view, /Không suy diễn Customer, Lead, assignee hoặc channel delivery/);
+  assert.equal(view.includes("online"), false);
+  assert.equal(view.includes("được phân công"), false);
+});
+
 test("Inbox viewer UI is read-only and canonical actions always send the authorized Page", async () => {
   const view = await source("src/components/modules/inbox/CustomerInboxView.tsx");
   const rules = await source("src/components/modules/inbox/MessageRules.tsx");
 
   assert.match(view, /body: JSON\.stringify\(\{ action, facebookPageId, \.\.\.body \}\)/);
-  assert.match(view, /\{canMutate \? \(/);
+  assert.match(view, /canMutate \? <Button/);
   assert.match(view, /Bạn có quyền xem nhưng không có quyền soạn, đồng bộ hoặc gửi reply/);
   assert.match(rules, /initialRules\?: Rule\[\]; canMutate\?: boolean/);
   assert.match(rules, /if \(!initialRules\) load\(\)/);

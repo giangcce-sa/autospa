@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { Brain, CirclesFour, ShieldCheck, Sparkle, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { DashboardMetric, DashboardPanel, DashboardStatusStrip } from "@/components/dashboard/Dashboard";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CouncilView } from "@/components/modules/council/CouncilView";
@@ -62,7 +63,7 @@ export async function AIRoomsWorkspace({ searchParams }: AIRoomsWorkspaceProps) 
 
   const status = typeof params.status === "string" ? params.status : undefined;
   return (
-    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope} visibleViewIds={access.visibleViewIds}>
+    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope} visibleViewIds={access.visibleViewIds} dashboard>
       {currentView.id === "overview" ? (
         <OverviewContent data={await getAIRoomsOverview()} canMutate={access.canMutate} />
       ) : currentView.id === "council" ? (
@@ -100,29 +101,41 @@ type ApprovalsData = Awaited<ReturnType<typeof getAIRoomApprovalsData>>;
 type OperationsData = Awaited<ReturnType<typeof getAutomationOperationsData>>;
 
 function OverviewContent({ data, canMutate }: { data: OverviewData; canMutate: boolean }) {
+  const rooms = [
+    { href: "/system/ai-rooms?view=council&scope=account", title: "Phòng tư vấn", description: "Tổng hợp và lưu CEODecision", icon: Brain, tone: "var(--accent)" },
+    { href: "/system/ai-rooms?view=brain&scope=account", title: "Bộ não kỹ năng", description: `${data.counts.activeSkills} skill đang active`, icon: Sparkle, tone: "var(--premium)" },
+    { href: "/system/ai-rooms?view=orchestrator&scope=account", title: "Trung tâm điều phối", description: `${data.counts.runningWorkflows} workflow đang running`, icon: CirclesFour, tone: "var(--info)" },
+    { href: "/system/ai-rooms?view=approvals&scope=account", title: "Approval center", description: `${data.counts.pendingApprovals} đề xuất còn hiệu lực`, icon: ShieldCheck, tone: "var(--warning)" },
+  ];
   return (
-    <section className="space-y-4">
-      <ProvenanceNotice provenance={data.provenance} />
-      <PermissionNotice canMutate={canMutate} />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric label="Quyết định persisted" value={data.counts.decisions} />
-        <Metric label="Skill đang active" value={data.counts.activeSkills} />
-        <Metric label="Approval còn hiệu lực" value={data.counts.pendingApprovals} />
-        <Metric label="Workflow đang running" value={data.counts.runningWorkflows} />
+    <section className="space-y-5">
+      <DashboardStatusStrip
+        tone={data.counts.pendingApprovals ? "warning" : "success"}
+        title={data.counts.pendingApprovals ? `${data.counts.pendingApprovals} approval cần review` : "Không có approval đang chờ"}
+        detail={canMutate ? "Owner có thể thực hiện mutation được audit trong từng phòng điều hành." : "Viewer chỉ có quyền đọc; mọi mutation control được ẩn và API vẫn enforce owner."}
+        meta={`Nguồn: ${data.provenance.source} · đọc ${formatDateTime(data.provenance.asOf)}`}
+      />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardMetric label="Quyết định persisted" value={data.counts.decisions} detail="CEODecision độc lập" icon={Brain} />
+        <DashboardMetric label="Skill đang active" value={data.counts.activeSkills} detail="BrainSkill hiện hành" icon={Sparkle} tone="accent" />
+        <DashboardMetric label="Approval còn hiệu lực" value={data.counts.pendingApprovals} detail="Review trước execution" icon={ShieldCheck} tone={data.counts.pendingApprovals ? "warning" : "success"} />
+        <DashboardMetric label="Workflow đang running" value={data.counts.runningWorkflows} detail="Persisted WorkflowRun" icon={CirclesFour} tone={data.counts.runningWorkflows ? "info" : "success"} />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <RoomLink href="/system/ai-rooms?view=council&scope=account" title="Phòng tư vấn" description="Tạo bản tổng hợp và lưu CEODecision." />
-        <RoomLink href="/system/ai-rooms?view=brain&scope=account" title="Kỹ năng" description="BrainSkill, run và outcome persisted." />
-        <RoomLink href="/system/ai-rooms?view=memory&scope=account" title="Quyết định" description="Theo dõi outcome và provenance đã lưu." />
-        <RoomLink href="/system/ai-rooms?view=orchestrator&scope=account" title="Điều phối" description="OrchestratorRun, WorkflowRun và JobRun." />
-        <RoomLink href="/system/ai-rooms?view=approvals&scope=account" title="Phê duyệt" description="Review đề xuất trước execution." />
-        <RoomLink href="/system/settings?view=providers&scope=account" title="Cấu hình AI" description="Provider và secret chỉ cấu hình trong Settings." />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-3">
+      <DashboardPanel title="Agents và phòng điều hành" description="Mỗi count là record độc lập, không được diễn giải thành một AI session chung" action={{ href: "/system/settings?view=providers&scope=account", label: "Cấu hình provider" }}>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {rooms.map((room) => (
+            <Link key={room.href} href={room.href} className="card-hover rounded-[11px] border border-[var(--border)] bg-[var(--bg-subtle)] p-4">
+              <span className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[var(--bg-card)] shadow-sm" style={{ color: room.tone }}><room.icon size={19} weight="fill" aria-hidden="true" /></span>
+              <h3 className="mt-3 text-sm font-extrabold">{room.title}</h3><p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{room.description}</p>
+            </Link>
+          ))}
+        </div>
+      </DashboardPanel>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">
         <DecisionList title="Quyết định gần đây" decisions={data.recentDecisions} />
-        <ApprovalList title="Approval gần đây" approvals={data.recentApprovals} canMutate={false} />
-        <JobList title="Job gần đây" jobs={data.recentJobs} />
+        <div className="space-y-5"><ApprovalList title="Approval gần đây" approvals={data.recentApprovals} canMutate={false} /><JobList title="Job gần đây" jobs={data.recentJobs} /></div>
       </div>
+      {data.provenance.warning ? <ProvenanceNotice provenance={data.provenance} /> : null}
     </section>
   );
 }
@@ -394,5 +407,4 @@ function PanelTitle({ children }: { children: React.ReactNode }) { return <div c
 function EmptyText({ children }: { children: React.ReactNode }) { return <p className="p-8 text-center text-sm text-[var(--text-muted)]">{children}</p>; }
 function EmptyBox({ children }: { children: React.ReactNode }) { return <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-8 text-center text-sm text-[var(--text-muted)]">{children}</p>; }
 function StateBadge({ status }: { status: string }) { const variant = status === "completed" || status === "success" || status === "approved" || status === "active" ? "success" : status === "failed" || status === "fail" || status === "rejected" ? "danger" : status === "pending" || status === "running" || status === "high" || status === "timed_out" ? "warning" : "neutral"; return <Badge variant={variant}>{status}</Badge>; }
-function RoomLink({ href, title, description }: { href: string; title: string; description: string }) { return <Link href={href} className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5 hover:bg-[var(--bg-subtle)]"><h3 className="font-bold">{title}</h3><p className="mt-1 text-sm text-[var(--text-muted)]">{description}</p></Link>; }
 function FilterLink({ status, current }: { status: string | null; current: string | null }) { const href = status ? `/system/ai-rooms?view=memory&scope=account&status=${status}` : "/system/ai-rooms?view=memory&scope=account"; return <Link href={href} className={`rounded-full px-3 py-2 text-xs font-semibold ${current === status ? "bg-[var(--accent)] text-white" : "bg-[var(--bg-subtle)] text-[var(--text-secondary)]"}`}>{status ?? "Tất cả"}</Link>; }

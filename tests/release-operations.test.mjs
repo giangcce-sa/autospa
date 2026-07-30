@@ -102,3 +102,21 @@ test("Compose gates application startup on migrations and liveness", async () =>
   assert.match(rollback, /APP_RELEASE/);
   assert.equal(rollback.includes("migrate"), false);
 });
+
+test("AutoSpa SSH deployment uses a pinned host profile and preserves server data", async () => {
+  const [deploy, sshConfig] = await Promise.all([
+    source("scripts/deploy-vps.sh"),
+    source("deploy/ssh_config"),
+  ]);
+
+  assert.match(sshConfig, /Host autospa-vps/);
+  assert.match(sshConfig, /HostName 34\.87\.65\.200/);
+  assert.match(sshConfig, /IdentityFile ~\/\.ssh\/qq_vps_new/);
+  assert.match(sshConfig, /StrictHostKeyChecking yes/);
+  assert.match(deploy, /SSH_IDENTITY_FILE/);
+  assert.match(deploy, /--exclude \.env/);
+  assert.match(deploy, /--exclude \.data/);
+  assert.match(deploy, /--exclude public\/uploads/);
+  assert.match(deploy, /scripts\/deploy-local\.sh/);
+  assert.ok(deploy.indexOf("rsync -az") < deploy.indexOf('scripts/deploy-local.sh "${release}"'));
+});

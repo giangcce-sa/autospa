@@ -232,5 +232,27 @@ test("System overview server-loads readiness and only links to canonical owners"
   assert.match(overview, /Mở Settings/);
   assert.match(overview, /\/system\/brand-assets\?view=overview/);
   assert.match(overview, /\/system\/ai-rooms\?view=overview/);
+  assert.match(overview, /label: "Vận hành"/);
+  assert.match(overview, /label: "Cấu hình"/);
+  assert.match(overview, /không phải phần trăm tiến độ/);
   assert.equal(overview.includes("fetch("), false);
+});
+
+test("System workspaces use dashboard presentation without moving configuration or weakening permissions", async () => {
+  const aiRooms = await source("src/components/modules/ai-rooms/AIRoomsWorkspace.tsx");
+  const brandAssets = await source("src/components/modules/brand-assets/BrandAssetsOverview.tsx");
+  const settings = await source("src/components/modules/settings/SettingsOverview.tsx");
+  const settingsWorkspace = await source("src/components/modules/settings/SettingsWorkspace.tsx");
+
+  assert.match(aiRooms, /dashboard>/);
+  assert.match(aiRooms, /Mỗi count là record độc lập/);
+  assert.match(aiRooms, /canMutate \? "Owner có thể thực hiện mutation/);
+  assert.match(brandAssets, /getBrandAssetsReadiness\(page\)/);
+  assert.match(brandAssets, /consent/);
+  assert.match(settings, /Kết nối/);
+  assert.match(settings, /AI & Media/);
+  assert.match(settings, /Dữ liệu & Bảo mật/);
+  assert.match(settings, /chưa persist kết quả probe/);
+  assert.match(settingsWorkspace, /await resolveWorkspaceAccess\(route, state, effectiveScope\)/);
+  assert.match(settingsWorkspace, /<WorkspacePermissionState/);
 });

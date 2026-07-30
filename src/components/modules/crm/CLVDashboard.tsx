@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
+import { DashboardMetric, DashboardPanel } from "@/components/dashboard/Dashboard";
+import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Crown, Warning, TrendUp, Users, ArrowsClockwise, Phone, ChatCircle } from "@phosphor-icons/react";
-import Link from "next/link";
+import { Crown, Warning, TrendUp, Users, ArrowsClockwise, Phone } from "@phosphor-icons/react";
 
 import type { CustomerCLVSummaryData } from "@/lib/customer-clv";
 
@@ -77,38 +77,17 @@ export function CLVDashboard({ initialSummary, canMutate = true }: { initialSumm
   const displayList = tab === "top" ? summary.topCustomers : summary.atRisk;
 
   return (
-    <div className="space-y-4 max-w-5xl">
-      {/* Summary stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: "TB CLV / khách", value: vnd(summary.avgCLV) + "đ", icon: TrendUp, color: "var(--accent)" },
-          { label: "Premium + High", value: summary.tiers.premium + summary.tiers.high, icon: Crown, color: "var(--premium)" },
-          { label: "Churn risk cao", value: summary.churn.high, icon: Warning, color: "var(--danger)" },
-          { label: "Tổng khách", value: summary.total, icon: Users, color: "var(--blue)" },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: color + "18" }}>
-                <Icon size={14} weight="fill" style={{ color }} />
-              </div>
-            </div>
-            <p className="text-2xl font-bold tabular-nums" style={{ color: "var(--text)" }}>{value}</p>
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>{label}</p>
-          </Card>
-        ))}
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <DashboardMetric label="TB CLV / khách" value={`${vnd(summary.avgCLV)}đ`} detail="Booking-derived persisted" icon={TrendUp} />
+        <DashboardMetric label="Premium + High" value={summary.tiers.premium + summary.tiers.high} detail="CLV tiers" icon={Crown} tone="warning" />
+        <DashboardMetric label="Churn risk cao" value={summary.churn.high} detail="Derived from persisted bookings" icon={Warning} tone="danger" />
+        <DashboardMetric label="Tổng khách" value={summary.total} detail="Có CLV summary" icon={Users} tone="info" />
       </div>
 
-      {/* Tier breakdown */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Phân tầng CLV</CardTitle>
-          {canMutate ? (
-            <Button size="sm" variant="secondary" onClick={refresh} loading={refreshing}>
-              <ArrowsClockwise size={12} /> Cập nhật
-            </Button>
-          ) : null}
-        </CardHeader>
-        <div className="grid grid-cols-4 gap-2">
+      <DashboardPanel title="Phân tầng CLV" description="Tỷ lệ trong tập Customer có summary hiện tại" action={undefined}>
+        {canMutate ? <div className="mb-4 flex justify-end"><Button size="sm" variant="secondary" onClick={refresh} loading={refreshing}><ArrowsClockwise size={12} /> Cập nhật</Button></div> : null}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["premium","high","mid","low"] as const).map(tier => {
             const meta = TIER_META[tier];
             const count = summary.tiers[tier];
@@ -125,15 +104,15 @@ export function CLVDashboard({ initialSummary, canMutate = true }: { initialSumm
             );
           })}
         </div>
-      </Card>
+      </DashboardPanel>
 
       {/* Customer list */}
       <Card>
         <CardHeader>
           <div className="flex gap-1 p-1 rounded-lg" style={{ background: "var(--bg-subtle)" }}>
             {[{ key: "top", label: "Top CLV" }, { key: "risk", label: `🚨 Churn Risk (${summary.churn.high})` }].map(t => (
-              <button key={t.key} onClick={() => setTab(t.key as "top" | "risk")}
-                className="px-3 py-1 rounded-md text-[11px] font-medium transition-all"
+              <button key={t.key} type="button" aria-pressed={tab === t.key} onClick={() => setTab(t.key as "top" | "risk")}
+                className="min-h-11 rounded-md px-3 py-1 text-[11px] font-medium transition-all"
                 style={{
                   background: tab === t.key ? "var(--bg-card)" : "transparent",
                   color: tab === t.key ? "var(--text)" : "var(--text-muted)",
@@ -206,13 +185,10 @@ export function CLVDashboard({ initialSummary, canMutate = true }: { initialSumm
                   {/* Actions */}
                   <div className="flex gap-1 shrink-0">
                     {c.phone && (
-                      <a href={`tel:${c.phone}`} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "var(--accent-light)" }}>
-                        <Phone size={11} weight="fill" style={{ color: "var(--accent)" }} />
+                      <a href={`tel:${c.phone}`} aria-label={`Gọi ${c.name}`} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg" style={{ background: "var(--accent-light)" }}>
+                        <Phone size={13} weight="fill" style={{ color: "var(--accent)" }} />
                       </a>
                     )}
-                    <Link href="/inbox" className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "var(--blue-light)" }}>
-                      <ChatCircle size={11} weight="fill" style={{ color: "var(--blue)" }} />
-                    </Link>
                   </div>
                 </div>
               );

@@ -69,7 +69,7 @@ export async function SettingsWorkspace({ searchParams }: SettingsWorkspaceProps
   const securitySettings = currentView.id === "security" ? await getSecuritySettings() : null;
 
   return (
-    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope}>
+    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope} dashboard>
       {overview ? (
         <SettingsOverview data={overview} />
       ) : adsSettings ? (

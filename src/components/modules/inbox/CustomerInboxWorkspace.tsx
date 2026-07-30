@@ -61,7 +61,7 @@ export async function CustomerInboxWorkspace({ searchParams }: CustomerInboxWork
   const rules = access.state.view === "rules" ? await getMessageRules() : undefined;
 
   return (
-    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope}>
+    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope} visibleViewIds={access.visibleViewIds} dashboard wide>
       {pageId && (access.state.view === "queue" || access.state.view === "conversation") ? (
         <CustomerInboxView
           facebookPageId={pageId}
@@ -69,6 +69,8 @@ export async function CustomerInboxWorkspace({ searchParams }: CustomerInboxWork
           initialMessages={messages}
           selectedMessage={selectedMessage}
           canMutate={access.canMutate}
+          status={access.state.status}
+          q={access.state.q}
         />
       ) : null}
       {access.state.view === "appointments" ? <AppointmentsOwnershipState /> : null}

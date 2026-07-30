@@ -55,7 +55,7 @@ export async function BrandAssetsWorkspace({ searchParams }: BrandAssetsWorkspac
   const overview = currentView.id === "overview" ? await getBrandAssetsOverview() : undefined;
 
   return (
-    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope}>
+    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope} dashboard>
       {currentView.id === "overview" && overview ? <BrandAssetsOverview data={overview} /> : null}
       {currentView.id === "brand" ? <BrandManager canMutate={access.canMutate} /> : null}
       {currentView.id === "kit" && page ? <BrandKitManager facebookPageId={page.id} canMutate={access.canMutate} /> : null}

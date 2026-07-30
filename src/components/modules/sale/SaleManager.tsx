@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { DashboardMetric } from "@/components/dashboard/Dashboard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import { Flame, Snowflake, SunDim, CheckCircle, Plus, Sparkle, Trash, ArrowRight } from "@phosphor-icons/react";
+import { Flame, Snowflake, SunDim, CheckCircle, Plus, Sparkle, Trash, ArrowRight, Users } from "@phosphor-icons/react";
 import { truncate } from "@/lib/utils";
 import type { LeadData, LeadStatsData } from "@/lib/customer-workspaces";
 
@@ -112,15 +113,17 @@ export function SaleManager({
   const filtered = filterStage ? leads.filter((l) => l.stage === filterStage) : leads;
 
   return (
-    <div className="space-y-4 max-w-5xl">
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {[{ label: "Tổng leads", value: stats.total, color: "var(--text)" }, { label: "Nóng", value: stats.hot, color: "var(--rose)" }, { label: "Ấm", value: stats.warm, color: "var(--amber)" }, { label: "Lạnh", value: stats.cold, color: "var(--blue)" }, { label: "Đã chốt", value: stats.closed, color: "var(--accent)" }].map(({ label, value, color }) => (
-          <Card key={label}><p className="text-2xl font-bold" style={{ color }}>{value}</p><p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{label}</p></Card>
-        ))}
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+        <DashboardMetric label="Tổng lead" value={stats.total} detail="Page-safe records" icon={Users} />
+        <DashboardMetric label="Nóng" value={stats.hot} detail="Stage hot" icon={Flame} tone="danger" />
+        <DashboardMetric label="Ấm" value={stats.warm} detail="Stage warm" icon={SunDim} tone="warning" />
+        <DashboardMetric label="Lạnh" value={stats.cold} detail="Stage cold" icon={Snowflake} tone="info" />
+        <DashboardMetric label="Đã chốt" value={stats.closed} detail="Stage closed" icon={CheckCircle} tone="success" />
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-3 shadow-[var(--shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {["", "hot", "warm", "cold", "closed"].map((s) => (
             <Button key={s} size="sm" variant={filterStage === s ? "primary" : "secondary"} onClick={() => { setFilterStage(s); onStageChange?.(s || undefined); }}>
               {s === "" ? "Tất cả" : s === "hot" ? "Nóng" : s === "warm" ? "Ấm" : s === "cold" ? "Lạnh" : "Đã chốt"}
@@ -164,7 +167,7 @@ export function SaleManager({
         </Card>
       )}
 
-      <div className="space-y-2">
+      <div className="grid gap-3 xl:grid-cols-2">
         {filtered.length === 0 ? (
           <Card><p className="text-xs text-center py-12" style={{ color: "var(--text-muted)" }}>Chưa có lead. Nhấn "Thêm lead" để bắt đầu.</p></Card>
         ) : (

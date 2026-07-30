@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle, ClockCounterClockwise, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { DashboardMetric, DashboardStatusStrip } from "@/components/dashboard/Dashboard";
 import { AdsInsights } from "@/components/modules/facebook-ads/AdsInsights";
 import { CampaignList } from "@/components/modules/facebook-ads/CampaignList";
 import { CreateAd } from "@/components/modules/facebook-ads/CreateAd";
@@ -57,7 +58,7 @@ export async function GrowthAdsWorkspace({ searchParams }: GrowthAdsWorkspacePro
   }
 
   return (
-    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope}>
+    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope} dashboard>
       {access.state.pageId ? (
         <AdsWorkspaceContent
           view={currentView.id}
@@ -163,29 +164,24 @@ async function AdsWorkspaceContent({
 }
 
 function AdsWorkspaceFrame({ context, children }: { context: AdsWorkspaceContextData; children: React.ReactNode }) {
+  const blocked = Boolean(context.policy.writeBlocker);
   return (
-    <section className="space-y-4">
-      <div className="grid gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <ContextItem label="Facebook Page" value={context.page.pageName} />
-        <ContextItem label="Ad Account" value={context.page.adAccountId ?? "Chưa cấu hình"} />
-        <ContextItem label="Execution mode" value={context.policy.executionMode} />
-        <ContextItem label="Readiness" value={context.readiness.blocker ? "Bị khóa" : "Sẵn sàng"} danger={Boolean(context.readiness.blocker)} />
-        <ContextItem label="Currency" value={context.readiness.currency ?? "Chưa xác minh"} />
-        <ContextItem label="Account status" value={context.readiness.accountStatus == null ? "Chưa xác minh" : String(context.readiness.accountStatus)} />
-        <ContextItem label="Readiness lúc" value={context.readiness.checkedAt ? new Date(context.readiness.checkedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa kiểm tra"} />
-        <ContextItem label="Automation hiệu lực" value={context.policy.effectiveAutomationLevel} />
+    <section className="space-y-5">
+      <DashboardStatusStrip
+        tone={blocked ? "warning" : "success"}
+        title={blocked ? "Ads write đang bị khóa" : "Ads workspace sẵn sàng"}
+        detail={context.policy.writeBlocker ?? "Safety gate đã đạt. Resource mới vẫn luôn được tạo ở trạng thái PAUSED trước khi activation riêng."}
+        meta={`${context.page.pageName} · ${context.page.adAccountId ?? "Chưa có Ad Account"} · execution ${context.policy.executionMode}`}
+        action={blocked ? { href: "/system/settings?view=ads&scope=account", label: "Mở Ads Settings" } : undefined}
+      />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardMetric label="Facebook Page" value={context.page.pageName} detail={context.page.adAccountId ?? "Chưa cấu hình Ad Account"} />
+        <DashboardMetric label="Readiness" value={blocked ? "Bị khóa" : "Sẵn sàng"} detail={context.readiness.checkedAt ? `Kiểm tra ${new Date(context.readiness.checkedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : "Chưa kiểm tra"} tone={blocked ? "warning" : "success"} />
+        <DashboardMetric label="Execution mode" value={context.policy.executionMode} detail={`Automation ${context.policy.effectiveAutomationLevel}`} tone="info" />
+        <DashboardMetric label="Meta account" value={context.readiness.currency ?? "Chưa xác minh"} detail={context.readiness.accountStatus == null ? "Status chưa xác minh" : `Account status ${context.readiness.accountStatus}`} unavailable={context.readiness.currency == null} />
       </div>
       {children}
     </section>
-  );
-}
-
-function ContextItem({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
-  return (
-    <div>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
-      <p className={`mt-1 text-sm font-bold ${danger ? "text-[var(--danger)]" : "text-[var(--text)]"}`}>{value}</p>
-    </div>
   );
 }
 

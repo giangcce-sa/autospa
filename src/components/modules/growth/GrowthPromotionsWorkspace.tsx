@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarBlank, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { CalendarBlank } from "@phosphor-icons/react/dist/ssr";
+import { DashboardMetric, DashboardPanel, DashboardStatusStrip } from "@/components/dashboard/Dashboard";
 import { PromotionManager } from "@/components/modules/promotions/PromotionManager";
 import { WorkspacePermissionState } from "@/components/workspace/WorkspacePermissionState";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
@@ -41,7 +42,7 @@ export async function GrowthPromotionsWorkspace({ searchParams }: GrowthPromotio
   }
 
   return (
-    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope}>
+    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope} dashboard>
       {currentView.id === "overview" || currentView.id === "capacity" ? (
         <PromotionCapacityContent overview={currentView.id === "overview"} />
       ) : access.state.pageId ? (
@@ -76,35 +77,39 @@ async function PromotionPageContent({ facebookPageId, view, canMutate }: { faceb
 
 async function PromotionCapacityContent({ overview }: { overview: boolean }) {
   const capacity = await getPromotionCapacity();
+  const nearestGap = capacity.gaps[0];
   return (
-    <section className="space-y-4">
-      <div className="flex items-start gap-3 rounded-lg border border-[var(--warning)] bg-[var(--bg-subtle)] p-4">
-        <WarningCircle size={19} className="mt-0.5 shrink-0 text-[var(--warning)]" aria-hidden="true" />
-        <div>
-          <h2 className="text-sm font-bold">Ước tính công suất — chưa phải lịch vận hành chuẩn</h2>
-          <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">{capacity.warning}</p>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">Nguồn: {capacity.source} · cửa sổ: {capacity.window} · cập nhật {new Date(capacity.asOf).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>
-        </div>
+    <section className="space-y-5">
+      <DashboardStatusStrip
+        tone="warning"
+        title="Công suất chỉ là ước tính cấp tài khoản"
+        detail={capacity.warning}
+        meta={`Nguồn: ${capacity.source} · ${capacity.window} · cập nhật ${new Date(capacity.asOf).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`}
+      />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardMetric label="Khoảng trống phát hiện" value={capacity.gaps.length} detail="Dưới ngưỡng 60%" tone={capacity.gaps.length ? "warning" : "success"} />
+        <DashboardMetric label="Mốc gần nhất" value={nearestGap?.label ?? "Không có"} detail={nearestGap ? `Còn ${nearestGap.hoursUntil} giờ` : "Trong cửa sổ hiện tại"} unavailable={!nearestGap} />
+        <DashboardMetric label="Tỷ lệ lấp gần nhất" value={nearestGap ? `${Math.round(nearestGap.fillRate * 100)}%` : "Chưa có"} detail={nearestGap ? `${nearestGap.filledSlots}/${nearestGap.estimatedCapacity} slot ước tính` : "Không có gap phù hợp"} unavailable={!nearestGap} />
+        <DashboardMetric label="Phạm vi" value="Account" detail="Không mô phỏng lịch vận hành" tone="info" />
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <DashboardPanel title="Cơ hội công suất" description="Các mốc dưới ngưỡng từ dữ liệu estimate hiện có" padding={false}>
         {capacity.gaps.length ? capacity.gaps.map((gap) => (
-          <article key={gap.date} className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
-            <div className="flex items-center gap-2">
-              <CalendarBlank size={15} className="text-[var(--accent)]" aria-hidden="true" />
-              <h3 className="text-sm font-bold">{gap.label}</h3>
+          <article key={gap.date} className="grid gap-3 border-b border-[var(--border)] px-4 py-4 last:border-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:px-5">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--accent-soft)] text-[var(--accent)]"><CalendarBlank size={18} aria-hidden="true" /></span>
+              <div><h3 className="text-sm font-bold">{gap.label}</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{gap.filledSlots}/{gap.estimatedCapacity} slot ước tính · còn {gap.hoursUntil} giờ</p></div>
             </div>
-            <p className="mt-3 text-2xl font-extrabold">{Math.round(gap.fillRate * 100)}%</p>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">{gap.filledSlots}/{gap.estimatedCapacity} slot ước tính · còn {gap.hoursUntil} giờ</p>
+            <strong className="text-xl tabular-nums text-[var(--warning)] sm:text-right">{Math.round(gap.fillRate * 100)}%</strong>
           </article>
-        )) : <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-8 text-sm text-[var(--text-muted)] sm:col-span-3">Không phát hiện khoảng trống dưới ngưỡng 60% trong dữ liệu hiện có.</p>}
-      </div>
+        )) : <p className="p-8 text-center text-sm text-[var(--text-muted)]">Không phát hiện khoảng trống dưới ngưỡng 60% trong dữ liệu hiện có.</p>}
+      </DashboardPanel>
       {overview ? (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Link href="/growth/promotions?view=offers&scope=current" className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5 hover:bg-[var(--bg-subtle)]">
+          <Link href="/growth/promotions?view=offers&scope=current" className="card-hover rounded-[11px] border border-[var(--border)] bg-[var(--bg-card)] p-5">
             <h3 className="font-bold">Tạo draft ưu đãi theo Page</h3>
             <p className="mt-1 text-sm text-[var(--text-muted)]">Persist Post trước rồi chuyển sang Publishing.</p>
           </Link>
-          <Link href="/growth/promotions?view=capacity&scope=account" className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5 hover:bg-[var(--bg-subtle)]">
+          <Link href="/growth/promotions?view=capacity&scope=account" className="card-hover rounded-[11px] border border-[var(--border)] bg-[var(--bg-card)] p-5">
             <h3 className="font-bold">Xem đầy đủ công suất</h3>
             <p className="mt-1 text-sm text-[var(--text-muted)]">Kiểm tra nguồn, cửa sổ và độ đầy đủ trước khi quyết định.</p>
           </Link>
@@ -136,6 +141,6 @@ function PromotionHistory({ posts, facebookPageId }: { posts: PromotionPostData[
   );
 }
 
-function TruthNotice({ children }: { children: React.ReactNode }) {
-  return <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)] p-4 text-sm leading-6 text-[var(--text-secondary)]">{children}</p>;
+function TruthNotice({ children }: { children: string }) {
+  return <DashboardStatusStrip tone="info" title="Luồng dữ liệu và publishing" detail={children} />;
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { DashboardMetric, DashboardStatusStrip } from "@/components/dashboard/Dashboard";
 import { WorkspacePermissionState } from "@/components/workspace/WorkspacePermissionState";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { ROUTES_BY_ID } from "@/config/routes";
@@ -54,7 +55,7 @@ export async function GrowthIntelligenceWorkspace({ searchParams }: GrowthIntell
       : [];
 
   return (
-    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope}>
+    <WorkspaceShell route={route} state={access.state} pages={access.pages} effectiveScope={effectiveScope} dashboard>
       {currentView.id === "competitors" ? (
         <CompetitorContent data={await getCompetitorIntelligence()} canMutate={access.canMutate} />
       ) : currentView.id === "listening" ? (
@@ -73,22 +74,23 @@ function PerformanceContent({ data, view }: { data: IntelligencePerformanceData;
   const title = view === "reports" ? "Báo cáo nội dung theo Page" : view === "performance" ? "Hiệu quả nội dung" : "Tổng quan tăng trưởng";
   return (
     <section className="space-y-4">
-      <ProvenanceNotice provenance={data.provenance} />
+      <DashboardStatusStrip
+        tone={data.provenance.availability === "available" ? "success" : "warning"}
+        title={data.provenance.availability === "available" ? "Dữ liệu analytics khả dụng" : data.provenance.availability === "partial" ? "Dữ liệu analytics chưa đầy đủ" : "Dữ liệu analytics chưa khả dụng"}
+        detail={data.provenance.warning ?? "Post analytics đã sẵn sàng trong phạm vi được phép."}
+        meta={`Nguồn: ${data.provenance.source} · ${data.provenance.window}`}
+      />
       <div>
         <h2 className="text-lg font-bold">{title}</h2>
         <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
           Chỉ Post có Facebook Page trong phạm vi được phép được tính. CRM, lead và doanh thu chưa có ownership tương thích nên không được ghép vào KPI này.
         </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric label="Post persisted" value={data.totals.posts} />
-        <Metric label="Đã published" value={data.totals.published} />
-        <Metric label="Có analytics" value={data.totals.measured} />
-        <Metric label="Độ đầy đủ" value={formatCompleteness(data.provenance.completeness)} />
-        <Metric label="Tiếp cận" value={formatMetric(data.totals.reach)} unavailable={data.totals.reach == null} />
-        <Metric label="Lượt thích" value={formatMetric(data.totals.likes)} unavailable={data.totals.likes == null} />
-        <Metric label="Bình luận + chia sẻ" value={data.totals.comments == null || data.totals.shares == null ? "Chưa đo" : formatMetric(data.totals.comments + data.totals.shares)} unavailable={data.totals.comments == null || data.totals.shares == null} />
-        <Metric label="Tỷ lệ tương tác" value={data.totals.engagementRate == null ? "Chưa đo" : `${data.totals.engagementRate}%`} unavailable={data.totals.engagementRate == null} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardMetric label="Post persisted" value={data.totals.posts} detail={`${data.totals.published} đã published`} />
+        <DashboardMetric label="Có analytics" value={data.totals.measured} detail={formatCompleteness(data.provenance.completeness)} tone={data.totals.measured ? "success" : "warning"} />
+        <DashboardMetric label="Tiếp cận" value={formatMetric(data.totals.reach)} detail={data.totals.likes == null ? "Like chưa đo" : `${formatMetric(data.totals.likes)} lượt thích`} unavailable={data.totals.reach == null} />
+        <DashboardMetric label="Tỷ lệ tương tác" value={data.totals.engagementRate == null ? "Chưa đo" : `${data.totals.engagementRate}%`} detail={data.totals.comments == null || data.totals.shares == null ? "Engagement chưa đủ" : `${formatMetric(data.totals.comments + data.totals.shares)} bình luận + chia sẻ`} unavailable={data.totals.engagementRate == null} />
       </div>
       {view === "overview" ? (
         <div className="grid gap-3 sm:grid-cols-2">

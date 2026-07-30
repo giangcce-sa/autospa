@@ -18,6 +18,47 @@ test("canonical Growth pages render local production workspaces", async () => {
   }
 });
 
+test("Growth landing resolves authorized Page scope and aggregates persisted data only", async () => {
+  const page = await source("src/app/growth/page.tsx");
+  const reader = await source("src/lib/growth-overview.ts");
+  const overview = await source("src/components/modules/growth/GrowthOverview.tsx");
+
+  assert.match(page, /await resolveWorkspaceAccess\(route, state, "current_or_all"\)/);
+  assert.match(page, /access\.state\.scope === "all"/);
+  assert.match(page, /<GrowthOverview data=\{data\} access=\{access\}/);
+  assert.match(reader, /import "server-only"/);
+  assert.match(reader, /const pageFilter = \{ facebookPageId: \{ in: pageIds \} \}/);
+  assert.match(reader, /await Promise\.all\(\[/);
+  assert.match(reader, /getIntelligencePerformance\(pageIds, scope\)/);
+  assert.match(reader, /prisma\.adsCreateOperation\.findMany/);
+  assert.match(reader, /postType: "promotion"/);
+  assert.equal(reader.includes("getInsights("), false);
+  assert.equal(reader.includes("getCampaigns("), false);
+  assert.equal(reader.includes("generate"), false);
+  assert.match(reader, /availability: promotions\.length \? "available" as const : "unavailable" as const/);
+  assert.match(reader, /không được diễn giải thành thị trường không có rủi ro/);
+  assert.match(overview, /không gọi Meta hoặc AI provider/);
+  assert.match(overview, /unavailable=\{performance\.totals\.reach == null\}/);
+  assert.match(overview, /badge=\{\{ label: "Không phải AI"/);
+});
+
+test("Growth dashboard compact tabs are accessible and preserve desktop panels", async () => {
+  const tabs = await source("src/components/dashboard/DashboardTabs.tsx");
+  const overview = await source("src/components/modules/growth/GrowthOverview.tsx");
+
+  assert.match(tabs, /role="tablist"/);
+  assert.match(tabs, /role="tab"/);
+  assert.match(tabs, /role="tabpanel"/);
+  assert.match(tabs, /event\.key === "ArrowRight"/);
+  assert.match(tabs, /event\.key === "ArrowLeft"/);
+  assert.match(tabs, /event\.key === "Home"/);
+  assert.match(tabs, /event\.key === "End"/);
+  assert.match(tabs, /active \? "block" : "hidden lg:block"/);
+  assert.match(overview, /label: "Tổng quan"/);
+  assert.match(overview, /label: "Hiệu quả"/);
+  assert.match(overview, /label: "Cơ hội"/);
+});
+
 test("Growth Intelligence uses mixed Page and account scopes", async () => {
   const routes = await source("src/config/routes.ts");
   assert.match(routes, /id: "growth-intelligence"[\s\S]*?id: "reports"[\s\S]*?id: "performance"/);

@@ -21,6 +21,7 @@ export function WorkspaceShell({
   header,
   topNav,
   wide = false,
+  dashboard = false,
   children,
 }: {
   route: AppRoute;
@@ -34,26 +35,28 @@ export function WorkspaceShell({
   topNav?: ReactNode;
   /** Command-center screens need the full content width instead of the reading-width default. */
   wide?: boolean;
+  /** Uses the dense dashboard header and navigation treatment. */
+  dashboard?: boolean;
   children?: ReactNode;
 }) {
   const views = (route.views ?? []).filter((view) => !visibleViewIds || visibleViewIds.includes(view.id));
   const currentView = views.find((view) => view.id === state.view) ?? views[0];
 
   return (
-    <div className={`space-y-5 ${wide ? "max-w-none" : "max-w-6xl space-y-6"}`}>
+    <div className={`space-y-5 ${wide || dashboard ? "max-w-none" : "max-w-6xl space-y-6"}`}>
       {topNav}
-      <header className={wide ? "" : "border-b border-[var(--border)] pb-5"}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <header className={dashboard ? "overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)]" : wide ? "" : "border-b border-[var(--border)] pb-5"}>
+        <div className={`flex flex-wrap items-start justify-between gap-4 ${dashboard ? "p-5 lg:p-6" : ""}`}>
           {header ?? (
             <div>
-              <p className="text-[13px] font-semibold text-[var(--accent)]">Phần mềm chức năng</p>
+              <p className={`${dashboard ? "text-[11px] font-extrabold uppercase tracking-[0.16em]" : "text-[13px] font-semibold"} text-[var(--accent)]`}>Phần mềm chức năng</p>
               <h1 className="mt-1 text-[30px] font-extrabold">{route.label}</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{route.description}</p>
             </div>
           )}
           <WorkspaceScopeControl route={route} state={state} pages={pages} effectiveScope={effectiveScope} />
         </div>
-        <WorkspaceNav route={route} views={views} state={state} pages={pages} />
+        <WorkspaceNav route={route} views={views} state={state} pages={pages} dashboard={dashboard} />
       </header>
 
       {effectiveScope !== "account" && !pages.length ? (
@@ -179,14 +182,16 @@ function WorkspaceNav({
   views,
   state,
   pages,
+  dashboard = false,
 }: {
   route: AppRoute;
   views: readonly WorkspaceView[];
   state: WorkspaceUrlState;
   pages: WorkspacePageOption[];
+  dashboard?: boolean;
 }) {
   return (
-    <nav className="mt-5 flex gap-1 overflow-x-auto pb-1" aria-label={`Điều hướng ${route.label}`}>
+    <nav className={dashboard ? "flex gap-1 overflow-x-auto border-t border-[var(--border)] bg-[var(--bg-subtle)] px-4 py-2" : "mt-5 flex gap-1 overflow-x-auto pb-1"} aria-label={`Điều hướng ${route.label}`}>
       {views.map((view) => {
         const targetScope = view.scope ?? route.scope;
         const allowedScopes = workspaceScopesForRoute(targetScope);
